@@ -1,0 +1,6 @@
+{
+  "name": "csgpt",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs"
+}
