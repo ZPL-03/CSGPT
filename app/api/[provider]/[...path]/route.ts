@@ -18,7 +18,9 @@ async function handle(
   }
 
   const config = getServerSideConfig();
-  const pathStr = params.path.join("/");
+  // 兼容 v1/ 前缀：v1/chat/completions → chat/completions
+  const rawPath = params.path.join("/");
+  const pathStr = rawPath.startsWith("v1/") ? rawPath.slice(3) : rawPath;
 
   // 处理 models 请求
   if (pathStr === "models") {
@@ -123,23 +125,5 @@ async function handle(
 export const GET = handle;
 export const POST = handle;
 
-export const runtime = "edge";
-export const preferredRegion = [
-  "arn1",
-  "bom1",
-  "cdg1",
-  "cle1",
-  "cpt1",
-  "dub1",
-  "fra1",
-  "gru1",
-  "hnd1",
-  "iad1",
-  "icn1",
-  "kix1",
-  "lhr1",
-  "pdx1",
-  "sfo1",
-  "sin1",
-  "syd1",
-];
+// 使用 Node.js Runtime，允许直接访问 IP 地址（Edge Runtime 禁止 IP 直连）
+export const runtime = "nodejs";
