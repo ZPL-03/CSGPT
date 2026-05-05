@@ -82,38 +82,27 @@ export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
 
   path(path: string): string {
+    // CSGPT 专用：始终使用 CSGPT API 路径，忽略用户自定义 provider 配置
+    let baseUrl = CSGPT_BASE_URL;
+
+    // 用户自定义配置：仅允许覆盖为自定义远程地址
     const accessStore = useAccessStore.getState();
-
-    let baseUrl = "";
-
-    const isAzure = path.includes("deployments");
-    if (accessStore.useCustomConfig) {
-      if (isAzure && !accessStore.isValidAzure()) {
-        throw Error(
-          "incomplete azure config, please check it in your settings page",
-        );
-      }
-
-      baseUrl = isAzure ? accessStore.azureUrl : accessStore.openaiUrl;
+    if (
+      accessStore.useCustomConfig &&
+      accessStore.openaiUrl &&
+      accessStore.openaiUrl !== ApiPath.OpenAI
+    ) {
+      baseUrl = accessStore.openaiUrl;
     }
 
-    if (baseUrl.length === 0) {
-      const isApp = !!getClientConfig()?.isApp;
-      // CSGPT 使用专用 API 路径，不再使用 OpenAI 默认路径
-      const apiPath = isAzure ? ApiPath.Azure : CSGPT_BASE_URL;
-      baseUrl = isApp ? OPENAI_BASE_URL : apiPath;
+    // APP 模式下使用远程地址
+    const isApp = !!getClientConfig()?.isApp;
+    if (isApp && baseUrl === CSGPT_BASE_URL) {
+      baseUrl = OPENAI_BASE_URL;
     }
 
     if (baseUrl.endsWith("/")) {
       baseUrl = baseUrl.slice(0, baseUrl.length - 1);
-    }
-    if (
-      !baseUrl.startsWith("http") &&
-      !isAzure &&
-      !baseUrl.startsWith(ApiPath.OpenAI) &&
-      !baseUrl.startsWith(CSGPT_BASE_URL)
-    ) {
-      baseUrl = "https://" + baseUrl;
     }
 
     console.log("[Proxy Endpoint] ", baseUrl, path);
