@@ -84,9 +84,9 @@
   }
 
   .auth-field {
-    width: 50%;
-    min-width: 320px;
-    max-width: 480px;
+    width: 44%;
+    min-width: 300px;
+    max-width: 420px;
     margin-bottom: 1.5vh;
   }
 
@@ -102,37 +102,34 @@
     position: relative;
     width: 100%;
 
-    .auth-input {
-      padding-right: 36px;
-    }
-
     .auth-eye-btn {
       position: absolute;
-      right: 4px;
+      right: 10px;
       top: 50%;
       transform: translateY(-50%);
       background: none;
       border: none;
       cursor: pointer;
-      padding: 4px;
+      padding: 0;
       display: flex;
       align-items: center;
-      opacity: 0.5;
+      opacity: 0.4;
+      z-index: 1;
 
       &:hover {
-        opacity: 1;
+        opacity: 0.7;
       }
 
       svg {
-        width: 16px;
-        height: 16px;
+        width: 18px;
+        height: 18px;
       }
     }
   }
 
   .auth-input {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px 36px 10px 12px;
     border: 1px solid var(--border-in-light);
     border-radius: 8px;
     font-size: 14px;
@@ -152,9 +149,9 @@
     display: flex;
     justify-content: center;
     flex-direction: column;
-    width: 50%;
-    min-width: 320px;
-    max-width: 480px;
+    width: 44%;
+    min-width: 300px;
+    max-width: 420px;
     margin-top: 1vh;
 
     button:not(:last-child) {

@@ -6,9 +6,9 @@ import { IconButton } from "./button";
 import { useState } from "react";
 import { useUserStore } from "../store/user";
 import Locale from "../locales";
-import BotIcon from "../icons/bot.svg";
 import EyeIcon from "../icons/eye.svg";
 import EyeOffIcon from "../icons/eye-off.svg";
+import BotPng from "../icons/bot.png";
 import clsx from "clsx";
 
 export function AuthPage() {
@@ -69,7 +69,7 @@ export function AuthPage() {
   return (
     <div className={styles["auth-page"]}>
       <div className={clsx("no-dark", styles["auth-logo"])}>
-        <BotIcon />
+        <img src={BotPng.src} alt="CSGPT" width={42} height={42} />
       </div>
 
       <div className={styles["auth-title"]}>
