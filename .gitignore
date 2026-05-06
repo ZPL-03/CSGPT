@@ -53,3 +53,9 @@ app/mcp/mcp_config.json
 # Claude Code 配置文件
 CLAUDE.md
 .claude/
+
+# 项目技术报告（本地参考，不上传）
+PROJECT_REPORT.md
+
+# 本地对话数据存储
+data/

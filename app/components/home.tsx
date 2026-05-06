@@ -148,11 +148,10 @@ export function WindowContent(props: { children: React.ReactNode }) {
 function Screen() {
   const config = useAppConfig();
   const location = useLocation();
-  const isArtifact = location.pathname.includes(Path.Artifacts);
   const isHome = location.pathname === Path.Home;
   const isAuth = location.pathname === Path.Auth;
-  const isSd = location.pathname === Path.Sd;
-  const isSdNew = location.pathname === Path.SdNew;
+
+  const accessStore = useAccessStore();
 
   const isMobileScreen = useMobileScreen();
   const shouldTightBorder =
@@ -162,12 +161,13 @@ function Screen() {
     loadAsyncGoogleFont();
   }, []);
 
-  if (isArtifact) {
-    return (
-      <Routes>
-        <Route path="/artifacts/:id" element={<></>} />
-      </Routes>
-    );
+  // 认证门控：如果启用了访问控制且用户未授权，强制跳转到认证页面
+  if (
+    accessStore.enabledAccessControl() &&
+    !accessStore.isAuthorized() &&
+    !isAuth
+  ) {
+    return <AuthPage />;
   }
   const renderContent = () => {
     if (isAuth) return <AuthPage />;

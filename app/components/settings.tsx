@@ -8,9 +8,7 @@ import CloseIcon from "../icons/close.svg";
 import CopyIcon from "../icons/copy.svg";
 import ClearIcon from "../icons/clear.svg";
 import EditIcon from "../icons/edit.svg";
-import FireIcon from "../icons/fire.svg";
 import EyeIcon from "../icons/eye.svg";
-import { trackSettingsPageGuideToCPaymentClick } from "../utils/auth-settings-events";
 import {
   Input,
   List,
@@ -57,7 +55,6 @@ import {
   SlotID,
   Stability,
   Iflytek,
-  SAAS_CHAT_URL,
   ChatGLM,
   DeepSeek,
   SiliconFlow,
@@ -285,9 +282,7 @@ export function Settings() {
   const customCount = promptStore.getUserPrompts().length ?? 0;
   const [shouldShowPromptModal, setShowPromptModal] = useState(false);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const clientConfig = useMemo(() => getClientConfig(), []);
 
   useEffect(() => {
     const keydownEvent = (e: KeyboardEvent) => {
@@ -296,7 +291,6 @@ export function Settings() {
       }
     };
     if (clientConfig?.isApp) {
-      // Force to set custom endpoint to true if it's app
       accessStore.update((state) => {
         state.useCustomConfig = true;
       });
@@ -307,8 +301,6 @@ export function Settings() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const clientConfig = useMemo(() => getClientConfig(), []);
   const showAccessCode = enabledAccessControl && !clientConfig?.isApp;
 
   const accessCodeComponent = showAccessCode && (
@@ -324,31 +316,6 @@ export function Settings() {
           accessStore.update(
             (access) => (access.accessCode = e.currentTarget.value),
           );
-        }}
-      />
-    </ListItem>
-  );
-
-  const saasStartComponent = (
-    <ListItem
-      className={styles["subtitle-button"]}
-      title={
-        Locale.Settings.Access.SaasStart.Title +
-        `${Locale.Settings.Access.SaasStart.Label}`
-      }
-      subTitle={Locale.Settings.Access.SaasStart.SubTitle}
-    >
-      <IconButton
-        aria={
-          Locale.Settings.Access.SaasStart.Title +
-          Locale.Settings.Access.SaasStart.ChatNow
-        }
-        icon={<FireIcon />}
-        type={"primary"}
-        text={Locale.Settings.Access.SaasStart.ChatNow}
-        onClick={() => {
-          trackSettingsPageGuideToCPaymentClick();
-          window.location.href = SAAS_CHAT_URL;
         }}
       />
     </ListItem>
@@ -1311,22 +1278,6 @@ export function Settings() {
           </ListItem>
 
           <ListItem
-            title={Locale.Mask.Config.Artifacts.Title}
-            subTitle={Locale.Mask.Config.Artifacts.SubTitle}
-          >
-            <input
-              aria-label={Locale.Mask.Config.Artifacts.Title}
-              type="checkbox"
-              checked={config.enableArtifacts}
-              onChange={(e) =>
-                updateConfig(
-                  (config) =>
-                    (config.enableArtifacts = e.currentTarget.checked),
-                )
-              }
-            ></input>
-          </ListItem>
-          <ListItem
             title={Locale.Mask.Config.CodeFold.Title}
             subTitle={Locale.Mask.Config.CodeFold.SubTitle}
           >
@@ -1416,7 +1367,6 @@ export function Settings() {
         </List>
 
         <List id={SlotID.CustomModel}>
-          {saasStartComponent}
           {accessCodeComponent}
 
           {!accessStore.hideUserApiKey && (

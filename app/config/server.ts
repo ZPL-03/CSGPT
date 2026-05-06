@@ -106,7 +106,8 @@ declare global {
 }
 
 const ACCESS_CODES = (function getAccessCodes(): Set<string> {
-  const code = process.env.CODE;
+  // 兼容 CODE 和 ACCESS_CODE 两种环境变量名
+  const code = process.env.CODE || process.env.ACCESS_CODE;
 
   try {
     const codes = (code?.split(",") ?? [])

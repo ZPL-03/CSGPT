@@ -1,10 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
+import md5 from "spark-md5";
+
+// 访问码前缀（与客户端 constant.ts 中的 ACCESS_CODE_PREFIX 一致）
+const ACCESS_CODE_PREFIX = "nk-";
+
+// 验证访问码
+function verifyAccessCode(req: NextRequest): boolean {
+  const config = getServerSideConfig();
+
+  // 未设置访问码则允许访问
+  if (!config.needCode) return true;
+
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  // 如果是访问码（带 nk- 前缀）
+  if (token.startsWith(ACCESS_CODE_PREFIX)) {
+    const code = token.slice(ACCESS_CODE_PREFIX.length);
+    const { codes } = config;
+    // 访问码为空则拒绝
+    if (!code) return false;
+    // 验证访问码哈希
+    const codeHash = md5.hash(code.trim());
+    return codes.has(codeHash);
+  }
+
+  // 如果是 API Key（用户自己提供），允许
+  if (token && !token.startsWith(ACCESS_CODE_PREFIX)) {
+    return true;
+  }
+
+  return false;
+}
 
 // CSGPT API 路由处理函数
 export async function POST(req: NextRequest) {
   try {
+    // 验证访问码
+    if (!verifyAccessCode(req)) {
+      return NextResponse.json(
+        { error: true, message: "访问码无效，请重新输入" },
+        { status: 401 }
+      );
+    }
+
     // 获取服务端配置
     const config = getServerSideConfig();
 
