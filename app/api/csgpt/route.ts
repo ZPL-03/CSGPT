@@ -1,51 +1,13 @@
+// CSGPT API 路由
+// 转发对话请求到 vLLM 推理服务
+
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
-import md5 from "spark-md5";
-
-// 访问码前缀（与客户端 constant.ts 中的 ACCESS_CODE_PREFIX 一致）
-const ACCESS_CODE_PREFIX = "nk-";
-
-// 验证访问码
-function verifyAccessCode(req: NextRequest): boolean {
-  const config = getServerSideConfig();
-
-  // 未设置访问码则允许访问
-  if (!config.needCode) return true;
-
-  const authHeader = req.headers.get("Authorization") || "";
-  const token = authHeader.replace("Bearer ", "").trim();
-
-  // 如果是访问码（带 nk- 前缀）
-  if (token.startsWith(ACCESS_CODE_PREFIX)) {
-    const code = token.slice(ACCESS_CODE_PREFIX.length);
-    const { codes } = config;
-    // 访问码为空则拒绝
-    if (!code) return false;
-    // 验证访问码哈希
-    const codeHash = md5.hash(code.trim());
-    return codes.has(codeHash);
-  }
-
-  // 如果是 API Key（用户自己提供），允许
-  if (token && !token.startsWith(ACCESS_CODE_PREFIX)) {
-    return true;
-  }
-
-  return false;
-}
 
 // CSGPT API 路由处理函数
 export async function POST(req: NextRequest) {
   try {
-    // 验证访问码
-    if (!verifyAccessCode(req)) {
-      return NextResponse.json(
-        { error: true, message: "访问码无效，请重新输入" },
-        { status: 401 }
-      );
-    }
-
     // 获取服务端配置
     const config = getServerSideConfig();
 
@@ -57,7 +19,7 @@ export async function POST(req: NextRequest) {
     // 如果用户没有提供 system 消息，则自动注入
     let processedMessages = [...messages];
     const hasSystemMessage = processedMessages.some(
-      (msg: any) => msg.role === "system"
+      (msg: any) => msg.role === "system",
     );
 
     if (!hasSystemMessage) {
@@ -104,7 +66,7 @@ export async function POST(req: NextRequest) {
           message: `模型服务返回错误: ${response.status}`,
           detail: errorText,
         },
-        { status: response.status }
+        { status: response.status },
       );
     }
 
@@ -133,7 +95,7 @@ export async function POST(req: NextRequest) {
             Connection: "keep-alive",
             "X-Accel-Buffering": "no",
           },
-        }
+        },
       );
 
       return streamResponse;
@@ -149,20 +111,20 @@ export async function POST(req: NextRequest) {
     if (error.name === "AbortError") {
       return NextResponse.json(
         { error: true, message: "请求超时，请稍后重试" },
-        { status: 504 }
+        { status: 504 },
       );
     }
 
     if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
       return NextResponse.json(
         { error: true, message: "模型服务不可用，请检查服务器状态" },
-        { status: 503 }
+        { status: 503 },
       );
     }
 
     return NextResponse.json(
       { error: true, message: "服务器内部错误", detail: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -171,10 +133,9 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const config = getServerSideConfig();
   const url = new URL(req.url);
-  const path = url.pathname;
 
   // 处理 /api/csgpt/models 请求
-  if (path.endsWith("/models") || url.searchParams.has("models")) {
+  if (url.searchParams.has("models")) {
     // 返回 CSGPT 模型列表
     const models = {
       object: "list",
@@ -208,6 +169,6 @@ export async function OPTIONS() {
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       },
-    }
+    },
   );
 }

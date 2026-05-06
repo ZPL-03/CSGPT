@@ -13,10 +13,12 @@ import MaskIcon from "../icons/mask.svg";
 import McpIcon from "../icons/mcp.svg";
 import DragIcon from "../icons/drag.svg";
 import DiscoveryIcon from "../icons/discovery.svg";
+import LogoutIcon from "../icons/power.svg";
 
 import Locale from "../locales";
 
 import { useAppConfig, useChatStore } from "../store";
+import { useUserStore } from "../store/user";
 
 import {
   DEFAULT_SIDEBAR_WIDTH,
@@ -343,6 +345,17 @@ export function SideBar(props: { className?: string }) {
                   shadow
                 />
               </a>
+            </div>
+            <div className={styles["sidebar-action"]}>
+              <IconButton
+                aria={Locale.Auth.Logout}
+                icon={<LogoutIcon />}
+                shadow
+                onClick={() => {
+                  useUserStore.getState().logout();
+                  window.location.href = "/#/auth";
+                }}
+              />
             </div>
           </>
         }

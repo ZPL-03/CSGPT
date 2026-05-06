@@ -99,25 +99,15 @@ declare global {
 
       // CSGPT 专用配置
       CSGPT_BASE_URL?: string; // vLLM 服务地址
-      CSGPT_API_KEY?: string;  // vLLM API 密钥
+      CSGPT_API_KEY?: string; // vLLM API 密钥
       CSGPT_MODEL_NAME?: string; // 模型名称
     }
   }
 }
 
-const ACCESS_CODES = (function getAccessCodes(): Set<string> {
-  // 兼容 CODE 和 ACCESS_CODE 两种环境变量名
-  const code = process.env.CODE || process.env.ACCESS_CODE;
-
-  try {
-    const codes = (code?.split(",") ?? [])
-      .filter((v) => !!v)
-      .map((v) => md5.hash(v.trim()));
-    return new Set(codes);
-  } catch (e) {
-    return new Set();
-  }
-})();
+// 数据库和认证配置
+const DATABASE_URL = process.env.DATABASE_URL || "";
+const JWT_SECRET = process.env.JWT_SECRET || "csgpt-jwt-secret";
 
 function getApiKey(keys?: string) {
   const apiKeyEnvVar = keys ?? "";
@@ -269,9 +259,10 @@ export const getServerSideConfig = () => {
     gtmId: process.env.GTM_ID,
     gaId: process.env.GA_ID || DEFAULT_GA_ID,
 
-    needCode: ACCESS_CODES.size > 0,
-    code: process.env.CODE,
-    codes: ACCESS_CODES,
+    // 认证系统：使用 JWT + PostgreSQL 用户注册/登录
+    needCode: false,
+    databaseUrl: DATABASE_URL,
+    jwtSecret: JWT_SECRET,
 
     proxyUrl: process.env.PROXY_URL,
     isVercel: !!process.env.VERCEL,

@@ -85,13 +85,13 @@ export enum FileName {
 
 export enum StoreKey {
   Chat = "chat-next-web-store",
-  Plugin = "chat-next-web-plugin",
   Access = "access-control",
   Config = "app-config",
   Mask = "mask-store",
   Prompt = "prompt-store",
   Update = "chat-update",
   Sync = "sync",
+  User = "user-store",
   SdList = "sd-list",
   Mcp = "mcp-store",
 }

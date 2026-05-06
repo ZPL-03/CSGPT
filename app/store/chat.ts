@@ -4,6 +4,11 @@ import {
   safeLocalStorage,
   trimTopic,
 } from "../utils";
+import {
+  debouncedSyncCurrentSession,
+  syncConversationToDB,
+  deleteConversationFromDB,
+} from "../utils/conversation-sync";
 
 import { indexedDBStorage } from "@/app/utils/indexedDB-storage";
 import { nanoid } from "nanoid";
@@ -325,6 +330,9 @@ export const useChatStore = createPersistStore(
           currentSessionIndex: 0,
           sessions: [session].concat(state.sessions),
         }));
+
+        // 同步到数据库
+        syncConversationToDB(session);
       },
 
       nextSession(delta: number) {
@@ -339,6 +347,9 @@ export const useChatStore = createPersistStore(
         const deletedSession = get().sessions.at(index);
 
         if (!deletedSession) return;
+
+        // 从数据库删除
+        deleteConversationFromDB(deletedSession.id);
 
         const sessions = get().sessions.slice();
         sessions.splice(index, 1);
@@ -402,6 +413,9 @@ export const useChatStore = createPersistStore(
         get().checkMcpJson(message);
 
         get().summarizeSession(false, targetSession);
+
+        // 同步到数据库
+        debouncedSyncCurrentSession(targetSession);
       },
 
       async onUserInput(

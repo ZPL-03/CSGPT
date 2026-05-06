@@ -1,0 +1,74 @@
+// CSGPT 数据库 Schema
+// PostgreSQL 数据模型定义
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String?  @unique
+  password  String   // bcrypt 加密后的密码
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Conversation[]
+  tokens   AuthToken[]
+}
+
+// 认证令牌表
+model AuthToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+// 对话表
+model Conversation {
+  id              String   @id
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic           String   @default("新的聊天")
+  memoryPrompt    String   @default("")
+  lastUpdate      BigInt   @default(0)
+  lastSummarizeIndex Int   @default(0)
+  clearContextIndex Int?
+  maskConfig      Json?    // 面具配置 JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([userId])
+  @@index([userId, updatedAt])
+}
+
+// 消息表
+model Message {
+  id             String   @id
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String   // system | user | assistant
+  content        String   @default("")
+  date           String
+  isError        Boolean  @default(false)
+  model          String?
+  tools          Json?    // 工具调用 JSON 数组
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([conversationId, date])
+}

@@ -28,6 +28,7 @@ import { AuthPage } from "./auth";
 import { getClientConfig } from "../config/client";
 import { type ClientApi, getClientApi } from "../client/api";
 import { useAccessStore } from "../store";
+import { useUserStore } from "../store/user";
 import clsx from "clsx";
 import { initializeMcpSystem, isMcpEnabled } from "../mcp/actions";
 
@@ -151,7 +152,7 @@ function Screen() {
   const isHome = location.pathname === Path.Home;
   const isAuth = location.pathname === Path.Auth;
 
-  const accessStore = useAccessStore();
+  const userStore = useUserStore();
 
   const isMobileScreen = useMobileScreen();
   const shouldTightBorder =
@@ -159,14 +160,14 @@ function Screen() {
 
   useEffect(() => {
     loadAsyncGoogleFont();
+    // 验证用户令牌有效性
+    if (userStore.token) {
+      userStore.fetchUser();
+    }
   }, []);
 
-  // 认证门控：如果启用了访问控制且用户未授权，强制跳转到认证页面
-  if (
-    accessStore.enabledAccessControl() &&
-    !accessStore.isAuthorized() &&
-    !isAuth
-  ) {
+  // 认证门控：用户未登录时强制跳转到认证页面
+  if (!userStore.isLoggedIn && !isAuth) {
     return <AuthPage />;
   }
   const renderContent = () => {
