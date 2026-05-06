@@ -79,12 +79,42 @@
     font-size: 14px;
   }
 
-  .auth-input {
-    margin: 3vh 0;
+  .auth-field {
+    width: 80%;
+    max-width: 320px;
+    margin-bottom: 1.5vh;
+
+    :global(.password-input-container) {
+      max-width: 100%;
+      width: 100%;
+
+      :global(.password-input) {
+        min-width: 100%;
+      }
+    }
   }
 
-  .auth-input-second {
-    margin: 0 0 3vh 0;
+  .auth-label {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: var(--black);
+    text-align: left;
+  }
+
+  .auth-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-in-light);
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+      border-color: var(--primary);
+    }
   }
 
   .auth-actions {

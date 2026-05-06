@@ -195,7 +195,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.1,
+    version: 4.2,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -203,10 +203,11 @@ export const useAppConfig = createPersistStore(
       const models = currentState.models.slice();
       state.models.forEach((pModel) => {
         const idx = models.findIndex(
-          (v) => v.name === pModel.name && v.provider === pModel.provider,
+          (v) =>
+            v.name === pModel.name && v.provider?.id === pModel.provider?.id,
         );
         if (idx !== -1) models[idx] = pModel;
-        else models.push(pModel);
+        // 不再追加不在当前列表中的旧模型，避免 localStorage 残留导致的重复
       });
       return { ...currentState, ...state, models: models };
     },

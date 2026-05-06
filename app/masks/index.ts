@@ -1,10 +1,12 @@
 import { Mask } from "../store/mask";
+import { getLang } from "../locales";
 
 import { type BuiltinMask } from "./typing";
 export { type BuiltinMask } from "./typing";
 
-// 导入 CSGPT 专用 Mask
+// 导入 CSGPT 中英文 Mask
 import { CSGPT_MASKS } from "./csgpt";
+import { CSGPT_MASKS_EN } from "./csgpt-en";
 
 export const BUILTIN_MASK_ID = 100000;
 
@@ -24,22 +26,28 @@ export const BUILTIN_MASK_STORE = {
 
 export const BUILTIN_MASKS: BuiltinMask[] = [];
 
-// 添加 CSGPT 专用 Mask
-CSGPT_MASKS.forEach((mask) => {
+// 根据当前语言加载对应的 Mask
+const lang = getLang();
+const masksForLang = lang === "en" ? CSGPT_MASKS_EN : CSGPT_MASKS;
+masksForLang.forEach((mask) => {
   BUILTIN_MASKS.push(BUILTIN_MASK_STORE.add(mask));
 });
 
 if (typeof window != "undefined") {
-  // 浏览器环境下尝试加载外部 masks.json
   fetch("/masks.json")
     .then((res) => res.json())
     .catch((error) => {
       console.error("[Fetch] failed to fetch masks", error);
-      return { cn: [], tw: [], en: [] };
+      return {};
     })
     .then((masks) => {
-      const { cn = [], tw = [], en = [] } = masks;
-      return [...cn, ...tw, ...en].map((m) => {
+      // 兼容 csgpt / cn / en 多种 key
+      const extra = [
+        ...(masks.csgpt || []),
+        ...(masks.cn || []),
+        ...(masks.en || []),
+      ];
+      extra.forEach((m: BuiltinMask) => {
         BUILTIN_MASKS.push(BUILTIN_MASK_STORE.add(m));
       });
     });

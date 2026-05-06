@@ -80,49 +80,58 @@ export function AuthPage() {
       <div className={styles["auth-tips"]}>{Locale.Auth.Tips}</div>
 
       {/* 用户名输入 */}
-      <input
-        className={styles["auth-input"]}
-        type="text"
-        placeholder={Locale.Auth.UsernamePlaceholder}
-        value={username}
-        onChange={(e) => {
-          setUsername(e.target.value);
-          setError("");
-        }}
-        onKeyDown={handleKeyDown}
-        autoFocus
-      />
+      <div className={styles["auth-field"]}>
+        <label className={styles["auth-label"]}>{Locale.Auth.Username}</label>
+        <input
+          className={styles["auth-input"]}
+          type="text"
+          placeholder={Locale.Auth.UsernamePlaceholder}
+          value={username}
+          onChange={(e) => {
+            setUsername(e.target.value);
+            setError("");
+          }}
+          onKeyDown={handleKeyDown}
+          autoFocus
+        />
+      </div>
 
       {/* 密码输入 */}
-      <PasswordInput
-        style={{ marginTop: "1vh", marginBottom: "1vh" }}
-        aria={Locale.Auth.Password}
-        aria-label={Locale.Auth.Password}
-        value={password}
-        type="password"
-        placeholder={Locale.Auth.PasswordPlaceholder}
-        onKeyDown={handleKeyDown}
-        onChange={(e) => {
-          setPassword(e.currentTarget.value);
-          setError("");
-        }}
-      />
-
-      {/* 注册模式下显示确认密码 */}
-      {!isLogin && (
+      <div className={styles["auth-field"]}>
+        <label className={styles["auth-label"]}>{Locale.Auth.Password}</label>
         <PasswordInput
-          style={{ marginBottom: "1vh" }}
-          aria={Locale.Auth.ConfirmPassword}
-          aria-label={Locale.Auth.ConfirmPassword}
-          value={confirmPassword}
+          className={styles["auth-input"]}
+          aria-label={Locale.Auth.Password}
+          value={password}
           type="password"
-          placeholder={Locale.Auth.ConfirmPassword}
+          placeholder={Locale.Auth.PasswordPlaceholder}
           onKeyDown={handleKeyDown}
           onChange={(e) => {
-            setConfirmPassword(e.currentTarget.value);
+            setPassword(e.currentTarget.value);
             setError("");
           }}
         />
+      </div>
+
+      {/* 注册模式下显示确认密码 */}
+      {!isLogin && (
+        <div className={styles["auth-field"]}>
+          <label className={styles["auth-label"]}>
+            {Locale.Auth.ConfirmPassword}
+          </label>
+          <PasswordInput
+            className={styles["auth-input"]}
+            aria-label={Locale.Auth.ConfirmPassword}
+            value={confirmPassword}
+            type="password"
+            placeholder={Locale.Auth.ConfirmPassword}
+            onKeyDown={handleKeyDown}
+            onChange={(e) => {
+              setConfirmPassword(e.currentTarget.value);
+              setError("");
+            }}
+          />
+        </div>
       )}
 
       {/* 错误提示 */}
