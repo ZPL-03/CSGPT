@@ -27,6 +27,7 @@ const en: LocaleType = {
     Later: "Later",
     SaasTips: "",
     TopTips: "CSGPT - Composite Material Structural Design Assistant",
+    SubTitle: "Composite Material Structural Design Assistant",
   },
   ChatItem: {
     ChatItemCount: (count: number) => `${count} messages`,
@@ -313,11 +314,11 @@ const en: LocaleType = {
     },
     Access: {
       SaasStart: {
-        Title: "Use NextChat AI",
-        Label: " (Most Cost-Effective Option)",
+        Title: "Use CSGPT",
+        Label: " (Built-in Composite Material Model)",
         SubTitle:
-          "Maintained by NextChat, zero setup needed, unlock OpenAI o1, GPT-4o," +
-          " Claude-3.5 and more",
+          "Fine-tuned on Qwen3-14B for composite materials, ready to use," +
+          " specializing in pressure vessels, ply design, and material selection",
         ChatNow: "Start Now",
       },
       AccessCode: {

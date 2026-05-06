@@ -26,6 +26,7 @@ const cn = {
     Later: "稍后再说",
     SaasTips: "",
     TopTips: "CSGPT - 复合材料结构设计助手",
+    SubTitle: "复合材料结构设计助手",
   },
   ChatItem: {
     ChatItemCount: (count: number) => `${count} 条对话`,
@@ -310,10 +311,10 @@ const cn = {
 
     Access: {
       SaasStart: {
-        Title: "使用 NextChat AI",
-        Label: "（性价比最高的方案）",
+        Title: "使用 CSGPT",
+        Label: "（复合材料结构设计内置模型）",
         SubTitle:
-          "由 NextChat 官方维护, 零配置开箱即用，支持 OpenAI o1, GPT-4o, Claude-3.5 等最新大模型",
+          "基于 Qwen3-14B 微调的复合材料领域大模型，开箱即用，专注压力容器、铺层设计、材料选型等专业场景",
         ChatNow: "立刻对话",
       },
       AccessCode: {

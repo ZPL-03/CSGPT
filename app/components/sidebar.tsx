@@ -250,7 +250,7 @@ export function SideBar(props: { className?: string }) {
     >
       <SideBarHeader
         title="CSGPT"
-        subTitle="复合材料结构设计助手"
+        subTitle={Locale.Auth.SubTitle}
         logo={<ChatGptIcon />}
         shouldNarrow={shouldNarrow}
       >

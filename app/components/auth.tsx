@@ -16,10 +16,9 @@ export function AuthPage() {
 
   const handleConfirm = () => {
     if (!accessStore.accessCode.trim()) {
-      setError("请输入访问码");
+      setError(Locale.Auth.Tips);
       return;
     }
-    // 访问码验证在服务端 API 路由中进行，前端只检查非空
     navigate(Path.Chat);
   };
 
@@ -29,16 +28,16 @@ export function AuthPage() {
         <BotIcon />
       </div>
 
-      <div className={styles["auth-title"]}>CSGPT - 复合材料结构设计助手</div>
-      <div className={styles["auth-tips"]}>请输入访问码以使用系统</div>
+      <div className={styles["auth-title"]}>{Locale.Auth.TopTips}</div>
+      <div className={styles["auth-tips"]}>{Locale.Auth.Tips}</div>
 
       <PasswordInput
         style={{ marginTop: "3vh", marginBottom: "1vh" }}
-        aria="访问码"
-        aria-label="访问码"
+        aria={Locale.Auth.Input}
+        aria-label={Locale.Auth.Input}
         value={accessStore.accessCode}
         type="password"
-        placeholder="请输入访问码"
+        placeholder={Locale.Auth.Input}
         onKeyDown={(e) => {
           if (e.key === "Enter") handleConfirm();
         }}
@@ -58,7 +57,7 @@ export function AuthPage() {
 
       <div className={styles["auth-actions"]}>
         <IconButton
-          text="确认"
+          text={Locale.Auth.Confirm}
           type="primary"
           onClick={handleConfirm}
         />
