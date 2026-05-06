@@ -4,11 +4,11 @@
 import styles from "./auth.module.scss";
 import { IconButton } from "./button";
 import { useState } from "react";
-import { Path } from "../constant";
 import { useUserStore } from "../store/user";
 import Locale from "../locales";
 import BotIcon from "../icons/bot.svg";
-import { PasswordInput } from "./ui-lib";
+import EyeIcon from "../icons/eye.svg";
+import EyeOffIcon from "../icons/eye-off.svg";
 import clsx from "clsx";
 
 export function AuthPage() {
@@ -19,11 +19,11 @@ export function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async () => {
     setError("");
 
-    // 基础验证
     if (!username.trim()) {
       setError(Locale.Auth.Username + "不能为空");
       return;
@@ -53,9 +53,7 @@ export function AuthPage() {
         return;
       }
 
-      // 登录/注册成功
       userStore.setAuth(data.token, data.user);
-      // 刷新页面进入主界面
       window.location.href = "/#/";
     } catch (e) {
       setError("网络错误，请稍后重试");
@@ -99,18 +97,27 @@ export function AuthPage() {
       {/* 密码输入 */}
       <div className={styles["auth-field"]}>
         <label className={styles["auth-label"]}>{Locale.Auth.Password}</label>
-        <PasswordInput
-          className={styles["auth-input"]}
-          aria-label={Locale.Auth.Password}
-          value={password}
-          type="password"
-          placeholder={Locale.Auth.PasswordPlaceholder}
-          onKeyDown={handleKeyDown}
-          onChange={(e) => {
-            setPassword(e.currentTarget.value);
-            setError("");
-          }}
-        />
+        <div className={styles["auth-password-wrap"]}>
+          <input
+            className={styles["auth-input"]}
+            type={showPassword ? "text" : "password"}
+            placeholder={Locale.Auth.PasswordPlaceholder}
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            type="button"
+            className={styles["auth-eye-btn"]}
+            onClick={() => setShowPassword(!showPassword)}
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeIcon /> : <EyeOffIcon />}
+          </button>
+        </div>
       </div>
 
       {/* 注册模式下显示确认密码 */}
@@ -119,18 +126,19 @@ export function AuthPage() {
           <label className={styles["auth-label"]}>
             {Locale.Auth.ConfirmPassword}
           </label>
-          <PasswordInput
-            className={styles["auth-input"]}
-            aria-label={Locale.Auth.ConfirmPassword}
-            value={confirmPassword}
-            type="password"
-            placeholder={Locale.Auth.ConfirmPassword}
-            onKeyDown={handleKeyDown}
-            onChange={(e) => {
-              setConfirmPassword(e.currentTarget.value);
-              setError("");
-            }}
-          />
+          <div className={styles["auth-password-wrap"]}>
+            <input
+              className={styles["auth-input"]}
+              type={showPassword ? "text" : "password"}
+              placeholder={Locale.Auth.ConfirmPassword}
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setError("");
+              }}
+              onKeyDown={handleKeyDown}
+            />
+          </div>
         </div>
       )}
 
@@ -152,7 +160,6 @@ export function AuthPage() {
           disabled={loading}
         />
 
-        {/* 切换登录/注册 */}
         <div
           style={{
             marginTop: "16px",

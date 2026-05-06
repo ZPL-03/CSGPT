@@ -83,15 +83,6 @@
     width: 80%;
     max-width: 320px;
     margin-bottom: 1.5vh;
-
-    :global(.password-input-container) {
-      max-width: 100% !important;
-      width: 100% !important;
-
-      :global(.password-input) {
-        min-width: 100% !important;
-      }
-    }
   }
 
   .auth-label {
@@ -100,6 +91,38 @@
     margin-bottom: 4px;
     color: var(--black);
     text-align: left;
+  }
+
+  .auth-password-wrap {
+    position: relative;
+    width: 100%;
+
+    .auth-input {
+      padding-right: 36px;
+    }
+
+    .auth-eye-btn {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      opacity: 0.5;
+
+      &:hover {
+        opacity: 1;
+      }
+
+      svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
   }
 
   .auth-input {
@@ -111,6 +134,8 @@
     box-sizing: border-box;
     outline: none;
     transition: border-color 0.2s;
+    background: var(--white);
+    color: var(--black);
 
     &:focus {
       border-color: var(--primary);
