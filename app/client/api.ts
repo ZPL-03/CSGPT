@@ -1,14 +1,10 @@
-import { getClientConfig } from "../config/client";
-import {
-  ACCESS_CODE_PREFIX,
-  ModelProvider,
-  ServiceProvider,
-} from "../constant";
+import { ACCESS_CODE_PREFIX, ServiceProvider } from "../constant";
 import {
   ChatMessageTool,
   ChatMessage,
   ModelType,
   useAccessStore,
+  useAppConfig,
 } from "../store";
 import { ChatGPTApi, DalleRequestPayload } from "./platforms/openai";
 
@@ -98,32 +94,12 @@ export abstract class LLMApi {
   abstract models(): Promise<LLMModel[]>;
 }
 
-type ProviderName = "openai" | "azure" | "claude" | "palm";
-
-interface Model {
-  name: string;
-  provider: ProviderName;
-  ctxlen: number;
-}
-
-interface ChatProvider {
-  name: ProviderName;
-  apiConfig: {
-    baseUrl: string;
-    apiKey: string;
-    summaryModel: Model;
-  };
-  models: Model[];
-
-  chat: () => void;
-  usage: () => void;
-}
-
 export class ClientApi {
   public llm: LLMApi;
 
-  // CSGPT 只使用 OpenAI 兼容接口（ChatGPTApi），不需要其他 Provider
-  constructor(provider: ModelProvider = ModelProvider.GPT) {
+  // Chat requests share the OpenAI-compatible client; provider-specific
+  // endpoint, key, and model are resolved from each request config.
+  constructor(_provider: ServiceProvider = ServiceProvider.CSGPT) {
     this.llm = new ChatGPTApi();
   }
 
@@ -153,8 +129,11 @@ export function validString(x: string): boolean {
   return x?.length > 0;
 }
 
-// CSGPT 简化请求头，只使用 OpenAI 兼容接口（Authorization: Bearer token）
-export function getHeaders(ignoreHeaders: boolean = false) {
+// 根据当前 Provider 获取请求头，自动匹配对应的 API Key
+export function getHeaders(
+  ignoreHeaders: boolean = false,
+  providerName?: string,
+) {
   const accessStore = useAccessStore.getState();
   let headers: Record<string, string> = {};
   if (!ignoreHeaders) {
@@ -165,7 +144,19 @@ export function getHeaders(ignoreHeaders: boolean = false) {
   }
 
   const isEnabledAccessControl = accessStore.enabledAccessControl();
-  const apiKey = accessStore.openaiApiKey;
+
+  // 获取当前 Provider 对应的 API Key
+  let apiKey = "";
+  try {
+    const effectiveProviderName =
+      providerName ||
+      useAppConfig.getState().modelConfig.providerName ||
+      ServiceProvider.CSGPT;
+    apiKey = getApiKeyForProvider(accessStore, effectiveProviderName);
+  } catch {
+    // 兜底：使用 CSGPT API Key
+    apiKey = accessStore.csgptApiKey || accessStore.openaiApiKey;
+  }
 
   if (apiKey) {
     headers["Authorization"] = getBearerToken(apiKey);
@@ -178,7 +169,32 @@ export function getHeaders(ignoreHeaders: boolean = false) {
   return headers;
 }
 
-// CSGPT 只使用 OpenAI 兼容接口，所有 Provider 统一返回 ChatGPTApi
+// 根据 Provider 名称获取对应的 API Key
+function getApiKeyForProvider(
+  accessStore: ReturnType<typeof useAccessStore.getState>,
+  providerName: string,
+): string {
+  const keyMap: Record<string, string> = {
+    CSGPT: accessStore.csgptApiKey,
+    OpenAI: accessStore.openaiApiKey,
+    Azure: accessStore.azureApiKey,
+    Google: accessStore.googleApiKey,
+    Anthropic: accessStore.anthropicApiKey,
+    Baidu: accessStore.baiduApiKey,
+    ByteDance: accessStore.bytedanceApiKey,
+    Alibaba: accessStore.alibabaApiKey,
+    Tencent: accessStore.tencentSecretKey,
+    Moonshot: accessStore.moonshotApiKey,
+    Iflytek: accessStore.iflytekApiKey,
+    DeepSeek: accessStore.deepseekApiKey,
+    XAI: accessStore.xaiApiKey,
+    ChatGLM: accessStore.chatglmApiKey,
+    SiliconFlow: accessStore.siliconflowApiKey,
+    "302.AI": accessStore.ai302ApiKey,
+  };
+  return keyMap[providerName] || "";
+}
+
 export function getClientApi(provider: ServiceProvider): ClientApi {
-  return new ClientApi(ModelProvider.GPT);
+  return new ClientApi(provider);
 }

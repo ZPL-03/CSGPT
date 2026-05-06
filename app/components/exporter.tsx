@@ -21,7 +21,7 @@ import {
 
 import CopyIcon from "../icons/copy.svg";
 import LoadingIcon from "../icons/three-dots.svg";
-import ChatGptIcon from "../icons/chatgpt.png";
+import ChatGptIcon from "../icons/bot.svg";
 import ShareIcon from "../icons/share.svg";
 
 import DownloadIcon from "../icons/download.svg";
@@ -29,8 +29,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSelector, useMessageSelector } from "./message-selector";
 import { Avatar } from "./emoji";
 import dynamic from "next/dynamic";
-import NextImage from "next/image";
-
 import { toBlob, toPng } from "html-to-image";
 
 import { prettyObject } from "../utils/format";
@@ -515,25 +513,19 @@ export function ImagePreviewer(props: {
       >
         <div className={styles["chat-info"]}>
           <div className={clsx(styles["logo"], "no-dark")}>
-            <NextImage
-              src={ChatGptIcon.src}
-              alt="logo"
-              width={50}
-              height={50}
-            />
+            <ChatGptIcon width={50} height={50} />
           </div>
 
           <div>
             <div className={styles["main-title"]}>CSGPT</div>
-            <div className={styles["sub-title"]}>
-              github.com/ZPL-03/CSGPT
-            </div>
+            <div className={styles["sub-title"]}>github.com/ZPL-03/CSGPT</div>
             <div className={styles["icons"]}>
               <MaskAvatar avatar={config.avatar} />
               <span className={styles["icon-space"]}>&</span>
               <MaskAvatar
                 avatar={mask.avatar}
                 model={session.mask.modelConfig.model}
+                providerName={session.mask.modelConfig.providerName}
               />
             </div>
           </div>
@@ -568,6 +560,7 @@ export function ImagePreviewer(props: {
                   <MaskAvatar
                     avatar={session.mask.avatar}
                     model={m.model || session.mask.modelConfig.model}
+                    providerName={session.mask.modelConfig.providerName}
                   />
                 )}
               </div>

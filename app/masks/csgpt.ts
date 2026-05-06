@@ -2,6 +2,7 @@
 // 复合材料结构设计大模型 - 预设对话模板
 
 import { BuiltinMask } from "./typing";
+import { CSGPT_DEFAULT_MODEL, ServiceProvider } from "../constant";
 
 export const CSGPT_MASKS: BuiltinMask[] = [
   {
@@ -44,7 +45,8 @@ export const CSGPT_MASKS: BuiltinMask[] = [
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.7,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -97,7 +99,8 @@ export const CSGPT_MASKS: BuiltinMask[] = [
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.6,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -145,7 +148,8 @@ export const CSGPT_MASKS: BuiltinMask[] = [
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.7,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -194,7 +198,8 @@ export const CSGPT_MASKS: BuiltinMask[] = [
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.5,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -243,7 +248,8 @@ export const CSGPT_MASKS: BuiltinMask[] = [
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.3,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -292,7 +298,8 @@ export const CSGPT_MASKS: BuiltinMask[] = [
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.6,
       max_tokens: 4096,
       presence_penalty: 0,

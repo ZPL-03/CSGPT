@@ -19,6 +19,7 @@ import {
   CHATGLM_BASE_URL,
   SILICONFLOW_BASE_URL,
   AI302_BASE_URL,
+  CSGPT,
 } from "../constant";
 import { getHeaders } from "../client/api";
 import { getClientConfig } from "../config/client";
@@ -31,8 +32,8 @@ let fetchState = 0; // 0 not fetch, 1 fetching, 2 done
 
 const isApp = getClientConfig()?.buildMode === "export";
 
-// CSGPT 专用：默认 API 路径指向 CSGPT 而非 OpenAI
-const DEFAULT_OPENAI_URL = isApp ? OPENAI_BASE_URL : CSGPT_BASE_URL;
+// OpenAI 默认 API 路径：非 APP 模式走服务端代理 /api/openai
+const DEFAULT_OPENAI_URL = isApp ? OPENAI_BASE_URL : ApiPath.OpenAI;
 
 const DEFAULT_GOOGLE_URL = isApp ? GEMINI_BASE_URL : ApiPath.Google;
 
@@ -64,11 +65,18 @@ const DEFAULT_SILICONFLOW_URL = isApp
 
 const DEFAULT_AI302_URL = isApp ? AI302_BASE_URL : ApiPath["302.AI"];
 
+// CSGPT 专用：默认 API 路径为 /api/csgpt
+const DEFAULT_CSGPT_URL = isApp ? CSGPT_BASE_URL : ApiPath.CSGPT;
+
 const DEFAULT_ACCESS_STATE = {
   accessCode: "",
   useCustomConfig: false,
 
-  provider: ServiceProvider.OpenAI,
+  provider: ServiceProvider.CSGPT,
+
+  // csgpt（内置 Qwen3-14B 微调模型）
+  csgptUrl: DEFAULT_CSGPT_URL,
+  csgptApiKey: "",
 
   // openai
   openaiUrl: DEFAULT_OPENAI_URL,
@@ -228,11 +236,16 @@ export const useAccessStore = createPersistStore(
       return ensure(get(), ["siliconflowApiKey"]);
     },
 
+    isValidCSGPT() {
+      return ensure(get(), ["csgptApiKey"]);
+    },
+
     isAuthorized() {
       this.fetch();
 
       // has token or has code or disabled access control
       return (
+        this.isValidCSGPT() ||
         this.isValidOpenAI() ||
         this.isValidAzure() ||
         this.isValidGoogle() ||
@@ -267,7 +280,9 @@ export const useAccessStore = createPersistStore(
           if (defaultModel !== "") {
             const [model, providerName] = getModelProvider(defaultModel);
             DEFAULT_CONFIG.modelConfig.model = model;
-            DEFAULT_CONFIG.modelConfig.providerName = providerName as any;
+            if (providerName) {
+              DEFAULT_CONFIG.modelConfig.providerName = providerName as any;
+            }
           }
 
           return res;
@@ -300,6 +315,18 @@ export const useAccessStore = createPersistStore(
       }
 
       return persistedState as any;
+    },
+    // 服务端配置字段不由 localStorage 持久化覆盖，避免旧值导致模型重复
+    merge(persistedState, currentState) {
+      const state = persistedState as any;
+      if (!state) return { ...currentState };
+      return {
+        ...currentState,
+        ...state,
+        customModels: currentState.customModels,
+        defaultModel: currentState.defaultModel,
+        visionModels: currentState.visionModels,
+      };
     },
   },
 );

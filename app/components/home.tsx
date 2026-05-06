@@ -164,7 +164,7 @@ function Screen() {
     if (userStore.token) {
       userStore.fetchUser();
     }
-  }, []);
+  }, [userStore]);
 
   // 认证门控：用户未登录时强制跳转到认证页面
   if (!userStore.isLoggedIn && !isAuth) {

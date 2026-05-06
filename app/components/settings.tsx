@@ -50,6 +50,7 @@ import {
   Google,
   GoogleSafetySettingsThreshold,
   OPENAI_BASE_URL,
+  CSGPT_BASE_URL,
   Path,
   ServiceProvider,
   SlotID,
@@ -59,6 +60,7 @@ import {
   DeepSeek,
   SiliconFlow,
   AI302,
+  CSGPT,
 } from "../constant";
 import { Prompt, SearchService, usePromptStore } from "../store/prompt";
 import { ErrorBoundary } from "./error";
@@ -68,6 +70,7 @@ import { Avatar, AvatarPicker } from "./emoji";
 import { getClientConfig } from "../config/client";
 import { nanoid } from "nanoid";
 import { useMaskStore } from "../store/mask";
+import { useAllModels } from "../utils/hooks";
 
 function EditPromptModal(props: { id: string; onClose: () => void }) {
   const promptStore = usePromptStore();
@@ -268,6 +271,7 @@ export function Settings() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const config = useAppConfig();
   const updateConfig = config.update;
+  const allModels = useAllModels();
 
   const accessStore = useAccessStore();
 
@@ -302,6 +306,25 @@ export function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const showAccessCode = enabledAccessControl && !clientConfig?.isApp;
+  const syncModelToProvider = (provider: ServiceProvider) => {
+    const currentModelBelongsToProvider = allModels.some(
+      (m) =>
+        m.available &&
+        m.name === config.modelConfig.model &&
+        m.provider?.providerName === provider,
+    );
+    if (currentModelBelongsToProvider) return;
+
+    const nextModel = allModels.find(
+      (m) => m.available && m.provider?.providerName === provider,
+    );
+    if (!nextModel) return;
+
+    config.update((config) => {
+      config.modelConfig.model = nextModel.name as any;
+      config.modelConfig.providerName = provider;
+    });
+  };
 
   const accessCodeComponent = showAccessCode && (
     <ListItem
@@ -339,6 +362,46 @@ export function Settings() {
         ></input>
       </ListItem>
     );
+
+  // CSGPT 内置模型配置：Qwen3-14B 微调大模型
+  const csgptConfigComponent = accessStore.provider ===
+    ServiceProvider.CSGPT && (
+    <>
+      <ListItem
+        title={Locale.Settings.Access.CSGPT.Endpoint.Title}
+        subTitle={Locale.Settings.Access.CSGPT.Endpoint.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.Access.CSGPT.Endpoint.Title}
+          type="text"
+          value={accessStore.csgptUrl}
+          placeholder={CSGPT_BASE_URL}
+          onChange={(e) =>
+            accessStore.update(
+              (access) => (access.csgptUrl = e.currentTarget.value),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.Access.CSGPT.ApiKey.Title}
+        subTitle={Locale.Settings.Access.CSGPT.ApiKey.SubTitle}
+      >
+        <PasswordInput
+          aria={Locale.Settings.ShowPassword}
+          aria-label={Locale.Settings.Access.CSGPT.ApiKey.Title}
+          value={accessStore.csgptApiKey}
+          type="text"
+          placeholder={Locale.Settings.Access.CSGPT.ApiKey.Placeholder}
+          onChange={(e) => {
+            accessStore.update(
+              (access) => (access.csgptApiKey = e.currentTarget.value),
+            );
+          }}
+        />
+      </ListItem>
+    </>
+  );
 
   const openAIConfigComponent = accessStore.provider ===
     ServiceProvider.OpenAI && (
@@ -1061,44 +1124,44 @@ export function Settings() {
     </>
   );
 
-  const ai302ConfigComponent = accessStore.provider === ServiceProvider["302.AI"] && (
+  const ai302ConfigComponent = accessStore.provider ===
+    ServiceProvider["302.AI"] && (
     <>
       <ListItem
-          title={Locale.Settings.Access.AI302.Endpoint.Title}
-          subTitle={
-            Locale.Settings.Access.AI302.Endpoint.SubTitle +
-            AI302.ExampleEndpoint
+        title={Locale.Settings.Access.AI302.Endpoint.Title}
+        subTitle={
+          Locale.Settings.Access.AI302.Endpoint.SubTitle + AI302.ExampleEndpoint
+        }
+      >
+        <input
+          aria-label={Locale.Settings.Access.AI302.Endpoint.Title}
+          type="text"
+          value={accessStore.ai302Url}
+          placeholder={AI302.ExampleEndpoint}
+          onChange={(e) =>
+            accessStore.update(
+              (access) => (access.ai302Url = e.currentTarget.value),
+            )
           }
-        >
-          <input
-            aria-label={Locale.Settings.Access.AI302.Endpoint.Title}
-            type="text"
-            value={accessStore.ai302Url}
-            placeholder={AI302.ExampleEndpoint}
-            onChange={(e) =>
-              accessStore.update(
-                (access) => (access.ai302Url = e.currentTarget.value),
-              )
-            }
-          ></input>
-        </ListItem>
-        <ListItem
-          title={Locale.Settings.Access.AI302.ApiKey.Title}
-          subTitle={Locale.Settings.Access.AI302.ApiKey.SubTitle}
-        >
-          <PasswordInput
-            aria-label={Locale.Settings.Access.AI302.ApiKey.Title}
-            value={accessStore.ai302ApiKey}
-            type="text"
-            placeholder={Locale.Settings.Access.AI302.ApiKey.Placeholder}
-            onChange={(e) => {
-              accessStore.update(
-                (access) => (access.ai302ApiKey = e.currentTarget.value),
-              );
-            }}
-          />
-        </ListItem>
-      </>
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.Access.AI302.ApiKey.Title}
+        subTitle={Locale.Settings.Access.AI302.ApiKey.SubTitle}
+      >
+        <PasswordInput
+          aria-label={Locale.Settings.Access.AI302.ApiKey.Title}
+          value={accessStore.ai302ApiKey}
+          type="text"
+          placeholder={Locale.Settings.Access.AI302.ApiKey.Placeholder}
+          onChange={(e) => {
+            accessStore.update(
+              (access) => (access.ai302ApiKey = e.currentTarget.value),
+            );
+          }}
+        />
+      </ListItem>
+    </>
   );
 
   return (
@@ -1383,11 +1446,11 @@ export function Settings() {
                       aria-label={Locale.Settings.Access.Provider.Title}
                       value={accessStore.provider}
                       onChange={(e) => {
+                        const provider = e.target.value as ServiceProvider;
                         accessStore.update(
-                          (access) =>
-                            (access.provider = e.target
-                              .value as ServiceProvider),
+                          (access) => (access.provider = provider),
                         );
+                        syncModelToProvider(provider);
                       }}
                     >
                       {Object.entries(ServiceProvider).map(([k, v]) => (
@@ -1398,6 +1461,7 @@ export function Settings() {
                     </Select>
                   </ListItem>
 
+                  {csgptConfigComponent}
                   {openAIConfigComponent}
                   {azureConfigComponent}
                   {googleConfigComponent}

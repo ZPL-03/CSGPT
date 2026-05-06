@@ -22,6 +22,22 @@ const customProvider = (providerName: string) => ({
   sorted: CustomSeq.next(providerName),
 });
 
+const normalizeProviderName = (providerName?: string) =>
+  providerName?.trim().toLowerCase();
+
+function isSameProvider(
+  provider: LLMModel["provider"] | undefined,
+  providerName?: string,
+) {
+  const normalized = normalizeProviderName(providerName);
+  if (!normalized) return true;
+
+  return (
+    normalizeProviderName(provider?.id) === normalized ||
+    normalizeProviderName(provider?.providerName) === normalized
+  );
+}
+
 /**
  * Sorts an array of models based on specified rules.
  *
@@ -69,7 +85,7 @@ export function collectModelTable(
     // using <modelName>@<providerId> as fullName
     modelTable[`${m.name}@${m?.provider?.id}`] = {
       ...m,
-      displayName: m.name, // 'provider' is copied over if it exists
+      displayName: m.displayName || m.name, // 'provider' is copied over if it exists
     };
   });
 
@@ -93,16 +109,16 @@ export function collectModelTable(
         const [customModelName, customProviderName] = getModelProvider(name);
         let count = 0;
         for (const fullName in modelTable) {
-          const [modelName, providerName] = getModelProvider(fullName);
+          const modelInfo = modelTable[fullName];
+          const modelName = modelInfo.name;
           if (
             customModelName == modelName &&
-            (customProviderName === undefined ||
-              customProviderName === providerName)
+            isSameProvider(modelInfo.provider, customProviderName)
           ) {
             count += 1;
             modelTable[fullName]["available"] = available;
             // swap name and displayName for bytedance
-            if (providerName === "bytedance") {
+            if (modelInfo.provider?.id === "bytedance") {
               [name, displayName] = [displayName, modelName];
               modelTable[fullName]["name"] = name;
             }
@@ -142,19 +158,17 @@ export function collectModelTableWithDefaultModel(
 ) {
   let modelTable = collectModelTable(models, customModels);
   if (defaultModel && defaultModel !== "") {
-    if (defaultModel.includes("@")) {
-      if (defaultModel in modelTable) {
-        modelTable[defaultModel].isDefault = true;
-      }
-    } else {
-      for (const key of Object.keys(modelTable)) {
-        if (
-          modelTable[key].available &&
-          getModelProvider(key)[0] == defaultModel
-        ) {
-          modelTable[key].isDefault = true;
-          break;
-        }
+    const [defaultModelName, defaultProviderName] =
+      getModelProvider(defaultModel);
+    for (const key of Object.keys(modelTable)) {
+      const modelInfo = modelTable[key];
+      if (
+        modelInfo.available &&
+        modelInfo.name === defaultModelName &&
+        isSameProvider(modelInfo.provider, defaultProviderName)
+      ) {
+        modelInfo.isDefault = true;
+        break;
       }
     }
   }
@@ -198,9 +212,13 @@ export function isModelAvailableInServer(
   modelName: string,
   providerName: string,
 ) {
-  const fullName = `${modelName}@${providerName}`;
   const modelTable = collectModelTable(DEFAULT_MODELS, customModels);
-  return modelTable[fullName]?.available === false;
+  return Object.values(modelTable).some(
+    (model) =>
+      model.name === modelName &&
+      isSameProvider(model.provider, providerName) &&
+      model.available === false,
+  );
 }
 
 /**
@@ -251,8 +269,16 @@ export function isModelNotavailableInServer(
       return !Object.values(modelTable).filter((v) => v.name === modelName)?.[0]
         ?.available;
     }
-    const fullName = `${modelName}@${providerName.toLowerCase()}`;
-    if (modelTable?.[fullName]?.available === true) return false;
+    if (
+      Object.values(modelTable).some(
+        (model) =>
+          model.name === modelName &&
+          isSameProvider(model.provider, providerName) &&
+          model.available === true,
+      )
+    ) {
+      return false;
+    }
   }
   return true;
 }

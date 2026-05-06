@@ -2,7 +2,6 @@
 export const OWNER = "ZPL-03";
 export const REPO = "CSGPT";
 export const REPO_URL = `https://github.com/${OWNER}/${REPO}`;
-export const PLUGINS_REPO_URL = `https://github.com/${OWNER}/CSGPT`;
 export const ISSUE_URL = `https://github.com/${OWNER}/${REPO}/issues`;
 export const UPDATE_URL = `${REPO_URL}#keep-updated`;
 export const RELEASE_URL = `${REPO_URL}/releases`;
@@ -55,6 +54,7 @@ export enum Path {
 
 export enum ApiPath {
   Cors = "",
+  CSGPT = "/api/csgpt",
   Azure = "/api/azure",
   OpenAI = "/api/openai",
   Anthropic = "/api/anthropic",
@@ -114,6 +114,7 @@ export const REQUEST_TIMEOUT_MS_FOR_THINKING = REQUEST_TIMEOUT_MS * 5;
 export const EXPORT_MESSAGE_CLASS_NAME = "export-markdown";
 
 export enum ServiceProvider {
+  CSGPT = "CSGPT",
   OpenAI = "OpenAI",
   Azure = "Azure",
   Google = "Google",
@@ -142,6 +143,7 @@ export enum GoogleSafetySettingsThreshold {
 }
 
 export enum ModelProvider {
+  CSGPT = "CSGPT",
   Stability = "Stability",
   GPT = "GPT",
   GeminiPro = "GeminiPro",
@@ -416,12 +418,26 @@ You are an AI assistant with access to system tools. Your role is to help users 
    
 `;
 
+export const CSGPT_DEFAULT_MODEL = "CSGPT-Qwen3-14B";
+export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "CSGPT Qwen3-14B";
+export const CSGPT_LEGACY_MODEL_NAMES = ["CSGPT-V1"] as const;
+
+export function isLegacyCSGPTModelName(model?: string) {
+  if (!model) return false;
+  return (
+    CSGPT_LEGACY_MODEL_NAMES.includes(model as any) ||
+    model.startsWith("gpt-") ||
+    model.startsWith("chatgpt-")
+  );
+}
+
 export const SUMMARIZE_MODEL = "gpt-4o-mini";
 export const GEMINI_SUMMARIZE_MODEL = "gemini-pro";
 export const DEEPSEEK_SUMMARIZE_MODEL = "deepseek-chat";
 
 export const KnowledgeCutOffDate: Record<string, string> = {
   default: "2021-09",
+  [CSGPT_DEFAULT_MODEL]: "2024-06",
   "gpt-4-turbo": "2023-12",
   "gpt-4-turbo-2024-04-09": "2023-12",
   "gpt-4-turbo-preview": "2023-12",
@@ -740,6 +756,18 @@ const ai302Models = [
 
 let seq = 1000; // 内置的模型序号生成器从1000开始
 export const DEFAULT_MODELS = [
+  {
+    name: CSGPT_DEFAULT_MODEL,
+    displayName: CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
+    available: true,
+    sorted: seq++,
+    provider: {
+      id: "csgpt",
+      providerName: "CSGPT",
+      providerType: "csgpt",
+      sorted: 0,
+    },
+  },
   ...openaiModels.map((name) => ({
     name,
     available: true,
@@ -945,13 +973,3 @@ export const CSGPT = {
   ExampleEndpoint: "http://your-autodl-server-ip:8000/v1",
   ChatPath: "chat/completions",
 };
-
-// CSGPT 服务提供商
-export enum CSGPTServiceProvider {
-  CSGPT = "CSGPT",
-}
-
-// CSGPT 模型提供商
-export enum CSGPTModelProvider {
-  CSGPT = "CSGPT",
-}

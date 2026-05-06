@@ -3,7 +3,38 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
+import { CSGPT_DEFAULT_MODEL } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
+
+function joinUrl(baseUrl: string, path: string) {
+  return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
+function getPublicCSGPTModel(config: ReturnType<typeof getServerSideConfig>) {
+  return config.csgptModelName || CSGPT_DEFAULT_MODEL;
+}
+
+function resolveUpstreamCSGPTModel(
+  requestedModel: string | undefined,
+  config: ReturnType<typeof getServerSideConfig>,
+) {
+  const publicDefaultModel = getPublicCSGPTModel(config);
+  if (!requestedModel || requestedModel === publicDefaultModel) {
+    return (
+      config.csgptUpstreamModelName || requestedModel || publicDefaultModel
+    );
+  }
+
+  return requestedModel;
+}
+
+function getAuthorizationHeader(
+  req: NextRequest,
+  config: ReturnType<typeof getServerSideConfig>,
+) {
+  if (config.csgptApiKey) return `Bearer ${config.csgptApiKey}`;
+  return req.headers.get("authorization") || "";
+}
 
 // CSGPT API 路由处理函数
 export async function POST(req: NextRequest) {
@@ -32,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     // 构造转发到 vLLM 的请求体
     const requestBody = {
-      model: config.csgptModelName || model || "CSGPT-V1",
+      model: resolveUpstreamCSGPTModel(model, config),
       messages: processedMessages,
       stream: stream,
       ...rest,
@@ -40,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     // 构造 vLLM API 地址
     const baseUrl = config.csgptBaseUrl || "http://localhost:8000/v1";
-    const apiUrl = `${baseUrl}/chat/completions`;
+    const apiUrl = joinUrl(baseUrl, "chat/completions");
 
     console.log("[CSGPT API] 转发请求到:", apiUrl);
     console.log("[CSGPT API] 模型:", requestBody.model);
@@ -50,7 +81,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.csgptApiKey || "sk-csgpt-placeholder"}`,
+        Authorization: getAuthorizationHeader(req, config),
       },
       body: JSON.stringify(requestBody),
     });
@@ -141,12 +172,12 @@ export async function GET(req: NextRequest) {
       object: "list",
       data: [
         {
-          id: config.csgptModelName || "CSGPT-V1",
+          id: getPublicCSGPTModel(config),
           object: "model",
           created: Date.now(),
           owned_by: "csgpt",
           permission: [],
-          root: config.csgptModelName || "CSGPT-V1",
+          root: getPublicCSGPTModel(config),
           parent: null,
         },
       ],

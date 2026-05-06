@@ -2,7 +2,12 @@ import { BUILTIN_MASKS } from "../masks";
 import { getLang, Lang } from "../locales";
 import { DEFAULT_TOPIC, ChatMessage } from "./chat";
 import { ModelConfig, useAppConfig } from "./config";
-import { StoreKey } from "../constant";
+import {
+  CSGPT_DEFAULT_MODEL,
+  isLegacyCSGPTModelName,
+  ServiceProvider,
+  StoreKey,
+} from "../constant";
 import { nanoid } from "nanoid";
 import { createPersistStore } from "../utils/store";
 
@@ -32,6 +37,18 @@ export type MaskState = typeof DEFAULT_MASK_STATE & {
 };
 
 export const DEFAULT_MASK_AVATAR = "gpt-bot";
+
+function normalizeCSGPTModelConfig(modelConfig: ModelConfig) {
+  if (
+    (!modelConfig.providerName ||
+      modelConfig.providerName === ServiceProvider.CSGPT) &&
+    isLegacyCSGPTModelName(modelConfig.model)
+  ) {
+    modelConfig.model = CSGPT_DEFAULT_MODEL as any;
+    modelConfig.providerName = ServiceProvider.CSGPT;
+  }
+}
+
 export const createEmptyMask = () =>
   ({
     id: nanoid(),
@@ -114,7 +131,7 @@ export const useMaskStore = createPersistStore(
   }),
   {
     name: StoreKey.Mask,
-    version: 3.1,
+    version: 3.2,
 
     migrate(state, version) {
       const newState = JSON.parse(JSON.stringify(state)) as MaskState;
@@ -130,6 +147,12 @@ export const useMaskStore = createPersistStore(
           updatedMasks[m.id] = m;
         });
         newState.masks = updatedMasks;
+      }
+
+      if (version < 3.2) {
+        Object.values(newState.masks).forEach((m) => {
+          normalizeCSGPTModelConfig(m.modelConfig);
+        });
       }
 
       return newState as any;

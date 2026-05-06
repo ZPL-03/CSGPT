@@ -24,6 +24,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.logs/
 
 # local env files
 .env*.local
@@ -50,7 +51,8 @@ masks.json
 # mcp config
 app/mcp/mcp_config.json
 
-# Claude Code 配置文件
+# AI 配置文件
+AGENTS.md
 CLAUDE.md
 .claude/
 

@@ -1,5 +1,11 @@
 import md5 from "spark-md5";
-import { DEFAULT_MODELS, DEFAULT_GA_ID } from "../constant";
+import {
+  CSGPT_DEFAULT_MODEL,
+  CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
+  DEFAULT_GA_ID,
+  DEFAULT_MODELS,
+  ServiceProvider,
+} from "../constant";
 import { isGPT4Model } from "../utils/model";
 
 declare global {
@@ -100,7 +106,8 @@ declare global {
       // CSGPT 专用配置
       CSGPT_BASE_URL?: string; // vLLM 服务地址
       CSGPT_API_KEY?: string; // vLLM API 密钥
-      CSGPT_MODEL_NAME?: string; // 模型名称
+      CSGPT_MODEL_NAME?: string; // 前端展示的 CSGPT 默认模型名称
+      CSGPT_UPSTREAM_MODEL_NAME?: string; // 临时上游实际模型名称
     }
   }
 }
@@ -125,6 +132,23 @@ function getApiKey(keys?: string) {
   return apiKey;
 }
 
+function appendCustomModel(
+  customModels: string,
+  modelKey: string,
+  modelEntry = modelKey,
+) {
+  if (
+    customModels
+      .split(",")
+      .map((v) => v.trim().replace(/^[+-]/, "").split("=")[0])
+      .some((v) => v.toLowerCase() === modelKey.toLowerCase())
+  ) {
+    return customModels;
+  }
+
+  return [customModels, `+${modelEntry}`].filter(Boolean).join(",");
+}
+
 export const getServerSideConfig = () => {
   if (typeof process === "undefined") {
     throw Error(
@@ -133,9 +157,19 @@ export const getServerSideConfig = () => {
   }
 
   const disableGPT4 = !!process.env.DISABLE_GPT4;
+  const csgptModelName = process.env.CSGPT_MODEL_NAME || CSGPT_DEFAULT_MODEL;
+  const csgptModelEntry = `${csgptModelName}@${ServiceProvider.CSGPT}`;
   let customModels = process.env.CUSTOM_MODELS ?? "";
-  let defaultModel = process.env.DEFAULT_MODEL ?? "";
+  let defaultModel = process.env.DEFAULT_MODEL ?? csgptModelEntry;
   let visionModels = process.env.VISION_MODELS ?? "";
+
+  customModels = appendCustomModel(
+    customModels,
+    csgptModelEntry,
+    csgptModelName === CSGPT_DEFAULT_MODEL
+      ? `${csgptModelEntry}=${CSGPT_DEFAULT_MODEL_DISPLAY_NAME}`
+      : csgptModelEntry,
+  );
 
   if (disableGPT4) {
     if (customModels) customModels += ",";
@@ -254,7 +288,8 @@ export const getServerSideConfig = () => {
     // CSGPT 专用配置：vLLM 服务地址、API 密钥、模型名称
     csgptBaseUrl: process.env.CSGPT_BASE_URL,
     csgptApiKey: process.env.CSGPT_API_KEY,
-    csgptModelName: process.env.CSGPT_MODEL_NAME,
+    csgptModelName,
+    csgptUpstreamModelName: process.env.CSGPT_UPSTREAM_MODEL_NAME,
 
     gtmId: process.env.GTM_ID,
     gaId: process.env.GA_ID || DEFAULT_GA_ID,

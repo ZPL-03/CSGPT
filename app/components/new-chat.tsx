@@ -24,6 +24,7 @@ function MaskItem(props: { mask: Mask; onClick?: () => void }) {
       <MaskAvatar
         avatar={props.mask.avatar}
         model={props.mask.modelConfig.model}
+        providerName={props.mask.modelConfig.providerName}
       />
       <div className={clsx(styles["mask-name"], "one-line")}>
         {props.mask.name}

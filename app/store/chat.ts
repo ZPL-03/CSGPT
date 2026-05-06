@@ -21,6 +21,7 @@ import { getClientApi } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { showToast } from "../components/ui-lib";
 import {
+  CSGPT_DEFAULT_MODEL,
   DEFAULT_INPUT_TEMPLATE,
   DEFAULT_MODELS,
   DEFAULT_SYSTEM_TEMPLATE,
@@ -32,6 +33,7 @@ import {
   ServiceProvider,
   StoreKey,
   SUMMARIZE_MODEL,
+  isLegacyCSGPTModelName,
 } from "../constant";
 import Locale, { getLang } from "../locales";
 import { prettyObject } from "../utils/format";
@@ -106,6 +108,17 @@ export const BOT_HELLO: ChatMessage = createMessage({
   content: Locale.Store.BotHello,
 });
 
+function normalizeCSGPTModelConfig(modelConfig: ModelConfig) {
+  if (
+    (!modelConfig.providerName ||
+      modelConfig.providerName === ServiceProvider.CSGPT) &&
+    isLegacyCSGPTModelName(modelConfig.model)
+  ) {
+    modelConfig.model = CSGPT_DEFAULT_MODEL as ModelType;
+    modelConfig.providerName = ServiceProvider.CSGPT;
+  }
+}
+
 function createEmptySession(): ChatSession {
   return {
     id: nanoid(),
@@ -129,7 +142,10 @@ function getSummarizeModel(
   providerName: string,
 ): string[] {
   // if it is using gpt-* models, force to use 4o-mini to summarize
-  if (currentModel.startsWith("gpt") || currentModel.startsWith("chatgpt")) {
+  if (
+    providerName !== ServiceProvider.CSGPT &&
+    (currentModel.startsWith("gpt") || currentModel.startsWith("chatgpt"))
+  ) {
     const configStore = useAppConfig.getState();
     const accessStore = useAccessStore.getState();
     const allModel = collectModelsWithDefaultModel(
@@ -169,7 +185,8 @@ function fillTemplateWith(input: string, modelConfig: ModelConfig) {
   // Find the model in the DEFAULT_MODELS array that matches the modelConfig.model
   const modelInfo = DEFAULT_MODELS.find((m) => m.name === modelConfig.model);
 
-  var serviceProvider = "OpenAI";
+  var serviceProvider: string =
+    modelConfig.providerName || ServiceProvider.OpenAI;
   if (modelInfo) {
     // TODO: auto detect the providerName from the modelConfig.model
 
@@ -566,6 +583,7 @@ export const useChatStore = createPersistStore(
         // system prompts, to get close to OpenAI Web ChatGPT
         const shouldInjectSystemPrompts =
           modelConfig.enableInjectSystemPrompts &&
+          modelConfig.providerName !== ServiceProvider.CSGPT &&
           (session.mask.modelConfig.model.startsWith("gpt-") ||
             session.mask.modelConfig.model.startsWith("chatgpt-"));
 
@@ -874,7 +892,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.3,
+    version: 3.4,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -936,6 +954,21 @@ export const useChatStore = createPersistStore(
           const config = useAppConfig.getState();
           s.mask.modelConfig.compressModel = "";
           s.mask.modelConfig.compressProviderName = "";
+        });
+      }
+
+      if (version < 3.4) {
+        newState.sessions.forEach((s) => {
+          normalizeCSGPTModelConfig(s.mask.modelConfig);
+          s.messages.forEach((m) => {
+            if (
+              m.model &&
+              isLegacyCSGPTModelName(m.model) &&
+              s.mask.modelConfig.providerName === ServiceProvider.CSGPT
+            ) {
+              m.model = CSGPT_DEFAULT_MODEL as ModelType;
+            }
+          });
         });
       }
 

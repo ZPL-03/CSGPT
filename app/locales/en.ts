@@ -132,7 +132,7 @@ const en: LocaleType = {
     Copy: "Copy All",
     Download: "Download",
     MessageFromYou: "Message From You",
-    MessageFromChatGPT: "Message From ChatGPT",
+    MessageFromChatGPT: "Message From CSGPT",
     Share: "Share to ShareGPT",
     Format: {
       Title: "Export Format",
@@ -149,10 +149,6 @@ const en: LocaleType = {
     Image: {
       Toast: "Capturing Image...",
       Modal: "Long press or right click to save image",
-    },
-    Artifacts: {
-      Title: "Share Artifacts",
-      Error: "Share Error",
     },
   },
   Select: {
@@ -346,11 +342,25 @@ const en: LocaleType = {
       },
       CustomEndpoint: {
         Title: "Custom Endpoint",
-        SubTitle: "Use custom Azure or OpenAI service",
+        SubTitle: "Use a custom API endpoint and key for the selected provider",
       },
       Provider: {
         Title: "Model Provider",
-        SubTitle: "Select Azure or OpenAI",
+        SubTitle:
+          "Switch between CSGPT, OpenAI, Anthropic, and other providers",
+      },
+      CSGPT: {
+        ApiKey: {
+          Title: "API Key",
+          SubTitle: "Custom CSGPT API Key",
+          Placeholder: "CSGPT API Key",
+        },
+
+        Endpoint: {
+          Title: "Inference Endpoint",
+          SubTitle:
+            "vLLM inference service endpoint, defaults to built-in CSGPT",
+        },
       },
       OpenAI: {
         ApiKey: {
@@ -537,7 +547,8 @@ const en: LocaleType = {
       },
       CustomModel: {
         Title: "Custom Models",
-        SubTitle: "Custom model options, seperated by comma",
+        SubTitle:
+          "Comma-separated custom models; supports model@Provider=Display Name, for example my-model@OpenAI",
       },
       Google: {
         ApiKey: {
@@ -707,47 +718,7 @@ const en: LocaleType = {
       View: "View",
     },
   },
-  Plugin: {
-    Name: "Plugin",
-    Page: {
-      Title: "Plugins",
-      SubTitle: (count: number) => `${count} plugins`,
-      Search: "Search Plugin",
-      Create: "Create",
-      Find: "You can find awesome plugins on github: ",
-    },
-    Item: {
-      Info: (count: number) => `${count} method`,
-      View: "View",
-      Edit: "Edit",
-      Delete: "Delete",
-      DeleteConfirm: "Confirm to delete?",
-    },
-    Auth: {
-      None: "None",
-      Basic: "Basic",
-      Bearer: "Bearer",
-      Custom: "Custom",
-      CustomHeader: "Parameter Name",
-      Token: "Token",
-      Proxy: "Using Proxy",
-      ProxyDescription: "Using proxies to solve CORS error",
-      Location: "Location",
-      LocationHeader: "Header",
-      LocationQuery: "Query",
-      LocationBody: "Body",
-    },
-    EditModal: {
-      Title: (readonly: boolean) =>
-        `Edit Plugin ${readonly ? "(readonly)" : ""}`,
-      Download: "Download",
-      Auth: "Authentication Type",
-      Content: "OpenAPI Schema",
-      Load: "Load From URL",
-      Method: "Method",
-      Error: "OpenAPI Schema Error",
-    },
-  },
+
   Mask: {
     Name: "Mask",
     Page: {
@@ -782,10 +753,7 @@ const en: LocaleType = {
         Title: "Hide Context Prompts",
         SubTitle: "Do not show in-context prompts in chat",
       },
-      Artifacts: {
-        Title: "Enable Artifacts",
-        SubTitle: "Can render HTML page when enable artifacts.",
-      },
+
       CodeFold: {
         Title: "Enable CodeFold",
         SubTitle:
@@ -831,61 +799,6 @@ const en: LocaleType = {
   URLCommand: {
     Code: "Detected access code from url, confirm to apply? ",
     Settings: "Detected settings from url, confirm to apply?",
-  },
-  SdPanel: {
-    Prompt: "Prompt",
-    NegativePrompt: "Negative Prompt",
-    PleaseInput: (name: string) => `Please input ${name}`,
-    AspectRatio: "Aspect Ratio",
-    ImageStyle: "Image Style",
-    OutFormat: "Output Format",
-    AIModel: "AI Model",
-    ModelVersion: "Model Version",
-    Submit: "Submit",
-    ParamIsRequired: (name: string) => `${name} is required`,
-    Styles: {
-      D3Model: "3d-model",
-      AnalogFilm: "analog-film",
-      Anime: "anime",
-      Cinematic: "cinematic",
-      ComicBook: "comic-book",
-      DigitalArt: "digital-art",
-      Enhance: "enhance",
-      FantasyArt: "fantasy-art",
-      Isometric: "isometric",
-      LineArt: "line-art",
-      LowPoly: "low-poly",
-      ModelingCompound: "modeling-compound",
-      NeonPunk: "neon-punk",
-      Origami: "origami",
-      Photographic: "photographic",
-      PixelArt: "pixel-art",
-      TileTexture: "tile-texture",
-    },
-  },
-  Sd: {
-    SubTitle: (count: number) => `${count} images`,
-    Actions: {
-      Params: "See Params",
-      Copy: "Copy Prompt",
-      Delete: "Delete",
-      Retry: "Retry",
-      ReturnHome: "Return Home",
-      History: "History",
-    },
-    EmptyRecord: "No images yet",
-    Status: {
-      Name: "Status",
-      Success: "Success",
-      Error: "Error",
-      Wait: "Waiting",
-      Running: "Running",
-    },
-    Danger: {
-      Delete: "Confirm to delete?",
-    },
-    GenerateParams: "Generate Params",
-    Detail: "Detail",
   },
 };
 

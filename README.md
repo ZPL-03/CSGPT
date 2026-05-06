@@ -34,7 +34,8 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 
 - **前端**：Next.js 14 + TypeScript + Zustand
 - **后端**：Next.js API Routes（SSE 流式代理）
-- **模型**：Qwen3-14B-QLoRA（通过 vLLM 部署）
+- **默认模型**：CSGPT-Qwen3-14B（Qwen3-14B 复合材料领域微调模型，通过 vLLM/OpenAI 兼容接口部署）
+- **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 
 ## 快速开始
 
@@ -55,7 +56,7 @@ cd CSGPT
 npm install
 
 # 配置环境变量
-cp .env.example .env.local
+cp .env.template .env.local
 # 编辑 .env.local，配置你的 API 地址和密钥
 
 # 启动开发服务器
@@ -73,8 +74,16 @@ CSGPT_BASE_URL=http://your-server:8000/v1
 # API Key
 CSGPT_API_KEY=your-api-key
 
-# 模型名称
-CSGPT_MODEL_NAME=CSGPT-V1
+# 前端展示的内置默认模型
+CSGPT_MODEL_NAME=CSGPT-Qwen3-14B
+
+# 临时上游实际模型名（可选）
+# 如果当前 CSGPT_BASE_URL 仍指向中转服务，可填写真实上游模型；
+# 正式切回 vLLM Qwen3-14B 后留空即可。
+# CSGPT_UPSTREAM_MODEL_NAME=
+
+# 默认会话模型
+DEFAULT_MODEL=CSGPT-Qwen3-14B@CSGPT
 
 # 访问控制码（可选）
 ACCESS_CODE=your-access-code
@@ -110,8 +119,21 @@ CSGPT/
     role: "system",
     content: "你的系统提示词",
   }],
-  modelConfig: { model: "CSGPT-V1" },
+  modelConfig: { model: "CSGPT-Qwen3-14B", providerName: "CSGPT" },
 }
+```
+
+### 自定义模型和接口
+
+设置页开启“自定义接口”后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部测试模型`；选择 CSGPT 默认模型时走内置 CSGPT-Qwen3-14B，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。
+
+### 验证命令
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run test:ci
+npm run build
 ```
 
 ### 自定义系统提示词

@@ -132,7 +132,7 @@ const cn = {
     Download: "下载文件",
     Share: "分享到 ShareGPT",
     MessageFromYou: "用户",
-    MessageFromChatGPT: "ChatGPT",
+    MessageFromChatGPT: "CSGPT",
     Format: {
       Title: "导出格式",
       SubTitle: "可以导出 Markdown 文本或者 PNG 图片",
@@ -148,10 +148,6 @@ const cn = {
     Image: {
       Toast: "正在生成截图",
       Modal: "长按或右键保存图片",
-    },
-    Artifacts: {
-      Title: "分享页面",
-      Error: "分享失败",
     },
   },
   Select: {
@@ -342,11 +338,23 @@ const cn = {
       },
       CustomEndpoint: {
         Title: "自定义接口",
-        SubTitle: "是否使用自定义 Azure 或 OpenAI 服务",
+        SubTitle: "为当前模型服务商改用自定义 API 地址和密钥",
       },
       Provider: {
         Title: "模型服务商",
-        SubTitle: "切换不同的服务商",
+        SubTitle: "切换 CSGPT、OpenAI、Anthropic 等模型服务",
+      },
+      CSGPT: {
+        ApiKey: {
+          Title: "API 密钥",
+          SubTitle: "使用自定义 CSGPT API Key",
+          Placeholder: "CSGPT API Key",
+        },
+
+        Endpoint: {
+          Title: "推理服务地址",
+          SubTitle: "vLLM 推理服务端点，默认使用内置 CSGPT 服务",
+        },
       },
       OpenAI: {
         ApiKey: {
@@ -553,7 +561,8 @@ const cn = {
       },
       CustomModel: {
         Title: "自定义模型名",
-        SubTitle: "增加自定义模型可选项，使用英文逗号隔开",
+        SubTitle:
+          "增加可选模型，英文逗号隔开；支持 model@Provider=显示名，例如 my-model@OpenAI",
       },
       AI302: {
         ApiKey: {
@@ -698,46 +707,6 @@ const cn = {
       View: "查看",
     },
   },
-  Plugin: {
-    Name: "插件",
-    Page: {
-      Title: "插件",
-      SubTitle: (count: number) => `${count} 个插件`,
-      Search: "搜索插件",
-      Create: "新建",
-      Find: "您可以在Github上找到优秀的插件：",
-    },
-    Item: {
-      Info: (count: number) => `${count} 方法`,
-      View: "查看",
-      Edit: "编辑",
-      Delete: "删除",
-      DeleteConfirm: "确认删除？",
-    },
-    Auth: {
-      None: "不需要授权",
-      Basic: "Basic",
-      Bearer: "Bearer",
-      Custom: "自定义",
-      CustomHeader: "自定义参数名称",
-      Token: "Token",
-      Proxy: "使用代理",
-      ProxyDescription: "使用代理解决 CORS 错误",
-      Location: "位置",
-      LocationHeader: "Header",
-      LocationQuery: "Query",
-      LocationBody: "Body",
-    },
-    EditModal: {
-      Title: (readonly: boolean) => `编辑插件 ${readonly ? "（只读）" : ""}`,
-      Download: "下载",
-      Auth: "授权方式",
-      Content: "OpenAPI Schema",
-      Load: "从网页加载",
-      Method: "方法",
-      Error: "格式错误",
-    },
-  },
   Mask: {
     Name: "面具",
     Page: {
@@ -771,10 +740,6 @@ const cn = {
       HideContext: {
         Title: "隐藏预设对话",
         SubTitle: "隐藏后预设对话不会出现在聊天界面",
-      },
-      Artifacts: {
-        Title: "启用Artifacts",
-        SubTitle: "启用之后可以直接渲染HTML页面",
       },
       CodeFold: {
         Title: "启用代码折叠",
@@ -821,61 +786,6 @@ const cn = {
     Messages: "消息",
     Topic: "主题",
     Time: "时间",
-  },
-  SdPanel: {
-    Prompt: "画面提示",
-    NegativePrompt: "否定提示",
-    PleaseInput: (name: string) => `请输入${name}`,
-    AspectRatio: "横纵比",
-    ImageStyle: "图像风格",
-    OutFormat: "输出格式",
-    AIModel: "AI模型",
-    ModelVersion: "模型版本",
-    Submit: "提交生成",
-    ParamIsRequired: (name: string) => `${name}不能为空`,
-    Styles: {
-      D3Model: "3D模型",
-      AnalogFilm: "模拟电影",
-      Anime: "动漫",
-      Cinematic: "电影风格",
-      ComicBook: "漫画书",
-      DigitalArt: "数字艺术",
-      Enhance: "增强",
-      FantasyArt: "幻想艺术",
-      Isometric: "等角",
-      LineArt: "线描",
-      LowPoly: "低多边形",
-      ModelingCompound: "建模材料",
-      NeonPunk: "霓虹朋克",
-      Origami: "折纸",
-      Photographic: "摄影",
-      PixelArt: "像素艺术",
-      TileTexture: "贴图",
-    },
-  },
-  Sd: {
-    SubTitle: (count: number) => `共 ${count} 条绘画`,
-    Actions: {
-      Params: "查看参数",
-      Copy: "复制提示词",
-      Delete: "删除",
-      Retry: "重试",
-      ReturnHome: "返回首页",
-      History: "查看历史",
-    },
-    EmptyRecord: "暂无绘画记录",
-    Status: {
-      Name: "状态",
-      Success: "成功",
-      Error: "失败",
-      Wait: "等待中",
-      Running: "运行中",
-    },
-    Danger: {
-      Delete: "确认删除？",
-    },
-    GenerateParams: "生成参数",
-    Detail: "详情",
   },
 };
 

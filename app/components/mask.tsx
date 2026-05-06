@@ -65,11 +65,15 @@ function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
   return result;
 }
 
-export function MaskAvatar(props: { avatar: string; model?: ModelType }) {
+export function MaskAvatar(props: {
+  avatar: string;
+  model?: ModelType | string;
+  providerName?: string;
+}) {
   return props.avatar !== DEFAULT_MASK_AVATAR ? (
     <Avatar avatar={props.avatar} />
   ) : (
-    <Avatar model={props.model} />
+    <Avatar model={props.model} providerName={props.providerName} />
   );
 }
 
@@ -135,6 +139,7 @@ export function MaskConfig(props: {
               <MaskAvatar
                 avatar={props.mask.avatar}
                 model={props.mask.modelConfig.model}
+                providerName={props.mask.modelConfig.providerName}
               />
             </div>
           </Popover>
@@ -568,7 +573,11 @@ export function MaskPage() {
               <div className={styles["mask-item"]} key={m.id}>
                 <div className={styles["mask-header"]}>
                   <div className={styles["mask-icon"]}>
-                    <MaskAvatar avatar={m.avatar} model={m.modelConfig.model} />
+                    <MaskAvatar
+                      avatar={m.avatar}
+                      model={m.modelConfig.model}
+                      providerName={m.modelConfig.providerName}
+                    />
                   </div>
                   <div className={styles["mask-title"]}>
                     <div className={styles["mask-name"]}>{m.name}</div>

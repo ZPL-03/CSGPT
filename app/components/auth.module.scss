@@ -5,157 +5,82 @@
   height: 100%;
   width: 100%;
   flex-direction: column;
-  .top-banner {
-    position: relative;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 12px 64px;
-    box-sizing: border-box;
-    background: var(--second);
-    .top-banner-inner {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 14px;
-      line-height: 150%;
-      span {
-        gap: 8px;
-        a {
-          display: inline-flex;
-          align-items: center;
-          text-decoration: none;
-          margin-left: 8px;
-          color: var(--primary);
-        }
-      }
-    }
-    .top-banner-close {
-      cursor: pointer;
-      position: absolute;
-      top: 50%;
-      right: 48px;
-      transform: translateY(-50%);
-    }
-  }
+  padding-top: 16vh;
+}
 
-  @media (max-width: 600px) {
-    .top-banner {
-      padding: 12px 24px 12px 12px;
-      .top-banner-close {
-        right: 10px;
-      }
-      .top-banner-inner {
-        .top-banner-logo {
-          margin-right: 8px;
-        }
-      }
-    }
-  }
+.auth-logo {
+  margin-bottom: 2vh;
 
-  .auth-header {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    padding: 10px;
-    box-sizing: border-box;
-    animation: slide-in-from-top ease 0.3s;
-  }
-
-  .auth-logo {
-    margin-top: 10vh;
-    transform: scale(1.4);
-  }
-
-  .auth-title {
-    font-size: 24px;
-    font-weight: bold;
-    line-height: 2;
-    margin-bottom: 1vh;
-    text-align: center;
-    width: 100%;
-  }
-
-  .auth-tips {
-    font-size: 14px;
-    text-align: center;
-    width: 100%;
-  }
-
-  .auth-field {
-    width: 44%;
-    min-width: 300px;
-    max-width: 420px;
-    margin-bottom: 1.5vh;
-  }
-
-  .auth-label {
+  svg {
     display: block;
-    font-size: 14px;
-    margin-bottom: 4px;
-    color: var(--black);
-    text-align: left;
   }
+}
 
-  .auth-password-wrap {
-    position: relative;
-    width: 100%;
+.auth-title {
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 2;
+  text-align: center;
+}
 
-    .auth-eye-btn {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      opacity: 0.4;
-      z-index: 1;
+.auth-tips {
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 2vh;
+}
 
-      &:hover {
-        opacity: 0.7;
-      }
+.auth-field {
+  width: 280px;
+  margin-bottom: 1.5vh;
+}
 
-      svg {
-        width: 18px;
-        height: 18px;
-      }
-    }
+.auth-label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: var(--black);
+}
+
+input.auth-input {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-in-light);
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+  background: var(--white);
+  color: var(--black);
+  text-align: center;
+
+  &:focus {
+    border-color: var(--primary);
   }
+}
 
-  .auth-input {
+.auth-error {
+  width: 280px;
+  color: red;
+  font-size: 14px;
+  margin-bottom: 1vh;
+  text-align: center;
+}
+
+.auth-actions {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  width: 280px;
+  margin-top: 1vh;
+
+  button {
     width: 100%;
-    padding: 10px 36px 10px 12px;
-    border: 1px solid var(--border-in-light);
-    border-radius: 8px;
-    font-size: 14px;
     box-sizing: border-box;
-    outline: none;
-    transition: border-color 0.2s;
-    background: var(--white);
-    color: var(--black);
-    text-align: center;
-
-    &:focus {
-      border-color: var(--primary);
-    }
   }
 
-  .auth-actions {
-    display: flex;
-    justify-content: center;
-    flex-direction: column;
-    width: 44%;
-    min-width: 300px;
-    max-width: 420px;
-    margin-top: 1vh;
-
-    button:not(:last-child) {
-      margin-bottom: 10px;
-    }
+  button:not(:last-child) {
+    margin-bottom: 10px;
   }
 }

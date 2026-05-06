@@ -68,6 +68,7 @@ export function ChatItem(props: {
                 <MaskAvatar
                   avatar={props.mask.avatar}
                   model={props.mask.modelConfig.model}
+                  providerName={props.mask.modelConfig.providerName}
                 />
               </div>
               <div className={styles["chat-item-narrow-count"]}>

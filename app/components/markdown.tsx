@@ -103,7 +103,7 @@ export function PreCode(props: { children: any }) {
       });
       setTimeout(renderMermaid, 1);
     }
-  }, []);
+  }, [renderMermaid]);
 
   return (
     <>

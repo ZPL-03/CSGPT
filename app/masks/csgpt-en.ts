@@ -2,6 +2,7 @@
 // Composite Material Structural Design Assistant - English Templates
 
 import { BuiltinMask } from "./typing";
+import { CSGPT_DEFAULT_MODEL, ServiceProvider } from "../constant";
 
 export const CSGPT_MASKS_EN: BuiltinMask[] = [
   {
@@ -45,7 +46,8 @@ Response guidelines:
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.7,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -99,7 +101,8 @@ Please provide professional layup design recommendations, including design basis
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.6,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -148,7 +151,8 @@ Please recommend suitable material systems based on operating conditions and exp
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.7,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -198,7 +202,8 @@ Please provide professional FEA modeling guidance.`,
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.5,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -248,7 +253,8 @@ Please provide accurate standard interpretation and compliance checks.`,
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.3,
       max_tokens: 4096,
       presence_penalty: 0,
@@ -297,7 +303,8 @@ Please provide detailed failure analysis reports and improvement recommendations
       },
     ],
     modelConfig: {
-      model: "CSGPT-V1",
+      model: CSGPT_DEFAULT_MODEL,
+      providerName: ServiceProvider.CSGPT,
       temperature: 0.6,
       max_tokens: 4096,
       presence_penalty: 0,

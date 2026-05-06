@@ -3,6 +3,7 @@ import { DalleQuality, DalleStyle, ModelSize } from "../typing";
 import { getClientConfig } from "../config/client";
 import {
   DEFAULT_INPUT_TEMPLATE,
+  CSGPT_DEFAULT_MODEL,
   DEFAULT_MODELS,
   DEFAULT_SIDEBAR_WIDTH,
   DEFAULT_TTS_ENGINE,
@@ -13,6 +14,7 @@ import {
   DEFAULT_TTS_VOICES,
   StoreKey,
   ServiceProvider,
+  isLegacyCSGPTModelName,
 } from "../constant";
 import { createPersistStore } from "../utils/store";
 import type { Voice } from "rt-client";
@@ -37,6 +39,20 @@ export enum Theme {
 }
 
 const config = getClientConfig();
+
+function normalizeCSGPTModelConfig(modelConfig: {
+  model: string;
+  providerName?: ServiceProvider;
+}) {
+  if (
+    (!modelConfig.providerName ||
+      modelConfig.providerName === ServiceProvider.CSGPT) &&
+    isLegacyCSGPTModelName(modelConfig.model)
+  ) {
+    modelConfig.model = CSGPT_DEFAULT_MODEL as ModelType;
+    modelConfig.providerName = ServiceProvider.CSGPT;
+  }
+}
 
 export const DEFAULT_CONFIG = {
   lastUpdate: Date.now(), // timestamp, to merge state
@@ -64,8 +80,8 @@ export const DEFAULT_CONFIG = {
   models: DEFAULT_MODELS as any as LLMModel[],
 
   modelConfig: {
-    model: "gpt-4o-mini" as ModelType,
-    providerName: "OpenAI" as ServiceProvider,
+    model: CSGPT_DEFAULT_MODEL as ModelType,
+    providerName: ServiceProvider.CSGPT,
     temperature: 0.5,
     top_p: 1,
     max_tokens: 4000,
@@ -195,7 +211,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.2,
+    version: 4.3,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -209,7 +225,13 @@ export const useAppConfig = createPersistStore(
         if (idx !== -1) models[idx] = pModel;
         // 不再追加不在当前列表中的旧模型，避免 localStorage 残留导致的重复
       });
-      return { ...currentState, ...state, models: models };
+      // customModels 由服务端控制，不允许 localStorage 中的旧值覆盖
+      return {
+        ...currentState,
+        ...state,
+        models: models,
+        customModels: currentState.customModels,
+      };
     },
 
     migrate(persistedState, version) {
@@ -254,6 +276,10 @@ export const useAppConfig = createPersistStore(
           DEFAULT_CONFIG.modelConfig.compressModel;
         state.modelConfig.compressProviderName =
           DEFAULT_CONFIG.modelConfig.compressProviderName;
+      }
+
+      if (version < 4.3) {
+        normalizeCSGPTModelConfig(state.modelConfig);
       }
 
       return state as any;

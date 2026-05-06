@@ -1,6 +1,5 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import "@testing-library/jest-dom";
-import { jest } from "@jest/globals";
 
 global.fetch = jest.fn(() =>
   Promise.resolve({

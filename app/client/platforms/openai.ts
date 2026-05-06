@@ -81,33 +81,117 @@ export interface DalleRequestPayload {
 export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
 
-  path(path: string): string {
-    // CSGPT 专用：始终使用 CSGPT API 路径，忽略用户自定义 provider 配置
-    let baseUrl = CSGPT_BASE_URL;
-
-    // 用户自定义配置：仅允许覆盖为自定义远程地址
+  // providerName 可选参数：chat 调用时传入会话级 provider，其他调用使用全局默认
+  path(path: string, providerName?: string): string {
     const accessStore = useAccessStore.getState();
-    if (
-      accessStore.useCustomConfig &&
-      accessStore.openaiUrl &&
-      accessStore.openaiUrl !== ApiPath.OpenAI
-    ) {
-      baseUrl = accessStore.openaiUrl;
-    }
-
-    // APP 模式下使用远程地址
+    const effectiveProvider =
+      providerName ||
+      useAppConfig.getState().modelConfig.providerName ||
+      ServiceProvider.CSGPT;
     const isApp = !!getClientConfig()?.isApp;
-    if (isApp && baseUrl === CSGPT_BASE_URL) {
-      baseUrl = OPENAI_BASE_URL;
-    }
+
+    // 根据当前选中的 Provider 获取对应的 API 基础路径
+    let baseUrl = this.getProviderBaseUrl(
+      effectiveProvider,
+      accessStore,
+      isApp,
+    );
 
     if (baseUrl.endsWith("/")) {
       baseUrl = baseUrl.slice(0, baseUrl.length - 1);
     }
 
-    console.log("[Proxy Endpoint] ", baseUrl, path);
+    const normalizedPath = this.normalizeRequestPath(baseUrl, path);
 
-    return [baseUrl, path].join("/");
+    console.log(
+      "[Proxy Endpoint] Provider:",
+      providerName,
+      baseUrl,
+      normalizedPath,
+    );
+
+    return [baseUrl, normalizedPath].join("/");
+  }
+
+  private normalizeRequestPath(baseUrl: string, path: string): string {
+    const isServerProxy = baseUrl.startsWith("/api/");
+    if (!isServerProxy && baseUrl.endsWith("/v1") && path.startsWith("v1/")) {
+      return path.slice(3);
+    }
+
+    return path;
+  }
+
+  // 根据 Provider 获取对应的 API 基础 URL
+  private getProviderBaseUrl(
+    providerName: string,
+    accessStore: ReturnType<typeof useAccessStore.getState>,
+    isApp: boolean,
+  ): string {
+    const customProviderUrl = accessStore.useCustomConfig
+      ? this.getCustomProviderUrl(accessStore, providerName)
+      : "";
+
+    if (customProviderUrl) {
+      return customProviderUrl;
+    }
+
+    // 各 Provider 的默认 API 路径（非 APP 模式走服务端代理，APP 模式走远程地址）
+    const urlMap: Record<string, string> = {
+      [ServiceProvider.CSGPT]: CSGPT_BASE_URL,
+      [ServiceProvider.OpenAI]: ApiPath.OpenAI,
+      [ServiceProvider.Azure]: ApiPath.Azure,
+      [ServiceProvider.Google]: ApiPath.Google,
+      [ServiceProvider.Anthropic]: ApiPath.Anthropic,
+      [ServiceProvider.Baidu]: ApiPath.Baidu,
+      [ServiceProvider.ByteDance]: ApiPath.ByteDance,
+      [ServiceProvider.Alibaba]: ApiPath.Alibaba,
+      [ServiceProvider.Tencent]: ApiPath.Tencent,
+      [ServiceProvider.Moonshot]: ApiPath.Moonshot,
+      [ServiceProvider.Iflytek]: ApiPath.Iflytek,
+      [ServiceProvider.DeepSeek]: ApiPath.DeepSeek,
+      [ServiceProvider.XAI]: ApiPath.XAI,
+      [ServiceProvider.ChatGLM]: ApiPath.ChatGLM,
+      [ServiceProvider.SiliconFlow]: ApiPath.SiliconFlow,
+      [ServiceProvider["302.AI"]]: ApiPath["302.AI"],
+    };
+
+    const baseUrl = urlMap[providerName];
+    if (baseUrl) return baseUrl;
+
+    // 兜底：使用 CSGPT 默认路径
+    return CSGPT_BASE_URL;
+  }
+
+  // 获取用户自定义的 Provider URL
+  private getCustomProviderUrl(
+    accessStore: ReturnType<typeof useAccessStore.getState>,
+    providerName: string,
+  ): string {
+    const customUrlMap: Record<string, string | undefined> = {
+      [ServiceProvider.CSGPT]: accessStore.csgptUrl,
+      [ServiceProvider.OpenAI]: accessStore.openaiUrl,
+      [ServiceProvider.Azure]: accessStore.azureUrl,
+      [ServiceProvider.Google]: accessStore.googleUrl,
+      [ServiceProvider.Anthropic]: accessStore.anthropicUrl,
+      [ServiceProvider.Baidu]: accessStore.baiduUrl,
+      [ServiceProvider.ByteDance]: accessStore.bytedanceUrl,
+      [ServiceProvider.Alibaba]: accessStore.alibabaUrl,
+      [ServiceProvider.Tencent]: accessStore.tencentUrl,
+      [ServiceProvider.Moonshot]: accessStore.moonshotUrl,
+      [ServiceProvider.Iflytek]: accessStore.iflytekUrl,
+      [ServiceProvider.DeepSeek]: accessStore.deepseekUrl,
+      [ServiceProvider.XAI]: accessStore.xaiUrl,
+      [ServiceProvider.ChatGLM]: accessStore.chatglmUrl,
+      [ServiceProvider.SiliconFlow]: accessStore.siliconflowUrl,
+      [ServiceProvider["302.AI"]]: accessStore.ai302Url,
+    };
+
+    const customUrl = customUrlMap[providerName];
+    if (customUrl && !customUrl.startsWith("/api/")) {
+      return customUrl;
+    }
+    return "";
   }
 
   async extractMessage(res: any) {
@@ -189,7 +273,7 @@ export class ChatGPTApi implements LLMApi {
       options.config.model.startsWith("o1") ||
       options.config.model.startsWith("o3") ||
       options.config.model.startsWith("o4-mini");
-    const isGpt5 =  options.config.model.startsWith("gpt-5");
+    const isGpt5 = options.config.model.startsWith("gpt-5");
     if (isDalle3) {
       const prompt = getMessageTextContent(
         options.messages.slice(-1)?.pop() as any,
@@ -220,7 +304,7 @@ export class ChatGPTApi implements LLMApi {
         messages,
         stream: options.config.stream,
         model: modelConfig.model,
-        temperature: (!isO1OrO3 && !isGpt5) ? modelConfig.temperature : 1,
+        temperature: !isO1OrO3 && !isGpt5 ? modelConfig.temperature : 1,
         presence_penalty: !isO1OrO3 ? modelConfig.presence_penalty : 0,
         frequency_penalty: !isO1OrO3 ? modelConfig.frequency_penalty : 0,
         top_p: !isO1OrO3 ? modelConfig.top_p : 1,
@@ -229,11 +313,10 @@ export class ChatGPTApi implements LLMApi {
       };
 
       if (isGpt5) {
-  	// Remove max_tokens if present
-  	delete requestPayload.max_tokens;
-  	// Add max_completion_tokens (or max_completion_tokens if that's what you meant)
-  	requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
-
+        // Remove max_tokens if present
+        delete requestPayload.max_tokens;
+        // Add max_completion_tokens (or max_completion_tokens if that's what you meant)
+        requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       } else if (isO1OrO3) {
         // by default the o1/o3 models will not attempt to produce output that includes markdown formatting
         // manually add "Formatting re-enabled" developer message to encourage markdown inclusion in model responses
@@ -247,9 +330,8 @@ export class ChatGPTApi implements LLMApi {
         requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       }
 
-
       // add max_tokens to vision model
-      if (visionModel && !isO1OrO3 && ! isGpt5) {
+      if (visionModel && !isO1OrO3 && !isGpt5) {
         requestPayload["max_tokens"] = Math.max(modelConfig.max_tokens, 4000);
       }
     }
@@ -286,10 +368,12 @@ export class ChatGPTApi implements LLMApi {
             (model?.displayName ?? model?.name) as string,
             useCustomConfig ? useAccessStore.getState().azureApiVersion : "",
           ),
+          modelConfig.providerName,
         );
       } else {
         chatPath = this.path(
           isDalle3 ? OpenaiPath.ImagePath : OpenaiPath.ChatPath,
+          modelConfig.providerName,
         );
       }
       if (shouldStream) {
@@ -299,7 +383,7 @@ export class ChatGPTApi implements LLMApi {
         streamWithThink(
           chatPath,
           requestPayload,
-          getHeaders(),
+          getHeaders(false, modelConfig.providerName),
           tools as any,
           funcs,
           controller,
@@ -392,7 +476,7 @@ export class ChatGPTApi implements LLMApi {
           method: "POST",
           body: JSON.stringify(requestPayload),
           signal: controller.signal,
-          headers: getHeaders(),
+          headers: getHeaders(false, modelConfig.providerName),
         };
 
         // make a fetch request

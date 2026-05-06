@@ -214,6 +214,7 @@ export function MessageSelector(props: {
                   <MaskAvatar
                     avatar={session.mask.avatar}
                     model={m.model || session.mask.modelConfig.model}
+                    providerName={session.mask.modelConfig.providerName}
                   />
                 )}
               </div>

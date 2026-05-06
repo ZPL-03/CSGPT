@@ -513,7 +513,7 @@ export function ChatActions(props: {
   // switch model
   const currentModel = session.mask.modelConfig.model;
   const currentProviderName =
-    session.mask.modelConfig?.providerName || ServiceProvider.OpenAI;
+    session.mask.modelConfig?.providerName || ServiceProvider.CSGPT;
   const allModels = useAllModels();
   const models = useMemo(() => {
     const filteredModels = allModels.filter((m) => m.available);
@@ -530,15 +530,21 @@ export function ChatActions(props: {
     }
   }, [allModels]);
   const currentModelName = useMemo(() => {
-    const model = models.find(
+    // 先精确匹配 model + provider
+    let model = models.find(
       (m) =>
         m.name == currentModel &&
         m?.provider?.providerName == currentProviderName,
     );
-    return model?.displayName ?? "";
+    // 若未匹配到（自定义模型 providerName 可能不一致），仅按模型名查找
+    if (!model) {
+      model = models.find((m) => m.name == currentModel);
+    }
+    return model?.displayName ?? currentModel;
   }, [models, currentModel, currentProviderName]);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showUploadImage, setShowUploadImage] = useState(false);
+  const { setAttachImages, setUploading } = props;
 
   const [showSizeSelector, setShowSizeSelector] = useState(false);
   const [showQualitySelector, setShowQualitySelector] = useState(false);
@@ -557,13 +563,17 @@ export function ChatActions(props: {
     const show = isVisionModel(currentModel);
     setShowUploadImage(show);
     if (!show) {
-      props.setAttachImages([]);
-      props.setUploading(false);
+      setAttachImages([]);
+      setUploading(false);
     }
 
     // if current model is not available
     // switch to first available model
-    const isUnavailableModel = !models.some((m) => m.name === currentModel);
+    const isUnavailableModel = !models.some(
+      (m) =>
+        m.name === currentModel &&
+        m.provider?.providerName === currentProviderName,
+    );
     if (isUnavailableModel && models.length > 0) {
       // show next model to default model if exist
       let nextModel = models.find((model) => model.isDefault) || models[0];
@@ -578,7 +588,15 @@ export function ChatActions(props: {
           : nextModel.name,
       );
     }
-  }, [chatStore, currentModel, models, session]);
+  }, [
+    chatStore,
+    currentModel,
+    currentProviderName,
+    models,
+    session,
+    setAttachImages,
+    setUploading,
+  ]);
 
   return (
     <div className={styles["chat-input-actions"]}>
@@ -788,8 +806,7 @@ export function ChatActions(props: {
         )}
         {!isMobileScreen && <MCPAction />}
       </>
-      <div className={styles["chat-input-actions-end"]}>
-      </div>
+      <div className={styles["chat-input-actions-end"]}></div>
     </div>
   );
 }
@@ -939,6 +956,7 @@ function _Chat() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
   const config = useAppConfig();
+  const allModels = useAllModels();
   const fontSize = config.fontSize;
   const fontFamily = config.fontFamily;
 
@@ -955,7 +973,7 @@ function _Chat() {
           (scrollRef.current.scrollTop + scrollRef.current.clientHeight),
       ) <= 1
     : false;
-  const isAttachWithTop = useMemo(() => {
+  const isAttachWithTop = (() => {
     const lastMessage = scrollRef.current?.lastElementChild as HTMLElement;
     // if scrolllRef is not ready or no message, return false
     if (!scrollRef?.current || !lastMessage) return false;
@@ -964,9 +982,24 @@ function _Chat() {
       scrollRef.current.getBoundingClientRect().top;
     // leave some space for user question
     return topDistance < 100;
-  }, [scrollRef?.current?.scrollHeight]);
+  })();
 
   const isTyping = userInput !== "";
+  const getModelDisplayName = useCallback(
+    (model?: string) => {
+      if (!model) return "";
+      const currentProviderName = session.mask.modelConfig.providerName;
+      const matchedModel =
+        allModels.find(
+          (m) =>
+            m.name === model &&
+            m.provider?.providerName === currentProviderName,
+        ) || allModels.find((m) => m.name === model);
+
+      return matchedModel?.displayName || model;
+    },
+    [allModels, session.mask.modelConfig.providerName],
+  );
 
   // if user is typing, should auto scroll to bottom
   // if user is not typing, should auto scroll to bottom only if already at bottom
@@ -1761,6 +1794,9 @@ function _Chat() {
                                         message.model ||
                                         session.mask.modelConfig.model
                                       }
+                                      providerName={
+                                        session.mask.modelConfig.providerName
+                                      }
                                     />
                                   )}
                                 </>
@@ -1768,7 +1804,7 @@ function _Chat() {
                             </div>
                             {!isUser && (
                               <div className={styles["chat-model-name"]}>
-                                {message.model}
+                                {getModelDisplayName(message.model)}
                               </div>
                             )}
 
@@ -1864,6 +1900,7 @@ function _Chat() {
                               defaultShow={i >= messages.length - 6}
                             />
                             {getMessageImages(message).length == 1 && (
+                              // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 className={styles["chat-message-item-image"]}
                                 src={getMessageImages(message)[0]}
@@ -1883,6 +1920,7 @@ function _Chat() {
                                 {getMessageImages(message).map(
                                   (image, index) => {
                                     return (
+                                      // eslint-disable-next-line @next/next/no-img-element
                                       <img
                                         className={
                                           styles[
@@ -2007,8 +2045,7 @@ function _Chat() {
             className={clsx(styles["chat-side-panel"], {
               [styles["mobile"]]: isMobileScreen,
             })}
-          >
-          </div>
+          ></div>
         </div>
       </div>
       {showExport && (

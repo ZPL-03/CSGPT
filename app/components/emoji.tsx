@@ -5,6 +5,7 @@ import EmojiPicker, {
 } from "emoji-picker-react";
 
 import { ModelType } from "../store";
+import { ServiceProvider } from "../constant";
 
 import BotIconDefault from "../icons/llm-icons/default.svg";
 import BotIconOpenAI from "../icons/llm-icons/openai.svg";
@@ -45,13 +46,25 @@ export function AvatarPicker(props: {
   );
 }
 
-export function Avatar(props: { model?: ModelType; avatar?: string }) {
+export function Avatar(props: {
+  model?: ModelType | string;
+  providerName?: ServiceProvider | string;
+  avatar?: string;
+}) {
   let LlmIcon = BotIconDefault;
 
   if (props.model) {
     const modelName = props.model.toLowerCase();
+    const providerName = props.providerName?.toLowerCase();
 
+    // CSGPT 内置 Qwen3-14B 微调模型
     if (
+      providerName === ServiceProvider.CSGPT.toLowerCase() ||
+      modelName.includes("csgpt") ||
+      modelName.startsWith("qwen")
+    ) {
+      LlmIcon = BotIconQwen;
+    } else if (
       modelName.startsWith("gpt") ||
       modelName.startsWith("chatgpt") ||
       modelName.startsWith("dall-e") ||
@@ -68,7 +81,10 @@ export function Avatar(props: { model?: ModelType; avatar?: string }) {
       LlmIcon = BotIconClaude;
     } else if (modelName.includes("llama")) {
       LlmIcon = BotIconMeta;
-    } else if (modelName.startsWith("mixtral") || modelName.startsWith("codestral")) {
+    } else if (
+      modelName.startsWith("mixtral") ||
+      modelName.startsWith("codestral")
+    ) {
       LlmIcon = BotIconMistral;
     } else if (modelName.includes("deepseek")) {
       LlmIcon = BotIconDeepseek;

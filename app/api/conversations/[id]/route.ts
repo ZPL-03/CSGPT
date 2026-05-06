@@ -8,6 +8,7 @@ import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // 获取对话详情
 export async function GET(
