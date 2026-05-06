@@ -137,6 +137,7 @@
     transition: border-color 0.2s;
     background: var(--white);
     color: var(--black);
+    text-align: center;
 
     &:focus {
       border-color: var(--primary);
@@ -147,6 +148,10 @@
     display: flex;
     justify-content: center;
     flex-direction: column;
+    width: 50%;
+    min-width: 320px;
+    max-width: 480px;
+    margin-top: 1vh;
 
     button:not(:last-child) {
       margin-bottom: 10px;
