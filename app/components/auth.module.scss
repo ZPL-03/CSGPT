@@ -80,8 +80,9 @@
   }
 
   .auth-field {
-    width: 80%;
-    max-width: 320px;
+    width: 50%;
+    min-width: 320px;
+    max-width: 480px;
     margin-bottom: 1.5vh;
   }
 
