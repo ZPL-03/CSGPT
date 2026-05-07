@@ -94,7 +94,7 @@ export function McpMarketPage() {
       if (!mcpEnabled) return;
       try {
         setLoadingPresets(true);
-        // CSGPT 暂不使用预设 MCP 服务器
+        // CSGPT 不使用预设 MCP 服务器
         setPresetServers([]);
         return;
       } catch (error) {

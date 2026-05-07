@@ -59,7 +59,7 @@ export const useUserStore = create<UserState>()(
             set({ token: "", user: null, isLoggedIn: false });
           }
         } catch {
-          // 网络错误不清除状态，可能是暂时不可用
+          // 网络错误不清除登录状态，避免误登出
         }
       },
     }),

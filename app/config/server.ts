@@ -101,7 +101,7 @@ declare global {
       CSGPT_BASE_URL?: string; // CSGPT API 服务地址
       CSGPT_API_KEY?: string; // CSGPT API 密钥
       CSGPT_MODEL_NAME?: string; // 前端展示的 CSGPT 默认模型名称
-      CSGPT_UPSTREAM_MODEL_NAME?: string; // 临时上游实际模型名称
+      CSGPT_UPSTREAM_MODEL_NAME?: string; // 上游实际模型名称
     }
   }
 }

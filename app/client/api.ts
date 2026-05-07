@@ -109,9 +109,7 @@ export class ClientApi {
 
   masks() {}
 
-  // CSGPT 分享功能（暂未实现）
-  async share(messages: ChatMessage[], avatarUrl: string | null = null) {
-    console.log("[Share] CSGPT 分享功能暂未实现");
+  async share(_messages: ChatMessage[], _avatarUrl: string | null = null) {
     return undefined;
   }
 }

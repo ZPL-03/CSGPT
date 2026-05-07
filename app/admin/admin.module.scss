@@ -1,0 +1,566 @@
+// 管理后台样式
+// 复用项目 CSS 变量体系，匹配主界面设计语言
+
+// 登录页
+.admin-login {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--white);
+  color: var(--black);
+  font-family: system-ui, sans-serif;
+}
+
+.admin-login-card {
+  background: var(--second);
+  padding: 32px;
+  border-radius: 12px;
+  width: 340px;
+  box-shadow: var(--card-shadow);
+}
+
+.admin-login-header {
+  text-align: center;
+  margin-bottom: 16px;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.admin-login-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  text-align: center;
+}
+
+.admin-login-subtitle {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--black);
+  opacity: 0.6;
+  text-align: center;
+}
+
+.admin-login-input {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: var(--border-in-light);
+  background: var(--white);
+  color: var(--black);
+  font-size: 14px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+
+  &:focus {
+    border-color: var(--primary);
+  }
+}
+
+.admin-login-error {
+  color: #e53e3e;
+  font-size: 13px;
+  margin: 0 0 12px;
+  text-align: center;
+}
+
+.admin-login-btn {
+  width: 100%;
+  padding: 8px 0;
+  border-radius: 6px;
+  border: none;
+  background: var(--black);
+  color: var(--white);
+  font-size: 14px;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// 状态页（加载/无权限）
+.admin-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--white);
+  color: var(--black);
+  font-family: system-ui, sans-serif;
+}
+
+.admin-status-body {
+  text-align: center;
+}
+
+.admin-status-title {
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+
+.admin-status-text {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.admin-status-error {
+  color: #e53e3e;
+  font-size: 13px;
+  margin: 0 0 16px;
+  max-width: 400px;
+}
+
+.admin-status-desc {
+  color: var(--black);
+  opacity: 0.6;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+// 按钮基础样式
+.admin-btn {
+  padding: 8px 24px;
+  border-radius: 6px;
+  border: var(--border-in-light);
+  background: transparent;
+  color: var(--black);
+  font-size: 14px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--second);
+  }
+}
+
+.admin-btn-sm {
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: var(--border-in-light);
+  background: transparent;
+  color: var(--black);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--second);
+  }
+}
+
+// 主布局
+.admin-page {
+  min-height: 100vh;
+  background: var(--white);
+  color: var(--black);
+  font-family: system-ui, sans-serif;
+}
+
+// 顶部导航
+.admin-nav {
+  border-bottom: var(--border-in-light);
+  background: var(--white);
+}
+
+.admin-nav-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 44px;
+  padding: 0 16px;
+}
+
+.admin-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-nav-brand {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-nav-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.admin-nav-tab {
+  padding: 4px 14px;
+  border-radius: 4px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--black);
+
+  &[data-active="true"] {
+    background: var(--black);
+    color: var(--white);
+  }
+}
+
+.admin-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.admin-nav-user {
+  font-size: 11px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+// 错误提示条
+.admin-error-bar {
+  padding: 8px 16px 0;
+}
+
+.admin-error-msg {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(229, 62, 62, 0.1);
+  color: #e53e3e;
+  font-size: 12px;
+}
+
+// 主内容区
+.admin-content {
+  padding: 16px;
+}
+
+// 卡片
+.admin-card {
+  background: var(--white);
+  border: var(--border-in-light);
+  border-radius: 10px;
+  box-shadow: var(--card-shadow);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.admin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.admin-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+// 统计卡片行
+.admin-stat-grid {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-stat-card {
+  flex: 1 1 140px;
+  min-width: 120px;
+  text-align: center;
+  background: var(--white);
+  border: var(--border-in-light);
+  border-radius: 10px;
+  box-shadow: var(--card-shadow);
+  padding: 16px;
+}
+
+.admin-stat-label {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+.admin-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+// 双栏布局
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 12px;
+}
+
+// 表格
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-th {
+  padding: 7px 10px;
+  font-weight: 500;
+  text-align: left;
+  font-size: 12px;
+  opacity: 0.6;
+  white-space: nowrap;
+  border-bottom: var(--border-in-light);
+}
+
+.admin-td {
+  padding: 8px 10px;
+  font-size: 13px;
+  border-bottom: var(--border-in-light);
+}
+
+// 表格行可点击
+.admin-tr-clickable {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--second);
+  }
+}
+
+.admin-tr-expanded {
+  background: var(--second);
+}
+
+// 展开箭头
+.admin-expand-arrow {
+  font-size: 10px;
+  display: inline-block;
+  transition: transform 0.15s;
+
+  &[data-expanded="true"] {
+    transform: rotate(90deg);
+  }
+}
+
+// 对话主题截断
+.admin-topic-cell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 空状态
+.admin-empty {
+  font-size: 13px;
+  opacity: 0.6;
+  padding: 8px 0;
+}
+
+// 删除按钮
+.admin-delete-btn {
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+  background: rgba(229, 62, 62, 0.1);
+  color: #e53e3e;
+
+  &:disabled {
+    background: var(--second);
+    color: var(--black);
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// 消息详情面板
+.admin-msg-panel {
+  margin: 0 0 10px 32px;
+  background: var(--second);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.admin-msg-loading {
+  font-size: 12px;
+  opacity: 0.6;
+  text-align: center;
+  padding: 8px;
+}
+
+.admin-msg-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.admin-msg-item {
+  margin-bottom: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+}
+
+.admin-msg-item-user {
+  background: var(--second);
+}
+
+.admin-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.admin-msg-role {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-msg-model {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.admin-msg-error-tag {
+  font-size: 10px;
+  color: #e53e3e;
+}
+
+.admin-msg-date {
+  font-size: 10px;
+  opacity: 0.4;
+  margin-left: auto;
+}
+
+.admin-msg-content {
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+// 确认弹窗
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.admin-modal {
+  background: var(--white);
+  padding: 24px;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 94%;
+  box-shadow: var(--shadow);
+}
+
+.admin-modal-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.admin-modal-body {
+  margin: 0 0 20px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.admin-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.admin-btn-cancel {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: var(--border-in-light);
+  background: transparent;
+  color: var(--black);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin-btn-confirm-delete {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #e53e3e;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+// 移动端适配
+@media screen and (max-width: 600px) {
+  .admin-login-card {
+    width: 90vw;
+    max-width: 340px;
+  }
+
+  .admin-nav-inner {
+    padding: 0 10px;
+  }
+
+  .admin-nav-left {
+    gap: 8px;
+  }
+
+  .admin-nav-brand {
+    font-size: 13px;
+  }
+
+  .admin-nav-tab {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .admin-nav-user {
+    display: none;
+  }
+
+  .admin-content {
+    padding: 10px;
+  }
+
+  .admin-stat-card {
+    flex: 1 1 100px;
+    min-width: 90px;
+    padding: 12px 8px;
+  }
+
+  .admin-stat-value {
+    font-size: 18px;
+  }
+
+  .admin-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-table-wrap {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-topic-cell {
+    max-width: 140px;
+  }
+
+  .admin-msg-panel {
+    margin-left: 16px;
+  }
+}
