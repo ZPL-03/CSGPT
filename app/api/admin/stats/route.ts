@@ -10,6 +10,7 @@ import { getServerSideConfig } from "@/app/config/server";
 import { verifyToken } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function isAdmin(username: string): boolean {
   const config = getServerSideConfig();

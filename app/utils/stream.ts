@@ -79,7 +79,6 @@ export function fetch(url: string, options?: RequestInit): Promise<Response> {
         method: method.toUpperCase(),
         url,
         headers,
-        // TODO FormData
         body:
           typeof body === "string"
             ? Array.from(new TextEncoder().encode(body))
