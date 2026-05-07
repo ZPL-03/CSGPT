@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState, useCallback } from "react";
 import { useUserStore } from "../store/user";
 import BotPng from "../icons/bot.svg";
