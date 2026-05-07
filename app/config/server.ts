@@ -288,6 +288,7 @@ export const getServerSideConfig = () => {
     needCode: false,
     databaseUrl: DATABASE_URL,
     jwtSecret: JWT_SECRET,
+    adminUsernames: process.env.ADMIN_USERNAMES || "",
 
     isVercel: !!process.env.VERCEL,
 
