@@ -461,9 +461,7 @@ export default function AdminPage() {
 
         {/* 对话列表 */}
         <div style={cardStyle}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>
-            最近对话（最多 50 条）
-          </h3>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>所有对话</h3>
           {stats?.conversationList && stats.conversationList.length > 0 ? (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>

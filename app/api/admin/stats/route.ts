@@ -70,7 +70,6 @@ export async function GET(req: NextRequest) {
             _count: { select: { messages: true } },
           },
           orderBy: { lastUpdate: "desc" },
-          take: 50,
         }),
       ]);
 
