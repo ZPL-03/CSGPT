@@ -1,4 +1,9 @@
-import { DEFAULT_MODELS, ServiceProvider } from "../constant";
+import {
+  CSGPT_DEFAULT_MODEL,
+  DEFAULT_MODELS,
+  isLegacyCSGPTModelName,
+  ServiceProvider,
+} from "../constant";
 import { LLMModel } from "../client/api";
 
 const CustomSeq = {
@@ -217,7 +222,7 @@ export function isModelAvailableInServer(
     (model) =>
       model.name === modelName &&
       isSameProvider(model.provider, providerName) &&
-      model.available === false,
+      model.available !== false,
   );
 }
 
@@ -236,6 +241,21 @@ export function isGPT4Model(modelName: string): boolean {
   );
 }
 
+// 规范化 CSGPT 模型配置：将旧模型名统一替换为 CSGPT 默认模型
+export function normalizeCSGPTModelConfig(modelConfig: {
+  model?: string;
+  providerName?: string;
+}) {
+  if (
+    (!modelConfig.providerName ||
+      modelConfig.providerName === ServiceProvider.CSGPT) &&
+    isLegacyCSGPTModelName(modelConfig.model)
+  ) {
+    modelConfig.model = CSGPT_DEFAULT_MODEL;
+    modelConfig.providerName = ServiceProvider.CSGPT;
+  }
+}
+
 /**
  * Checks if a model is not available on any of the specified providers in the server.
  *
@@ -245,7 +265,7 @@ export function isGPT4Model(modelName: string): boolean {
  *
  * @returns {boolean} True if the model is not available on any of the specified providers, false otherwise.
  */
-export function isModelNotavailableInServer(
+export function isModelNotAvailableInServer(
   customModels: string,
   modelName: string,
   providerNames: string | string[],

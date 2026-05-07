@@ -17,7 +17,7 @@ export const ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/";
 
 export const BAIDU_BASE_URL = "https://aip.baidubce.com";
-export const BAIDU_OATUH_URL = `${BAIDU_BASE_URL}/oauth/2.0/token`;
+export const BAIDU_OAUTH_URL = `${BAIDU_BASE_URL}/oauth/2.0/token`;
 
 export const BYTEDANCE_BASE_URL = "https://ark.cn-beijing.volces.com";
 
@@ -106,8 +106,6 @@ export const ACCESS_CODE_PREFIX = "nk-";
 export const LAST_INPUT_KEY = "last-input";
 export const UNFINISHED_INPUT = (id: string) => "unfinished-input-" + id;
 
-export const STORAGE_KEY = "csgpt";
-
 export const REQUEST_TIMEOUT_MS = 60000;
 export const REQUEST_TIMEOUT_MS_FOR_THINKING = REQUEST_TIMEOUT_MS * 5;
 
@@ -131,15 +129,6 @@ export enum ServiceProvider {
   DeepSeek = "DeepSeek",
   SiliconFlow = "SiliconFlow",
   "302.AI" = "302.AI",
-}
-
-// Google API safety settings, see https://ai.google.dev/gemini-api/docs/safety-settings
-// BLOCK_NONE will not block any content, and BLOCK_ONLY_HIGH will block only high-risk content.
-export enum GoogleSafetySettingsThreshold {
-  BLOCK_NONE = "BLOCK_NONE",
-  BLOCK_ONLY_HIGH = "BLOCK_ONLY_HIGH",
-  BLOCK_MEDIUM_AND_ABOVE = "BLOCK_MEDIUM_AND_ABOVE",
-  BLOCK_LOW_AND_ABOVE = "BLOCK_LOW_AND_ABOVE",
 }
 
 export enum ModelProvider {
@@ -168,9 +157,7 @@ export const Stability = {
 
 export const Anthropic = {
   ChatPath: "v1/messages",
-  ChatPath1: "v1/complete",
   ExampleEndpoint: "https://api.anthropic.com",
-  Vision: "2023-06-01",
 };
 
 export const OpenaiPath = {
@@ -420,15 +407,9 @@ You are an AI assistant with access to system tools. Your role is to help users 
 
 export const CSGPT_DEFAULT_MODEL = "CSGPT-Qwen3-14B";
 export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "CSGPT Qwen3-14B";
-export const CSGPT_LEGACY_MODEL_NAMES = ["CSGPT-V1"] as const;
-
 export function isLegacyCSGPTModelName(model?: string) {
   if (!model) return false;
-  return (
-    CSGPT_LEGACY_MODEL_NAMES.includes(model as any) ||
-    model.startsWith("gpt-") ||
-    model.startsWith("chatgpt-")
-  );
+  return model.startsWith("gpt-") || model.startsWith("chatgpt-");
 }
 
 export const SUMMARIZE_MODEL = "gpt-4o-mini";
@@ -618,7 +599,7 @@ const bytedanceModels = [
   "Doubao-pro-128k",
 ];
 
-const alibabaModes = [
+const alibabaModels = [
   "qwen-turbo",
   "qwen-plus",
   "qwen-max",
@@ -664,7 +645,7 @@ const iflytekModels = [
 
 const deepseekModels = ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"];
 
-const xAIModes = [
+const xAIModels = [
   "grok-beta",
   "grok-2",
   "grok-2-1212",
@@ -834,7 +815,7 @@ export const DEFAULT_MODELS = [
       sorted: 6,
     },
   })),
-  ...alibabaModes.map((name) => ({
+  ...alibabaModels.map((name) => ({
     name,
     available: true,
     sorted: seq++,
@@ -878,7 +859,7 @@ export const DEFAULT_MODELS = [
       sorted: 10,
     },
   })),
-  ...xAIModes.map((name) => ({
+  ...xAIModels.map((name) => ({
     name,
     available: true,
     sorted: seq++,
@@ -936,40 +917,16 @@ export const DEFAULT_MODELS = [
 ] as const;
 
 export const CHAT_PAGE_SIZE = 15;
-export const MAX_RENDER_MSG_COUNT = 45;
-
-// some famous webdav endpoints
-export const internalAllowedWebDavEndpoints = [
-  "https://dav.jianguoyun.com/dav/",
-  "https://dav.dropdav.com/",
-  "https://dav.box.com/dav",
-  "https://nanao.teracloud.jp/dav/",
-  "https://bora.teracloud.jp/dav/",
-  "https://webdav.4shared.com/",
-  "https://dav.idrivesync.com",
-  "https://webdav.yandex.com",
-  "https://app.koofr.net/dav/Koofr",
-];
 
 export const DEFAULT_GA_ID = "G-89WN60ZK2E";
-
-// CSGPT 不使用 SAAS 服务
-export const SAAS_CHAT_URL = "";
-export const SAAS_CHAT_UTM_URL = "";
 
 // ===== CSGPT 专用配置 =====
 
 // CSGPT API 路径
 export const CSGPT_BASE_URL = "/api/csgpt";
 
-// CSGPT 模型路径
+// CSGPT 模型路径（供 client/platforms/openai.ts 使用）
 export const CSGPTPath = {
   ChatPath: "chat/completions",
   ListModelPath: "models",
-};
-
-// CSGPT 模型配置
-export const CSGPT = {
-  ExampleEndpoint: "http://your-autodl-server-ip:8000/v1",
-  ChatPath: "chat/completions",
 };

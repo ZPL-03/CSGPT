@@ -71,7 +71,7 @@ export function McpMarketPage() {
     checkMcpStatus();
   }, [navigate]);
 
-  // 添加状态轮询
+  // 状态轮询
   useEffect(() => {
     if (!mcpEnabled || !config) return;
 
@@ -238,7 +238,7 @@ export function McpMarketPage() {
     }
   };
 
-  // 更新加载状态的辅助函数
+  // 加载状态的辅助函数
   const updateLoadingState = (id: string, message: string | null) => {
     setLoadingStates((prev) => {
       if (message === null) {
@@ -249,7 +249,7 @@ export function McpMarketPage() {
     });
   };
 
-  // 修改添加服务器函数
+  // 添加 MCP 服务器
   const addServer = async (preset: PresetServer) => {
     if (!preset.configurable) {
       try {
@@ -276,7 +276,7 @@ export function McpMarketPage() {
     }
   };
 
-  // 修改暂停服务器函数
+  // 暂停 MCP 服务器
   const pauseServer = async (id: string) => {
     try {
       updateLoadingState(id, "Stopping server...");
@@ -412,7 +412,7 @@ export function McpMarketPage() {
 
     const statusMap = {
       undefined: null, // 未配置/未找到不显示
-      // 添加初始化状态
+      // 初始化状态
       initializing: (
         <span className={clsx(styles["server-status"], styles["initializing"])}>
           Initializing

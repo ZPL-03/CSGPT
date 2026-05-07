@@ -184,6 +184,12 @@ function getBackendConfig(
         apiKey: config.tencentSecretKey || "",
         isCSGPT: false,
       };
+    case "stability":
+      return {
+        baseUrl: config.stabilityUrl || "https://api.stability.ai",
+        apiKey: config.stabilityApiKey || "",
+        isCSGPT: false,
+      };
     case "iflytek":
       return {
         baseUrl: config.iflytekUrl || "",
@@ -295,17 +301,9 @@ async function handleChatCompletions(
     );
   }
 
-  if (stream) {
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    const transformStream = new TransformStream({
-      async transform(chunk, controller) {
-        const text = decoder.decode(chunk, { stream: true });
-        controller.enqueue(encoder.encode(text));
-      },
-    });
-
-    return new Response(response.body?.pipeThrough(transformStream), {
+  if (stream && response.body) {
+    // 直接透传 vLLM 的 SSE 流，避免 TransformStream 在 Node.js 环境下导致流阻塞
+    return new Response(response.body, {
       status: 200,
       headers: {
         "Content-Type": "text/event-stream",

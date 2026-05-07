@@ -1,4 +1,3 @@
-import md5 from "spark-md5";
 import {
   CSGPT_DEFAULT_MODEL,
   CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
@@ -11,13 +10,10 @@ import { isGPT4Model } from "../utils/model";
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      PROXY_URL?: string; // docker only
-
       OPENAI_API_KEY?: string;
       CODE?: string;
 
       BASE_URL?: string;
-      OPENAI_ORG_ID?: string; // openai only
 
       VERCEL?: string;
       BUILD_MODE?: "standalone" | "export";
@@ -50,7 +46,6 @@ declare global {
       // anthropic only
       ANTHROPIC_URL?: string;
       ANTHROPIC_API_KEY?: string;
-      ANTHROPIC_API_VERSION?: string;
 
       // baidu only
       BAIDU_URL?: string;
@@ -77,7 +72,6 @@ declare global {
       // iflytek only
       IFLYTEK_URL?: string;
       IFLYTEK_API_KEY?: string;
-      IFLYTEK_API_SECRET?: string;
 
       DEEPSEEK_URL?: string;
       DEEPSEEK_API_KEY?: string;
@@ -123,9 +117,7 @@ function getApiKey(keys?: string) {
   const apiKey = apiKeys[randomIndex];
   if (apiKey) {
     console.log(
-      `[Server Config] using ${randomIndex + 1} of ${
-        apiKeys.length
-      } api key - ${apiKey}`,
+      `[Server Config] using ${randomIndex + 1} of ${apiKeys.length} api key`,
     );
   }
 
@@ -186,7 +178,8 @@ export const getServerSideConfig = () => {
   const isAzure = !!process.env.AZURE_URL;
   const isGoogle = !!process.env.GOOGLE_API_KEY;
   const isAnthropic = !!process.env.ANTHROPIC_API_KEY;
-  const isTencent = !!process.env.TENCENT_API_KEY;
+  const isTencent =
+    !!process.env.TENCENT_SECRET_KEY && !!process.env.TENCENT_SECRET_ID;
 
   const isBaidu = !!process.env.BAIDU_API_KEY;
   const isBytedance = !!process.env.BYTEDANCE_API_KEY;
@@ -213,7 +206,6 @@ export const getServerSideConfig = () => {
   return {
     baseUrl: process.env.BASE_URL,
     apiKey: getApiKey(process.env.OPENAI_API_KEY),
-    openaiOrgId: process.env.OPENAI_ORG_ID,
 
     isStability,
     stabilityUrl: process.env.STABILITY_URL,
@@ -230,7 +222,6 @@ export const getServerSideConfig = () => {
 
     isAnthropic,
     anthropicApiKey: getApiKey(process.env.ANTHROPIC_API_KEY),
-    anthropicApiVersion: process.env.ANTHROPIC_API_VERSION,
     anthropicUrl: process.env.ANTHROPIC_URL,
 
     isBaidu,
@@ -258,7 +249,6 @@ export const getServerSideConfig = () => {
     isIflytek,
     iflytekUrl: process.env.IFLYTEK_URL,
     iflytekApiKey: process.env.IFLYTEK_API_KEY,
-    iflytekApiSecret: process.env.IFLYTEK_API_SECRET,
 
     isDeepSeek,
     deepseekUrl: process.env.DEEPSEEK_URL,
@@ -299,7 +289,6 @@ export const getServerSideConfig = () => {
     databaseUrl: DATABASE_URL,
     jwtSecret: JWT_SECRET,
 
-    proxyUrl: process.env.PROXY_URL,
     isVercel: !!process.env.VERCEL,
 
     hideUserApiKey: !!process.env.HIDE_USER_API_KEY,

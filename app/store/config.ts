@@ -14,9 +14,9 @@ import {
   DEFAULT_TTS_VOICES,
   StoreKey,
   ServiceProvider,
-  isLegacyCSGPTModelName,
 } from "../constant";
 import { createPersistStore } from "../utils/store";
+import { normalizeCSGPTModelConfig } from "../utils/model";
 import type { Voice } from "rt-client";
 
 export type ModelType = (typeof DEFAULT_MODELS)[number]["name"];
@@ -39,20 +39,6 @@ export enum Theme {
 }
 
 const config = getClientConfig();
-
-function normalizeCSGPTModelConfig(modelConfig: {
-  model: string;
-  providerName?: ServiceProvider;
-}) {
-  if (
-    (!modelConfig.providerName ||
-      modelConfig.providerName === ServiceProvider.CSGPT) &&
-    isLegacyCSGPTModelName(modelConfig.model)
-  ) {
-    modelConfig.model = CSGPT_DEFAULT_MODEL as ModelType;
-    modelConfig.providerName = ServiceProvider.CSGPT;
-  }
-}
 
 export const DEFAULT_CONFIG = {
   lastUpdate: Date.now(), // timestamp, to merge state
@@ -84,7 +70,7 @@ export const DEFAULT_CONFIG = {
     providerName: ServiceProvider.CSGPT,
     temperature: 0.5,
     top_p: 1,
-    max_tokens: 4000,
+    max_tokens: 4096,
     presence_penalty: 0,
     frequency_penalty: 0,
     sendMemory: true,
@@ -211,7 +197,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.3,
+    version: 4.4,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -226,12 +212,15 @@ export const useAppConfig = createPersistStore(
         // 不再追加不在当前列表中的旧模型，避免 localStorage 残留导致的重复
       });
       // customModels 由服务端控制，不允许 localStorage 中的旧值覆盖
-      return {
+      const merged = {
         ...currentState,
         ...state,
         models: models,
         customModels: currentState.customModels,
       };
+      // 规范化 CSGPT 模型配置，防止 localStorage 中的旧模型名覆盖默认值
+      normalizeCSGPTModelConfig(merged.modelConfig);
+      return merged;
     },
 
     migrate(persistedState, version) {
@@ -279,6 +268,11 @@ export const useAppConfig = createPersistStore(
       }
 
       if (version < 4.3) {
+        normalizeCSGPTModelConfig(state.modelConfig);
+      }
+
+      // 版本 4.4：重新规范化 CSGPT 模型配置，处理 localStorage 中残留的旧模型名覆盖
+      if (version < 4.4) {
         normalizeCSGPTModelConfig(state.modelConfig);
       }
 

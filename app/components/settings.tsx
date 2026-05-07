@@ -48,7 +48,6 @@ import {
   Moonshot,
   XAI,
   Google,
-  GoogleSafetySettingsThreshold,
   OPENAI_BASE_URL,
   CSGPT_BASE_URL,
   Path,
@@ -60,7 +59,6 @@ import {
   DeepSeek,
   SiliconFlow,
   AI302,
-  CSGPT,
 } from "../constant";
 import { Prompt, SearchService, usePromptStore } from "../store/prompt";
 import { ErrorBoundary } from "./error";
@@ -480,11 +478,11 @@ export function Settings() {
         />
       </ListItem>
       <ListItem
-        title={Locale.Settings.Access.Azure.ApiVerion.Title}
-        subTitle={Locale.Settings.Access.Azure.ApiVerion.SubTitle}
+        title={Locale.Settings.Access.Azure.ApiVersion.Title}
+        subTitle={Locale.Settings.Access.Azure.ApiVersion.SubTitle}
       >
         <input
-          aria-label={Locale.Settings.Access.Azure.ApiVerion.Title}
+          aria-label={Locale.Settings.Access.Azure.ApiVersion.Title}
           type="text"
           value={accessStore.azureApiVersion}
           placeholder="2023-08-01-preview"
@@ -536,44 +534,6 @@ export function Settings() {
           }}
         />
       </ListItem>
-      <ListItem
-        title={Locale.Settings.Access.Google.ApiVersion.Title}
-        subTitle={Locale.Settings.Access.Google.ApiVersion.SubTitle}
-      >
-        <input
-          aria-label={Locale.Settings.Access.Google.ApiVersion.Title}
-          type="text"
-          value={accessStore.googleApiVersion}
-          placeholder="2023-08-01-preview"
-          onChange={(e) =>
-            accessStore.update(
-              (access) => (access.googleApiVersion = e.currentTarget.value),
-            )
-          }
-        ></input>
-      </ListItem>
-      <ListItem
-        title={Locale.Settings.Access.Google.GoogleSafetySettings.Title}
-        subTitle={Locale.Settings.Access.Google.GoogleSafetySettings.SubTitle}
-      >
-        <Select
-          aria-label={Locale.Settings.Access.Google.GoogleSafetySettings.Title}
-          value={accessStore.googleSafetySettings}
-          onChange={(e) => {
-            accessStore.update(
-              (access) =>
-                (access.googleSafetySettings = e.target
-                  .value as GoogleSafetySettingsThreshold),
-            );
-          }}
-        >
-          {Object.entries(GoogleSafetySettingsThreshold).map(([k, v]) => (
-            <option value={v} key={k}>
-              {k}
-            </option>
-          ))}
-        </Select>
-      </ListItem>
     </>
   );
 
@@ -614,22 +574,6 @@ export function Settings() {
             );
           }}
         />
-      </ListItem>
-      <ListItem
-        title={Locale.Settings.Access.Anthropic.ApiVerion.Title}
-        subTitle={Locale.Settings.Access.Anthropic.ApiVerion.SubTitle}
-      >
-        <input
-          aria-label={Locale.Settings.Access.Anthropic.ApiVerion.Title}
-          type="text"
-          value={accessStore.anthropicApiVersion}
-          placeholder={Anthropic.Vision}
-          onChange={(e) =>
-            accessStore.update(
-              (access) => (access.anthropicApiVersion = e.currentTarget.value),
-            )
-          }
-        ></input>
       </ListItem>
     </>
   );
@@ -1100,23 +1044,6 @@ export function Settings() {
           onChange={(e) => {
             accessStore.update(
               (access) => (access.iflytekApiKey = e.currentTarget.value),
-            );
-          }}
-        />
-      </ListItem>
-
-      <ListItem
-        title={Locale.Settings.Access.Iflytek.ApiSecret.Title}
-        subTitle={Locale.Settings.Access.Iflytek.ApiSecret.SubTitle}
-      >
-        <PasswordInput
-          aria-label={Locale.Settings.Access.Iflytek.ApiSecret.Title}
-          value={accessStore.iflytekApiSecret}
-          type="text"
-          placeholder={Locale.Settings.Access.Iflytek.ApiSecret.Placeholder}
-          onChange={(e) => {
-            accessStore.update(
-              (access) => (access.iflytekApiSecret = e.currentTarget.value),
             );
           }}
         />

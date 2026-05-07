@@ -1,5 +1,4 @@
 import {
-  GoogleSafetySettingsThreshold,
   ServiceProvider,
   StoreKey,
   ApiPath,
@@ -19,13 +18,12 @@ import {
   CHATGLM_BASE_URL,
   SILICONFLOW_BASE_URL,
   AI302_BASE_URL,
-  CSGPT,
 } from "../constant";
 import { getHeaders } from "../client/api";
 import { getClientConfig } from "../config/client";
 import { createPersistStore } from "../utils/store";
 import { ensure } from "../utils/clone";
-import { DEFAULT_CONFIG } from "./config";
+import { useAppConfig } from "./config";
 import { getModelProvider } from "../utils/model";
 
 let fetchState = 0; // 0 not fetch, 1 fetching, 2 done
@@ -90,13 +88,10 @@ const DEFAULT_ACCESS_STATE = {
   // google ai studio
   googleUrl: DEFAULT_GOOGLE_URL,
   googleApiKey: "",
-  googleApiVersion: "v1",
-  googleSafetySettings: GoogleSafetySettingsThreshold.BLOCK_ONLY_HIGH,
 
   // anthropic
   anthropicUrl: DEFAULT_ANTHROPIC_URL,
   anthropicApiKey: "",
-  anthropicApiVersion: "2023-06-01",
 
   // baidu
   baiduUrl: DEFAULT_BAIDU_URL,
@@ -127,7 +122,6 @@ const DEFAULT_ACCESS_STATE = {
   // iflytek
   iflytekUrl: DEFAULT_IFLYTEK_URL,
   iflytekApiKey: "",
-  iflytekApiSecret: "",
 
   // deepseek
   deepseekUrl: DEFAULT_DEEPSEEK_URL,
@@ -158,9 +152,6 @@ const DEFAULT_ACCESS_STATE = {
   customModels: "",
   defaultModel: "",
   visionModels: "",
-
-  // tts config
-  edgeTTSVoiceName: "zh-CN-YunxiNeural",
 };
 
 export const useAccessStore = createPersistStore(
@@ -176,12 +167,6 @@ export const useAccessStore = createPersistStore(
       this.fetch();
       return get().visionModels;
     },
-    edgeVoiceName() {
-      this.fetch();
-
-      return get().edgeTTSVoiceName;
-    },
-
     isValidOpenAI() {
       return ensure(get(), ["openaiApiKey"]);
     },
@@ -240,10 +225,17 @@ export const useAccessStore = createPersistStore(
       return ensure(get(), ["csgptApiKey"]);
     },
 
+    isValidStability() {
+      return ensure(get(), ["stabilityApiKey"]);
+    },
+
+    isValid302AI() {
+      return ensure(get(), ["ai302ApiKey"]);
+    },
+
     isAuthorized() {
       this.fetch();
 
-      // has token or has code or disabled access control
       return (
         this.isValidCSGPT() ||
         this.isValidOpenAI() ||
@@ -254,12 +246,14 @@ export const useAccessStore = createPersistStore(
         this.isValidByteDance() ||
         this.isValidAlibaba() ||
         this.isValidTencent() ||
+        this.isValidStability() ||
         this.isValidMoonshot() ||
         this.isValidIflytek() ||
         this.isValidDeepSeek() ||
         this.isValidXAI() ||
         this.isValidChatGLM() ||
         this.isValidSiliconFlow() ||
+        this.isValid302AI() ||
         !this.enabledAccessControl() ||
         (this.enabledAccessControl() && ensure(get(), ["accessCode"]))
       );
@@ -279,10 +273,14 @@ export const useAccessStore = createPersistStore(
           const defaultModel = res.defaultModel ?? "";
           if (defaultModel !== "") {
             const [model, providerName] = getModelProvider(defaultModel);
-            DEFAULT_CONFIG.modelConfig.model = model;
-            if (providerName) {
-              DEFAULT_CONFIG.modelConfig.providerName = providerName as any;
-            }
+            // 通过 config store 更新全局默认模型，避免直接突变 DEFAULT_CONFIG 常量
+            useAppConfig.getState().update((config) => {
+              config.modelConfig.model = model;
+              if (providerName) {
+                config.modelConfig.providerName =
+                  providerName as ServiceProvider;
+              }
+            });
           }
 
           return res;
@@ -323,9 +321,15 @@ export const useAccessStore = createPersistStore(
       return {
         ...currentState,
         ...state,
+        // 服务端控制的配置字段始终以 currentState（服务端配置）为准
         customModels: currentState.customModels,
         defaultModel: currentState.defaultModel,
         visionModels: currentState.visionModels,
+        needCode: currentState.needCode,
+        hideUserApiKey: currentState.hideUserApiKey,
+        hideBalanceQuery: currentState.hideBalanceQuery,
+        disableGPT4: currentState.disableGPT4,
+        disableFastLink: currentState.disableFastLink,
       };
     },
   },

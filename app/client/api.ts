@@ -189,6 +189,7 @@ function getApiKeyForProvider(
     DeepSeek: accessStore.deepseekApiKey,
     XAI: accessStore.xaiApiKey,
     ChatGLM: accessStore.chatglmApiKey,
+    Stability: accessStore.stabilityApiKey,
     SiliconFlow: accessStore.siliconflowApiKey,
     "302.AI": accessStore.ai302ApiKey,
   };

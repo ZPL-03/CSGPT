@@ -386,7 +386,7 @@ const en: LocaleType = {
           SubTitle: "Example: ",
         },
 
-        ApiVerion: {
+        ApiVersion: {
           Title: "Azure Api Version",
           SubTitle: "Check your api version from azure console",
         },
@@ -404,7 +404,7 @@ const en: LocaleType = {
           SubTitle: "Example: ",
         },
 
-        ApiVerion: {
+        ApiVersion: {
           Title: "API Version (claude api version)",
           SubTitle: "Select and input a specific API version",
         },
