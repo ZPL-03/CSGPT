@@ -4,8 +4,6 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState, useCallback } from "react";
 import { useUserStore } from "../store/user";
-import BotPng from "../icons/bot.svg";
-import Locale from "../locales";
 
 interface UserItem {
   id: string;
@@ -95,8 +93,15 @@ function AdminLogin() {
           width: 340,
         }}
       >
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <BotPng width={48} height={48} />
+        <div
+          style={{
+            textAlign: "center",
+            marginBottom: 16,
+            fontSize: 36,
+            fontWeight: 700,
+          }}
+        >
+          CSGPT
         </div>
         <h2 style={{ margin: "0 0 8px", fontSize: 20, textAlign: "center" }}>
           CSGPT 管理后台
@@ -118,7 +123,7 @@ function AdminLogin() {
             setUsername(e.target.value);
             setError("");
           }}
-          placeholder={Locale.Auth.Username}
+          placeholder="用户名"
           autoFocus
           style={{
             width: "100%",
@@ -139,7 +144,7 @@ function AdminLogin() {
             setPassword(e.target.value);
             setError("");
           }}
-          placeholder={Locale.Auth.Password}
+          placeholder="密码"
           style={{
             width: "100%",
             marginBottom: 12,
@@ -180,7 +185,7 @@ function AdminLogin() {
             boxSizing: "border-box",
           }}
         >
-          {loading ? "登录中..." : Locale.Auth.Login}
+          {loading ? "登录中..." : "登录"}
         </button>
       </form>
     </div>
