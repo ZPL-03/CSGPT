@@ -51,7 +51,7 @@ export function AuthPage() {
       }
 
       userStore.setAuth(data.token, data.user);
-      window.location.href = "/#/";
+      window.location.hash = "#/";
     } catch (e) {
       setError("网络错误，请稍后重试");
     } finally {
