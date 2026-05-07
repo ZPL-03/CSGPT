@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
         topic: c.topic,
         userId: c.userId,
         username: c.user.username,
-        lastUpdate: c.lastUpdate,
+        lastUpdate: Number(c.lastUpdate),
         messageCount: Number(c._count.messages),
       })),
       messages: Number(messageCount),
