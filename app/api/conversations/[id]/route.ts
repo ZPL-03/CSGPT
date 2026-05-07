@@ -40,6 +40,8 @@ export async function GET(
         topic: conversation.topic,
         memoryPrompt: conversation.memoryPrompt,
         lastUpdate: Number(conversation.lastUpdate),
+        lastSummarizeIndex: conversation.lastSummarizeIndex,
+        clearContextIndex: conversation.clearContextIndex,
         maskConfig: conversation.maskConfig,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,

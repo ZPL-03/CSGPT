@@ -27,7 +27,7 @@ import { useAppConfig } from "../store/config";
 import { AuthPage } from "./auth";
 import { getClientConfig } from "../config/client";
 import { type ClientApi, getClientApi } from "../client/api";
-import { useAccessStore } from "../store";
+import { useAccessStore, useChatStore } from "../store";
 import { useUserStore } from "../store/user";
 import clsx from "clsx";
 import { initializeMcpSystem, isMcpEnabled } from "../mcp/actions";
@@ -165,6 +165,18 @@ function Screen() {
       userStore.fetchUser();
     }
   }, [userStore]);
+
+  // 登录后从数据库加载对话
+  const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false);
+  useEffect(() => {
+    if (userStore.isLoggedIn && !hasLoadedFromServer) {
+      setHasLoadedFromServer(true);
+      useChatStore.getState().loadSessionsFromServer();
+    }
+    if (!userStore.isLoggedIn) {
+      setHasLoadedFromServer(false);
+    }
+  }, [userStore.isLoggedIn, hasLoadedFromServer]);
 
   // 认证门控：用户未登录时强制跳转到认证页面
   if (!userStore.isLoggedIn && !isAuth) {
