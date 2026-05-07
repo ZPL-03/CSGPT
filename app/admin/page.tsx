@@ -103,7 +103,7 @@ function AdminLogin() {
           CSGPT
         </div>
         <h2 style={{ margin: "0 0 8px", fontSize: 20, textAlign: "center" }}>
-          CSGPT 管理后台
+          管理后台
         </h2>
         <p
           style={{
@@ -195,24 +195,22 @@ const INPUT_STYLE: React.CSSProperties = {
 
 const CARD_STYLE: React.CSSProperties = {
   background: "var(--disabled-background)",
-  borderRadius: 10,
-  padding: 20,
+  borderRadius: 8,
+  padding: 16,
 };
 
-const TAB_STYLE: React.CSSProperties = {
-  padding: "8px 20px",
-  borderRadius: 6,
-  border: "none",
-  fontSize: 14,
-  cursor: "pointer",
-  background: "transparent",
-  color: "var(--foreground-color)",
+const TH_STYLE: React.CSSProperties = {
+  padding: "8px 12px",
+  fontWeight: 500,
+  textAlign: "left",
+  fontSize: 12,
+  color: "var(--secondary-text)",
 };
 
-const TAB_ACTIVE_STYLE: React.CSSProperties = {
-  ...TAB_STYLE,
-  background: "var(--foreground-color)",
-  color: "var(--background-color)",
+const TD_STYLE: React.CSSProperties = {
+  padding: "10px 12px",
+  fontSize: 13,
+  borderBottom: "1px solid var(--border-color)",
 };
 
 function formatDate(dateStr: string): string {
@@ -263,7 +261,7 @@ export default function AdminPage() {
       setStats(data);
       setIsAdmin(true);
     } catch {
-      setError("网络错误，请检查网络连接后刷新页面");
+      setError("网络错误");
       setIsAdmin(false);
     } finally {
       setLoading(false);
@@ -331,12 +329,10 @@ export default function AdminPage() {
     }
   }
 
-  // 未登录
   if (!userStore.isLoggedIn) {
     return <AdminLogin />;
   }
 
-  // 加载中或权限检查中
   if (isAdmin === null) {
     return (
       <div style={CENTER_STYLE}>
@@ -377,7 +373,6 @@ export default function AdminPage() {
     );
   }
 
-  // 非管理员
   if (!isAdmin) {
     return (
       <div style={CENTER_STYLE}>
@@ -402,7 +397,7 @@ export default function AdminPage() {
               marginBottom: 20,
             }}
           >
-            当前账号不是管理员，无法访问管理后台
+            当前账号不是管理员
           </p>
           <button
             onClick={() => {
@@ -426,12 +421,6 @@ export default function AdminPage() {
     );
   }
 
-  const tabs: { key: TabKey; label: string }[] = [
-    { key: "overview", label: "概览" },
-    { key: "users", label: "用户管理" },
-    { key: "conversations", label: "对话管理" },
-  ];
-
   // 删除确认弹窗
   function renderDeleteConfirm() {
     if (!deleteConfirm) return null;
@@ -454,7 +443,7 @@ export default function AdminPage() {
             padding: 24,
             borderRadius: 12,
             maxWidth: 400,
-            width: "90%",
+            width: "94%",
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -505,331 +494,11 @@ export default function AdminPage() {
     );
   }
 
-  function renderOverview() {
-    const cards = [
-      { label: "注册用户", value: stats?.users },
-      { label: "对话总数", value: stats?.conversations },
-      { label: "消息总数", value: stats?.messages },
-      { label: "数据库大小", value: stats?.dbSize },
-      { label: "数据大小", value: stats?.dataSize },
-    ];
-    return (
-      <div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 16,
-            marginBottom: 32,
-          }}
-        >
-          {cards.map((c) => (
-            <div key={c.label} style={CARD_STYLE}>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "var(--secondary-text)",
-                  marginBottom: 8,
-                }}
-              >
-                {c.label}
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 700 }}>
-                {loading ? "..." : c.value ?? "-"}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 最近用户 */}
-        <div style={{ ...CARD_STYLE, marginBottom: 24 }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>最近注册用户</h3>
-          {stats?.userList && stats.userList.length > 0 ? (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr
-                  style={{
-                    textAlign: "left",
-                    fontSize: 13,
-                    color: "var(--secondary-text)",
-                    borderBottom: "1px solid var(--border-color)",
-                  }}
-                >
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>用户名</th>
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>对话数</th>
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>
-                    注册时间
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.userList.slice(0, 10).map((u) => (
-                  <tr
-                    key={u.id}
-                    style={{
-                      fontSize: 14,
-                      borderBottom: "1px solid var(--border-color)",
-                    }}
-                  >
-                    <td style={{ padding: "10px 0" }}>{u.username}</td>
-                    <td style={{ padding: "10px 0" }}>{u.conversationCount}</td>
-                    <td style={{ padding: "10px 0" }}>
-                      {formatDate(u.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ fontSize: 14, color: "var(--secondary-text)" }}>
-              暂无注册用户
-            </p>
-          )}
-        </div>
-
-        {/* 最近对话 */}
-        <div style={CARD_STYLE}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>最近对话</h3>
-          {stats?.conversationList && stats.conversationList.length > 0 ? (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr
-                  style={{
-                    textAlign: "left",
-                    fontSize: 13,
-                    color: "var(--secondary-text)",
-                    borderBottom: "1px solid var(--border-color)",
-                  }}
-                >
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>主题</th>
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>用户</th>
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>消息数</th>
-                  <th style={{ padding: "8px 0", fontWeight: 500 }}>
-                    最后更新
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.conversationList.slice(0, 10).map((c) => (
-                  <tr
-                    key={c.id}
-                    style={{
-                      fontSize: 14,
-                      borderBottom: "1px solid var(--border-color)",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "10px 0",
-                        maxWidth: 320,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {c.topic || "（无主题）"}
-                    </td>
-                    <td style={{ padding: "10px 0" }}>{c.username}</td>
-                    <td style={{ padding: "10px 0" }}>{c.messageCount}</td>
-                    <td style={{ padding: "10px 0" }}>
-                      {formatDate(c.lastUpdate)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ fontSize: 14, color: "var(--secondary-text)" }}>
-              暂无对话记录
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function renderUsers() {
-    const isSelf = (username: string) => username === userStore.user?.username;
-    return (
-      <div style={CARD_STYLE}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: 16 }}>所有用户</h3>
-          <button
-            onClick={fetchStats}
-            disabled={loading}
-            style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--border-color)",
-              background: "transparent",
-              color: "var(--foreground-color)",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            刷新
-          </button>
-        </div>
-        {stats?.userList && stats.userList.length > 0 ? (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr
-                style={{
-                  textAlign: "left",
-                  fontSize: 13,
-                  color: "var(--secondary-text)",
-                  borderBottom: "1px solid var(--border-color)",
-                }}
-              >
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>用户名</th>
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>对话数</th>
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>注册时间</th>
-                <th style={{ padding: "8px 0", fontWeight: 500, width: 80 }}>
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.userList.map((u) => (
-                <tr
-                  key={u.id}
-                  style={{
-                    fontSize: 14,
-                    borderBottom: "1px solid var(--border-color)",
-                  }}
-                >
-                  <td style={{ padding: "10px 0" }}>{u.username}</td>
-                  <td style={{ padding: "10px 0" }}>{u.conversationCount}</td>
-                  <td style={{ padding: "10px 0" }}>
-                    {formatDate(u.createdAt)}
-                  </td>
-                  <td style={{ padding: "10px 0" }}>
-                    <button
-                      onClick={() =>
-                        setDeleteConfirm({
-                          type: "user",
-                          id: u.id,
-                          name: u.username,
-                        })
-                      }
-                      disabled={isSelf(u.username)}
-                      style={{
-                        padding: "3px 10px",
-                        borderRadius: 4,
-                        border: "none",
-                        fontSize: 12,
-                        background: isSelf(u.username)
-                          ? "var(--disabled-background)"
-                          : "rgba(229,62,62,0.1)",
-                        color: isSelf(u.username)
-                          ? "var(--secondary-text)"
-                          : "#e53e3e",
-                        cursor: isSelf(u.username) ? "not-allowed" : "pointer",
-                      }}
-                      title={isSelf(u.username) ? "不能删除自己" : "删除该用户"}
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ fontSize: 14, color: "var(--secondary-text)" }}>
-            暂无注册用户
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  function renderConversations() {
-    return (
-      <div style={CARD_STYLE}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: 16 }}>所有对话</h3>
-          <button
-            onClick={fetchStats}
-            disabled={loading}
-            style={{
-              padding: "4px 12px",
-              borderRadius: 6,
-              border: "1px solid var(--border-color)",
-              background: "transparent",
-              color: "var(--foreground-color)",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            刷新
-          </button>
-        </div>
-        {stats?.conversationList && stats.conversationList.length > 0 ? (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr
-                style={{
-                  textAlign: "left",
-                  fontSize: 13,
-                  color: "var(--secondary-text)",
-                  borderBottom: "1px solid var(--border-color)",
-                }}
-              >
-                <th
-                  style={{ padding: "8px 0", fontWeight: 500, width: 40 }}
-                ></th>
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>主题</th>
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>用户</th>
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>消息数</th>
-                <th style={{ padding: "8px 0", fontWeight: 500 }}>最后更新</th>
-                <th style={{ padding: "8px 0", fontWeight: 500, width: 80 }}>
-                  操作
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.conversationList.map((c) => (
-                <ConverationRow
-                  key={c.id}
-                  conv={c}
-                  isExpanded={expandedConvId === c.id}
-                  messages={convMessages}
-                  loadingMessages={loadingMessages}
-                  onToggle={() => toggleConversation(c.id)}
-                  onDelete={() =>
-                    setDeleteConfirm({
-                      type: "conversation",
-                      id: c.id,
-                      name: c.topic || "（无主题）",
-                    })
-                  }
-                />
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ fontSize: 14, color: "var(--secondary-text)" }}>
-            暂无对话记录
-          </p>
-        )}
-      </div>
-    );
-  }
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "overview", label: "概览" },
+    { key: "users", label: "用户" },
+    { key: "conversations", label: "对话" },
+  ];
 
   return (
     <div
@@ -846,38 +515,74 @@ export default function AdminPage() {
       <div
         style={{
           borderBottom: "1px solid var(--border-color)",
-          padding: "0 32px",
+          padding: "0 16px",
+          background: "var(--background-color)",
         }}
       >
         <div
           style={{
-            maxWidth: 1400,
-            margin: "0 auto",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            height: 56,
+            height: 44,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}
+            >
               CSGPT 管理后台
-            </h2>
-            <div style={{ display: "flex", gap: 4 }}>
+            </span>
+            <div style={{ display: "flex", gap: 2 }}>
               {tabs.map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
-                  style={activeTab === t.key ? TAB_ACTIVE_STYLE : TAB_STYLE}
+                  style={{
+                    padding: "4px 14px",
+                    borderRadius: 4,
+                    border: "none",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    background:
+                      activeTab === t.key
+                        ? "var(--foreground-color)"
+                        : "transparent",
+                    color:
+                      activeTab === t.key
+                        ? "var(--background-color)"
+                        : "var(--foreground-color)",
+                  }}
                 >
                   {t.label}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontSize: 13, color: "var(--secondary-text)" }}>
-              当前用户：{userStore.user?.username}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexShrink: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--secondary-text)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {userStore.user?.username}
             </span>
             <button
               onClick={() => {
@@ -885,16 +590,17 @@ export default function AdminPage() {
                 window.location.href = "/";
               }}
               style={{
-                padding: "4px 12px",
-                borderRadius: 6,
+                padding: "3px 10px",
+                borderRadius: 4,
                 border: "1px solid var(--border-color)",
                 background: "transparent",
                 color: "var(--foreground-color)",
-                fontSize: 12,
+                fontSize: 11,
                 cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
-              退出登录
+              退出
             </button>
           </div>
         </div>
@@ -902,16 +608,14 @@ export default function AdminPage() {
 
       {/* 错误提示 */}
       {error && (
-        <div
-          style={{ maxWidth: 1400, margin: "16px auto 0", padding: "0 32px" }}
-        >
+        <div style={{ padding: "8px 16px 0" }}>
           <div
             style={{
-              padding: "10px 14px",
-              borderRadius: 8,
+              padding: "8px 12px",
+              borderRadius: 6,
               background: "rgba(229,62,62,0.1)",
               color: "#e53e3e",
-              fontSize: 13,
+              fontSize: 12,
             }}
           >
             {error}
@@ -920,17 +624,347 @@ export default function AdminPage() {
       )}
 
       {/* 主内容区 */}
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 32px" }}>
-        {activeTab === "overview" && renderOverview()}
-        {activeTab === "users" && renderUsers()}
-        {activeTab === "conversations" && renderConversations()}
+      <div style={{ padding: "16px" }}>
+        {activeTab === "overview" && (
+          <OverviewTab stats={stats} loading={loading} />
+        )}
+        {activeTab === "users" && (
+          <UsersTab
+            stats={stats}
+            loading={loading}
+            isSelf={(u) => u === userStore.user?.username}
+            onDelete={(u) =>
+              setDeleteConfirm({ type: "user", id: u.id, name: u.username })
+            }
+            onRefresh={fetchStats}
+          />
+        )}
+        {activeTab === "conversations" && (
+          <ConversationsTab
+            stats={stats}
+            loading={loading}
+            expandedConvId={expandedConvId}
+            convMessages={convMessages}
+            loadingMessages={loadingMessages}
+            onToggle={toggleConversation}
+            onDelete={(c) =>
+              setDeleteConfirm({
+                type: "conversation",
+                id: c.id,
+                name: c.topic || "（无主题）",
+              })
+            }
+            onRefresh={fetchStats}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-// 对话行组件，支持展开查看消息
-function ConverationRow({
+function OverviewTab({
+  stats,
+  loading,
+}: {
+  stats: Stats | null;
+  loading: boolean;
+}) {
+  const cards = [
+    { label: "注册用户", value: stats?.users },
+    { label: "对话总数", value: stats?.conversations },
+    { label: "消息总数", value: stats?.messages },
+    { label: "数据库大小", value: stats?.dbSize },
+    { label: "数据大小", value: stats?.dataSize },
+  ];
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 12,
+          marginBottom: 20,
+        }}
+      >
+        {cards.map((c) => (
+          <div key={c.label} style={CARD_STYLE}>
+            <div
+              style={{
+                fontSize: 12,
+                color: "var(--secondary-text)",
+                marginBottom: 6,
+              }}
+            >
+              {c.label}
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 700 }}>
+              {loading ? "..." : c.value ?? "-"}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
+          gap: 16,
+        }}
+      >
+        {/* 最近用户 */}
+        <div style={CARD_STYLE}>
+          <h3 style={{ margin: "0 0 12px", fontSize: 14 }}>最近注册用户</h3>
+          {stats?.userList && stats.userList.length > 0 ? (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  <th style={TH_STYLE}>用户名</th>
+                  <th style={TH_STYLE}>对话数</th>
+                  <th style={{ ...TH_STYLE, textAlign: "right" }}>注册时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.userList.slice(0, 10).map((u) => (
+                  <tr key={u.id}>
+                    <td style={TD_STYLE}>{u.username}</td>
+                    <td style={TD_STYLE}>{u.conversationCount}</td>
+                    <td style={{ ...TD_STYLE, textAlign: "right" }}>
+                      {formatDate(u.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>暂无</p>
+          )}
+        </div>
+
+        {/* 最近对话 */}
+        <div style={CARD_STYLE}>
+          <h3 style={{ margin: "0 0 12px", fontSize: 14 }}>最近对话</h3>
+          {stats?.conversationList && stats.conversationList.length > 0 ? (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  <th style={TH_STYLE}>主题</th>
+                  <th style={TH_STYLE}>用户</th>
+                  <th style={TH_STYLE}>消息</th>
+                  <th style={{ ...TH_STYLE, textAlign: "right" }}>最后更新</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.conversationList.slice(0, 10).map((c) => (
+                  <tr key={c.id}>
+                    <td
+                      style={{
+                        ...TD_STYLE,
+                        maxWidth: 260,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {c.topic || "（无主题）"}
+                    </td>
+                    <td style={TD_STYLE}>{c.username}</td>
+                    <td style={TD_STYLE}>{c.messageCount}</td>
+                    <td style={{ ...TD_STYLE, textAlign: "right" }}>
+                      {formatDate(c.lastUpdate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>暂无</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsersTab({
+  stats,
+  loading,
+  isSelf,
+  onDelete,
+  onRefresh,
+}: {
+  stats: Stats | null;
+  loading: boolean;
+  isSelf: (u: string) => boolean;
+  onDelete: (u: UserItem) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div style={CARD_STYLE}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 14 }}>所有用户</h3>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          style={{
+            padding: "3px 10px",
+            borderRadius: 4,
+            border: "1px solid var(--border-color)",
+            background: "transparent",
+            color: "var(--foreground-color)",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          刷新
+        </button>
+      </div>
+      {stats?.userList && stats.userList.length > 0 ? (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+              <th style={TH_STYLE}>用户名</th>
+              <th style={TH_STYLE}>对话数</th>
+              <th style={{ ...TH_STYLE, textAlign: "right" }}>注册时间</th>
+              <th style={{ ...TH_STYLE, textAlign: "center", width: 60 }}>
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.userList.map((u) => (
+              <tr key={u.id}>
+                <td style={TD_STYLE}>{u.username}</td>
+                <td style={TD_STYLE}>{u.conversationCount}</td>
+                <td style={{ ...TD_STYLE, textAlign: "right" }}>
+                  {formatDate(u.createdAt)}
+                </td>
+                <td style={{ ...TD_STYLE, textAlign: "center" }}>
+                  <button
+                    onClick={() => onDelete(u)}
+                    disabled={isSelf(u.username)}
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 3,
+                      border: "none",
+                      fontSize: 11,
+                      background: isSelf(u.username)
+                        ? "var(--disabled-background)"
+                        : "rgba(229,62,62,0.1)",
+                      color: isSelf(u.username)
+                        ? "var(--secondary-text)"
+                        : "#e53e3e",
+                      cursor: isSelf(u.username) ? "not-allowed" : "pointer",
+                    }}
+                    title={isSelf(u.username) ? "不能删除自己" : "删除"}
+                  >
+                    删除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>
+          暂无注册用户
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ConversationsTab({
+  stats,
+  loading,
+  expandedConvId,
+  convMessages,
+  loadingMessages,
+  onToggle,
+  onDelete,
+  onRefresh,
+}: {
+  stats: Stats | null;
+  loading: boolean;
+  expandedConvId: string | null;
+  convMessages: MessageItem[];
+  loadingMessages: boolean;
+  onToggle: (id: string) => void;
+  onDelete: (c: ConversationItem) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div style={CARD_STYLE}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 14 }}>所有对话</h3>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          style={{
+            padding: "3px 10px",
+            borderRadius: 4,
+            border: "1px solid var(--border-color)",
+            background: "transparent",
+            color: "var(--foreground-color)",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          刷新
+        </button>
+      </div>
+      {stats?.conversationList && stats.conversationList.length > 0 ? (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+              <th style={{ ...TH_STYLE, width: 28 }}></th>
+              <th style={TH_STYLE}>主题</th>
+              <th style={TH_STYLE}>用户</th>
+              <th style={TH_STYLE}>消息</th>
+              <th style={{ ...TH_STYLE, textAlign: "right" }}>最后更新</th>
+              <th style={{ ...TH_STYLE, textAlign: "center", width: 60 }}>
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.conversationList.map((c) => (
+              <ConvRow
+                key={c.id}
+                conv={c}
+                isExpanded={expandedConvId === c.id}
+                messages={convMessages}
+                loadingMessages={loadingMessages}
+                onToggle={() => onToggle(c.id)}
+                onDelete={() => onDelete(c)}
+              />
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>
+          暂无对话记录
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ConvRow({
   conv,
   isExpanded,
   messages,
@@ -945,35 +979,25 @@ function ConverationRow({
   onToggle: () => void;
   onDelete: () => void;
 }) {
-  const roleLabel = (role: string) => {
-    switch (role) {
-      case "user":
-        return "用户";
-      case "assistant":
-        return "助手";
-      case "system":
-        return "系统";
-      default:
-        return role;
-    }
+  const roleCfg: Record<string, { label: string; color: string }> = {
+    user: { label: "用户", color: "#e53e3e" },
+    assistant: { label: "助手", color: "#3182ce" },
+    system: { label: "系统", color: "var(--secondary-text)" },
   };
 
   return (
     <>
       <tr
+        onClick={onToggle}
         style={{
-          fontSize: 14,
-          borderBottom: "1px solid var(--border-color)",
           cursor: "pointer",
           background: isExpanded ? "var(--disabled-background)" : undefined,
         }}
-        onClick={onToggle}
       >
-        <td style={{ padding: "10px 0", textAlign: "center" }}>
+        <td style={{ ...TD_STYLE, textAlign: "center", width: 28 }}>
           <span
             style={{
-              fontSize: 12,
-              transition: "transform 0.2s",
+              fontSize: 10,
               display: "inline-block",
               transform: isExpanded ? "rotate(90deg)" : undefined,
             }}
@@ -983,8 +1007,8 @@ function ConverationRow({
         </td>
         <td
           style={{
-            padding: "10px 0",
-            maxWidth: 320,
+            ...TD_STYLE,
+            maxWidth: 300,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -992,22 +1016,24 @@ function ConverationRow({
         >
           {conv.topic || "（无主题）"}
         </td>
-        <td style={{ padding: "10px 0" }}>{conv.username}</td>
-        <td style={{ padding: "10px 0" }}>{conv.messageCount}</td>
-        <td style={{ padding: "10px 0" }}>{formatDate(conv.lastUpdate)}</td>
-        <td style={{ padding: "10px 0" }}>
+        <td style={TD_STYLE}>{conv.username}</td>
+        <td style={TD_STYLE}>{conv.messageCount}</td>
+        <td style={{ ...TD_STYLE, textAlign: "right" }}>
+          {formatDate(conv.lastUpdate)}
+        </td>
+        <td style={{ ...TD_STYLE, textAlign: "center" }}>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
             }}
             style={{
-              padding: "3px 10px",
-              borderRadius: 4,
+              padding: "2px 8px",
+              borderRadius: 3,
               border: "none",
               background: "rgba(229,62,62,0.1)",
               color: "#e53e3e",
-              fontSize: 12,
+              fontSize: 11,
               cursor: "pointer",
             }}
           >
@@ -1017,116 +1043,116 @@ function ConverationRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={6} style={{ padding: "0 0 16px 0" }}>
+          <td colSpan={6} style={{ padding: 0 }}>
             <div
               style={{
+                margin: "0 0 12px 36px",
                 background: "var(--background-color)",
-                borderRadius: 8,
-                padding: 16,
-                margin: "8px 0 0 40px",
+                borderRadius: 6,
+                padding: 12,
               }}
             >
               {loadingMessages ? (
                 <p
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     color: "var(--secondary-text)",
                     textAlign: "center",
-                    padding: 16,
+                    padding: 10,
                   }}
                 >
-                  加载消息中...
+                  加载中...
                 </p>
               ) : messages.length === 0 ? (
                 <p
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     color: "var(--secondary-text)",
                     textAlign: "center",
-                    padding: 16,
+                    padding: 10,
                   }}
                 >
                   暂无消息
                 </p>
               ) : (
-                <div style={{ maxHeight: 480, overflowY: "auto" }}>
-                  {messages.map((m, i) => (
-                    <div
-                      key={m.id || i}
-                      style={{
-                        marginBottom: i < messages.length - 1 ? 12 : 0,
-                        padding: "8px 12px",
-                        borderRadius: 6,
-                        background:
-                          m.role === "user"
-                            ? "var(--disabled-background)"
-                            : "transparent",
-                      }}
-                    >
+                <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                  {messages.map((m, i) => {
+                    const role = roleCfg[m.role] || {
+                      label: m.role,
+                      color: "var(--secondary-text)",
+                    };
+                    return (
                       <div
+                        key={m.id || i}
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          marginBottom: 4,
+                          marginBottom: i < messages.length - 1 ? 8 : 0,
+                          padding: "6px 10px",
+                          borderRadius: 4,
+                          background:
+                            m.role === "user"
+                              ? "var(--disabled-background)"
+                              : "transparent",
                         }}
                       >
-                        <span
+                        <div
                           style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color:
-                              m.role === "assistant"
-                                ? "#3182ce"
-                                : m.role === "user"
-                                ? "#e53e3e"
-                                : "var(--secondary-text)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            marginBottom: 2,
                           }}
                         >
-                          {roleLabel(m.role)}
-                        </span>
-                        {m.model && (
                           <span
                             style={{
                               fontSize: 11,
-                              color: "var(--secondary-text)",
-                              background: "var(--disabled-background)",
-                              padding: "1px 6px",
-                              borderRadius: 3,
+                              fontWeight: 600,
+                              color: role.color,
                             }}
                           >
-                            {m.model}
+                            {role.label}
                           </span>
-                        )}
-                        {m.isError && (
-                          <span style={{ fontSize: 11, color: "#e53e3e" }}>
-                            错误
+                          {m.model && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: "var(--secondary-text)",
+                                opacity: 0.7,
+                              }}
+                            >
+                              {m.model}
+                            </span>
+                          )}
+                          {m.isError && (
+                            <span style={{ fontSize: 10, color: "#e53e3e" }}>
+                              错误
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: "var(--secondary-text)",
+                              opacity: 0.6,
+                              marginLeft: "auto",
+                            }}
+                          >
+                            {formatDate(m.date)}
                           </span>
-                        )}
-                        <span
+                        </div>
+                        <div
                           style={{
-                            fontSize: 11,
-                            color: "var(--secondary-text)",
-                            marginLeft: "auto",
+                            fontSize: 12,
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            lineHeight: 1.5,
+                            maxHeight: 160,
+                            overflowY: "auto",
                           }}
                         >
-                          {formatDate(m.date)}
-                        </span>
+                          {m.content || "（空）"}
+                        </div>
                       </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          lineHeight: 1.6,
-                          maxHeight: 200,
-                          overflowY: "auto",
-                        }}
-                      >
-                        {m.content || "（空消息）"}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
