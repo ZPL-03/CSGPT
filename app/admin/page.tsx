@@ -75,7 +75,7 @@ function AdminLogin() {
       }
       userStore.setAuth(data.token, data.user);
     } catch {
-      setError("网络错误，请稍后重试");
+      setError("网络错误");
     } finally {
       setLoading(false);
     }
@@ -200,7 +200,7 @@ const CARD_STYLE: React.CSSProperties = {
 };
 
 const TH_STYLE: React.CSSProperties = {
-  padding: "8px 12px",
+  padding: "7px 10px",
   fontWeight: 500,
   textAlign: "left",
   fontSize: 12,
@@ -208,7 +208,7 @@ const TH_STYLE: React.CSSProperties = {
 };
 
 const TD_STYLE: React.CSSProperties = {
-  padding: "10px 12px",
+  padding: "8px 10px",
   fontSize: 13,
   borderBottom: "1px solid var(--border-color)",
 };
@@ -219,6 +219,12 @@ function formatDate(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+// 退出登录后停留在当前页面
+function doLogout(userStore: ReturnType<typeof useUserStore.getState>) {
+  userStore.logout();
+  window.location.reload();
 }
 
 export default function AdminPage() {
@@ -233,8 +239,6 @@ export default function AdminPage() {
     id: string;
     name: string;
   } | null>(null);
-
-  // 对话消息查看
   const [expandedConvId, setExpandedConvId] = useState<string | null>(null);
   const [convMessages, setConvMessages] = useState<MessageItem[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -400,10 +404,7 @@ export default function AdminPage() {
             当前账号不是管理员
           </p>
           <button
-            onClick={() => {
-              userStore.logout();
-              window.location.href = "/";
-            }}
+            onClick={() => doLogout(userStore)}
             style={{
               padding: "8px 24px",
               borderRadius: 6,
@@ -414,14 +415,13 @@ export default function AdminPage() {
               cursor: "pointer",
             }}
           >
-            返回首页
+            退出登录
           </button>
         </div>
       </div>
     );
   }
 
-  // 删除确认弹窗
   function renderDeleteConfirm() {
     if (!deleteConfirm) return null;
     return (
@@ -459,7 +459,13 @@ export default function AdminPage() {
               ? `确定要删除用户「${deleteConfirm.name}」及其所有数据吗？此操作不可撤销。`
               : `确定要删除对话「${deleteConfirm.name}」吗？此操作不可撤销。`}
           </p>
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              justifyContent: "flex-end",
+            }}
+          >
             <button
               onClick={() => setDeleteConfirm(null)}
               style={{
@@ -511,11 +517,10 @@ export default function AdminPage() {
     >
       {renderDeleteConfirm()}
 
-      {/* 顶部导航 */}
+      {/* 顶部导航栏 */}
       <div
         style={{
           borderBottom: "1px solid var(--border-color)",
-          padding: "0 16px",
           background: "var(--background-color)",
         }}
       >
@@ -524,29 +529,30 @@ export default function AdminPage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            height: 44,
+            height: 40,
+            padding: "0 12px",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 16,
+              gap: 12,
               minWidth: 0,
             }}
           >
             <span
-              style={{ fontSize: 15, fontWeight: 700, whiteSpace: "nowrap" }}
+              style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}
             >
-              CSGPT 管理后台
+              管理后台
             </span>
-            <div style={{ display: "flex", gap: 2 }}>
+            <div style={{ display: "flex", gap: 1 }}>
               {tabs.map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   style={{
-                    padding: "4px 14px",
+                    padding: "3px 12px",
                     borderRadius: 4,
                     border: "none",
                     fontSize: 12,
@@ -571,13 +577,13 @@ export default function AdminPage() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: 10,
               flexShrink: 0,
             }}
           >
             <span
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 color: "var(--secondary-text)",
                 whiteSpace: "nowrap",
               }}
@@ -585,12 +591,9 @@ export default function AdminPage() {
               {userStore.user?.username}
             </span>
             <button
-              onClick={() => {
-                userStore.logout();
-                window.location.href = "/";
-              }}
+              onClick={() => doLogout(userStore)}
               style={{
-                padding: "3px 10px",
+                padding: "2px 8px",
                 borderRadius: 4,
                 border: "1px solid var(--border-color)",
                 background: "transparent",
@@ -606,12 +609,11 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* 错误提示 */}
       {error && (
-        <div style={{ padding: "8px 16px 0" }}>
+        <div style={{ padding: "6px 12px 0" }}>
           <div
             style={{
-              padding: "8px 12px",
+              padding: "6px 10px",
               borderRadius: 6,
               background: "rgba(229,62,62,0.1)",
               color: "#e53e3e",
@@ -624,7 +626,7 @@ export default function AdminPage() {
       )}
 
       {/* 主内容区 */}
-      <div style={{ padding: "16px" }}>
+      <div style={{ padding: "12px" }}>
         {activeTab === "overview" && (
           <OverviewTab stats={stats} loading={loading} />
         )}
@@ -634,7 +636,11 @@ export default function AdminPage() {
             loading={loading}
             isSelf={(u) => u === userStore.user?.username}
             onDelete={(u) =>
-              setDeleteConfirm({ type: "user", id: u.id, name: u.username })
+              setDeleteConfirm({
+                type: "user",
+                id: u.id,
+                name: u.username,
+              })
             }
             onRefresh={fetchStats}
           />
@@ -662,6 +668,7 @@ export default function AdminPage() {
   );
 }
 
+// 概览标签页：统计卡片 + 数据表格
 function OverviewTab({
   stats,
   loading,
@@ -673,59 +680,68 @@ function OverviewTab({
     { label: "注册用户", value: stats?.users },
     { label: "对话总数", value: stats?.conversations },
     { label: "消息总数", value: stats?.messages },
-    { label: "数据库大小", value: stats?.dbSize },
-    { label: "数据大小", value: stats?.dataSize },
+    { label: "数据库", value: stats?.dbSize },
+    { label: "数据", value: stats?.dataSize },
   ];
 
   return (
     <div>
+      {/* 统计卡片 — 横向排列 */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          display: "flex",
           gap: 12,
-          marginBottom: 20,
+          marginBottom: 12,
+          flexWrap: "wrap",
         }}
       >
         {cards.map((c) => (
-          <div key={c.label} style={CARD_STYLE}>
+          <div
+            key={c.label}
+            style={{
+              ...CARD_STYLE,
+              flex: "1 1 140px",
+              minWidth: 120,
+              textAlign: "center",
+            }}
+          >
             <div
               style={{
                 fontSize: 12,
                 color: "var(--secondary-text)",
-                marginBottom: 6,
+                marginBottom: 4,
               }}
             >
               {c.label}
             </div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>
               {loading ? "..." : c.value ?? "-"}
             </div>
           </div>
         ))}
       </div>
 
+      {/* 用户和对话表格 — 双栏并排 */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
-          gap: 16,
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+          gap: 12,
         }}
       >
-        {/* 最近用户 */}
         <div style={CARD_STYLE}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 14 }}>最近注册用户</h3>
+          <h3 style={{ margin: "0 0 10px", fontSize: 13 }}>用户列表</h3>
           {stats?.userList && stats.userList.length > 0 ? (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
                   <th style={TH_STYLE}>用户名</th>
-                  <th style={TH_STYLE}>对话数</th>
+                  <th style={TH_STYLE}>对话</th>
                   <th style={{ ...TH_STYLE, textAlign: "right" }}>注册时间</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.userList.slice(0, 10).map((u) => (
+                {stats.userList.map((u) => (
                   <tr key={u.id}>
                     <td style={TD_STYLE}>{u.username}</td>
                     <td style={TD_STYLE}>{u.conversationCount}</td>
@@ -737,13 +753,14 @@ function OverviewTab({
               </tbody>
             </table>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>暂无</p>
+            <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>
+              暂无数据
+            </p>
           )}
         </div>
 
-        {/* 最近对话 */}
         <div style={CARD_STYLE}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 14 }}>最近对话</h3>
+          <h3 style={{ margin: "0 0 10px", fontSize: 13 }}>对话列表</h3>
           {stats?.conversationList && stats.conversationList.length > 0 ? (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -751,16 +768,16 @@ function OverviewTab({
                   <th style={TH_STYLE}>主题</th>
                   <th style={TH_STYLE}>用户</th>
                   <th style={TH_STYLE}>消息</th>
-                  <th style={{ ...TH_STYLE, textAlign: "right" }}>最后更新</th>
+                  <th style={{ ...TH_STYLE, textAlign: "right" }}>更新时间</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.conversationList.slice(0, 10).map((c) => (
+                {stats.conversationList.map((c) => (
                   <tr key={c.id}>
                     <td
                       style={{
                         ...TD_STYLE,
-                        maxWidth: 260,
+                        maxWidth: 200,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -778,7 +795,9 @@ function OverviewTab({
               </tbody>
             </table>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>暂无</p>
+            <p style={{ fontSize: 13, color: "var(--secondary-text)" }}>
+              暂无数据
+            </p>
           )}
         </div>
       </div>
@@ -786,6 +805,7 @@ function OverviewTab({
   );
 }
 
+// 用户管理标签页
 function UsersTab({
   stats,
   loading,
@@ -806,15 +826,15 @@ function UsersTab({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 14 }}>所有用户</h3>
+        <h3 style={{ margin: 0, fontSize: 13 }}>所有用户</h3>
         <button
           onClick={onRefresh}
           disabled={loading}
           style={{
-            padding: "3px 10px",
+            padding: "2px 8px",
             borderRadius: 4,
             border: "1px solid var(--border-color)",
             background: "transparent",
@@ -833,7 +853,7 @@ function UsersTab({
               <th style={TH_STYLE}>用户名</th>
               <th style={TH_STYLE}>对话数</th>
               <th style={{ ...TH_STYLE, textAlign: "right" }}>注册时间</th>
-              <th style={{ ...TH_STYLE, textAlign: "center", width: 60 }}>
+              <th style={{ ...TH_STYLE, textAlign: "center", width: 50 }}>
                 操作
               </th>
             </tr>
@@ -851,7 +871,7 @@ function UsersTab({
                     onClick={() => onDelete(u)}
                     disabled={isSelf(u.username)}
                     style={{
-                      padding: "2px 8px",
+                      padding: "2px 6px",
                       borderRadius: 3,
                       border: "none",
                       fontSize: 11,
@@ -881,6 +901,7 @@ function UsersTab({
   );
 }
 
+// 对话管理标签页
 function ConversationsTab({
   stats,
   loading,
@@ -907,15 +928,15 @@ function ConversationsTab({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 14 }}>所有对话</h3>
+        <h3 style={{ margin: 0, fontSize: 13 }}>所有对话</h3>
         <button
           onClick={onRefresh}
           disabled={loading}
           style={{
-            padding: "3px 10px",
+            padding: "2px 8px",
             borderRadius: 4,
             border: "1px solid var(--border-color)",
             background: "transparent",
@@ -931,12 +952,12 @@ function ConversationsTab({
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-              <th style={{ ...TH_STYLE, width: 28 }}></th>
+              <th style={{ ...TH_STYLE, width: 24 }}></th>
               <th style={TH_STYLE}>主题</th>
               <th style={TH_STYLE}>用户</th>
               <th style={TH_STYLE}>消息</th>
               <th style={{ ...TH_STYLE, textAlign: "right" }}>最后更新</th>
-              <th style={{ ...TH_STYLE, textAlign: "center", width: 60 }}>
+              <th style={{ ...TH_STYLE, textAlign: "center", width: 50 }}>
                 操作
               </th>
             </tr>
@@ -964,6 +985,7 @@ function ConversationsTab({
   );
 }
 
+// 对话行组件：支持展开查看消息详情
 function ConvRow({
   conv,
   isExpanded,
@@ -994,7 +1016,7 @@ function ConvRow({
           background: isExpanded ? "var(--disabled-background)" : undefined,
         }}
       >
-        <td style={{ ...TD_STYLE, textAlign: "center", width: 28 }}>
+        <td style={{ ...TD_STYLE, textAlign: "center", width: 24 }}>
           <span
             style={{
               fontSize: 10,
@@ -1008,7 +1030,7 @@ function ConvRow({
         <td
           style={{
             ...TD_STYLE,
-            maxWidth: 300,
+            maxWidth: 280,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -1028,7 +1050,7 @@ function ConvRow({
               onDelete();
             }}
             style={{
-              padding: "2px 8px",
+              padding: "2px 6px",
               borderRadius: 3,
               border: "none",
               background: "rgba(229,62,62,0.1)",
@@ -1046,10 +1068,10 @@ function ConvRow({
           <td colSpan={6} style={{ padding: 0 }}>
             <div
               style={{
-                margin: "0 0 12px 36px",
+                margin: "0 0 10px 32px",
                 background: "var(--background-color)",
                 borderRadius: 6,
-                padding: 12,
+                padding: 10,
               }}
             >
               {loadingMessages ? (
@@ -1058,7 +1080,7 @@ function ConvRow({
                     fontSize: 12,
                     color: "var(--secondary-text)",
                     textAlign: "center",
-                    padding: 10,
+                    padding: 8,
                   }}
                 >
                   加载中...
@@ -1069,13 +1091,13 @@ function ConvRow({
                     fontSize: 12,
                     color: "var(--secondary-text)",
                     textAlign: "center",
-                    padding: 10,
+                    padding: 8,
                   }}
                 >
                   暂无消息
                 </p>
               ) : (
-                <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                <div style={{ maxHeight: 360, overflowY: "auto" }}>
                   {messages.map((m, i) => {
                     const role = roleCfg[m.role] || {
                       label: m.role,
@@ -1085,8 +1107,8 @@ function ConvRow({
                       <div
                         key={m.id || i}
                         style={{
-                          marginBottom: i < messages.length - 1 ? 8 : 0,
-                          padding: "6px 10px",
+                          marginBottom: i < messages.length - 1 ? 6 : 0,
+                          padding: "5px 8px",
                           borderRadius: 4,
                           background:
                             m.role === "user"
@@ -1123,7 +1145,12 @@ function ConvRow({
                             </span>
                           )}
                           {m.isError && (
-                            <span style={{ fontSize: 10, color: "#e53e3e" }}>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: "#e53e3e",
+                              }}
+                            >
                               错误
                             </span>
                           )}
@@ -1144,7 +1171,7 @@ function ConvRow({
                             whiteSpace: "pre-wrap",
                             wordBreak: "break-word",
                             lineHeight: 1.5,
-                            maxHeight: 160,
+                            maxHeight: 140,
                             overflowY: "auto",
                           }}
                         >
