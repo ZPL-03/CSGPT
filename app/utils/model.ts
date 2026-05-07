@@ -241,7 +241,7 @@ export function isGPT4Model(modelName: string): boolean {
   );
 }
 
-// 规范化 CSGPT 模型配置：将旧模型名统一替换为 CSGPT 默认模型
+// 将历史模型名映射到 CSGPT 默认模型
 export function normalizeCSGPTModelConfig(modelConfig: {
   model?: string;
   providerName?: string;

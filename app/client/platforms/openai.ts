@@ -160,7 +160,7 @@ export class ChatGPTApi implements LLMApi {
     const baseUrl = urlMap[providerName];
     if (baseUrl) return baseUrl;
 
-    // 兜底：使用 CSGPT 默认路径
+    // 使用 CSGPT 默认路径
     return CSGPT_BASE_URL;
   }
 

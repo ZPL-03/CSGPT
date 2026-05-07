@@ -21,6 +21,7 @@ import { getClientApi } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { showToast } from "../components/ui-lib";
 import {
+  CSGPT_DEFAULT_MODEL,
   DEFAULT_INPUT_TEMPLATE,
   DEFAULT_MODELS,
   DEFAULT_SYSTEM_TEMPLATE,
@@ -39,7 +40,10 @@ import { createPersistStore } from "../utils/store";
 import { estimateTokenLength } from "../utils/token";
 import { ModelConfig, ModelType, useAppConfig } from "./config";
 import { useAccessStore } from "./access";
-import { collectModelsWithDefaultModel } from "../utils/model";
+import {
+  collectModelsWithDefaultModel,
+  normalizeCSGPTModelConfig,
+} from "../utils/model";
 import { createEmptyMask, Mask } from "./mask";
 import { executeMcpAction, getAllTools, isMcpEnabled } from "../mcp/actions";
 import { extractMcpJson, isMcpJson } from "../mcp/utils";
@@ -876,7 +880,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.5,
+    version: 3.6,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -938,6 +942,23 @@ export const useChatStore = createPersistStore(
           const config = useAppConfig.getState();
           s.mask.modelConfig.compressModel = "";
           s.mask.modelConfig.compressProviderName = "";
+        });
+      }
+
+      // 版本 3.6：统一会话中模型配置的关键字段与全局默认值一致
+      if (version < 3.6) {
+        newState.sessions.forEach((s) => {
+          normalizeCSGPTModelConfig(s.mask.modelConfig);
+          if (s.mask.modelConfig.max_tokens === 4000) {
+            s.mask.modelConfig.max_tokens = 4096;
+          }
+          if (
+            s.mask.modelConfig.providerName &&
+            s.mask.modelConfig.providerName !== ServiceProvider.CSGPT &&
+            s.mask.modelConfig.model === CSGPT_DEFAULT_MODEL
+          ) {
+            s.mask.modelConfig.providerName = ServiceProvider.CSGPT;
+          }
         });
       }
 

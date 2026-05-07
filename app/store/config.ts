@@ -197,7 +197,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.4,
+    version: 4.5,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -209,17 +209,27 @@ export const useAppConfig = createPersistStore(
             v.name === pModel.name && v.provider?.id === pModel.provider?.id,
         );
         if (idx !== -1) models[idx] = pModel;
-        // 不再追加不在当前列表中的旧模型，避免 localStorage 残留导致的重复
+        // 不在当前列表中的模型不追加
       });
-      // customModels 由服务端控制，不允许 localStorage 中的旧值覆盖
+      // customModels 由服务端控制
       const merged = {
         ...currentState,
         ...state,
         models: models,
         customModels: currentState.customModels,
       };
-      // 规范化 CSGPT 模型配置，防止 localStorage 中的旧模型名覆盖默认值
+      // localStorage 数据与代码默认值合并后，统一规范化关键字段
       normalizeCSGPTModelConfig(merged.modelConfig);
+      if (merged.modelConfig.max_tokens === 4000) {
+        merged.modelConfig.max_tokens = currentState.modelConfig.max_tokens;
+      }
+      if (
+        merged.modelConfig.providerName &&
+        merged.modelConfig.providerName !== ServiceProvider.CSGPT &&
+        merged.modelConfig.model === CSGPT_DEFAULT_MODEL
+      ) {
+        merged.modelConfig.providerName = ServiceProvider.CSGPT;
+      }
       return merged;
     },
 
@@ -271,9 +281,24 @@ export const useAppConfig = createPersistStore(
         normalizeCSGPTModelConfig(state.modelConfig);
       }
 
-      // 版本 4.4：重新规范化 CSGPT 模型配置，处理 localStorage 中残留的旧模型名覆盖
+      // 版本 4.4：统一 CSGPT 模型配置规范化
       if (version < 4.4) {
         normalizeCSGPTModelConfig(state.modelConfig);
+      }
+
+      // 版本 4.5：将历史默认值同步到当前版本默认值
+      if (version < 4.5) {
+        normalizeCSGPTModelConfig(state.modelConfig);
+        if (state.modelConfig.max_tokens === 4000) {
+          state.modelConfig.max_tokens = 4096;
+        }
+        if (
+          state.modelConfig.providerName &&
+          state.modelConfig.providerName !== ServiceProvider.CSGPT
+        ) {
+          state.modelConfig.providerName = ServiceProvider.CSGPT;
+          state.modelConfig.model = CSGPT_DEFAULT_MODEL;
+        }
       }
 
       return state as any;

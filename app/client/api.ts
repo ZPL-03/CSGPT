@@ -154,7 +154,7 @@ export function getHeaders(
       ServiceProvider.CSGPT;
     apiKey = getApiKeyForProvider(accessStore, effectiveProviderName);
   } catch {
-    // 兜底：使用 CSGPT API Key
+    // 使用 CSGPT API Key
     apiKey = accessStore.csgptApiKey || accessStore.openaiApiKey;
   }
 

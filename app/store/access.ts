@@ -314,7 +314,7 @@ export const useAccessStore = createPersistStore(
 
       return persistedState as any;
     },
-    // 服务端配置字段不由 localStorage 持久化覆盖，避免旧值导致模型重复
+    // 服务端配置字段不在 localStorage 中持久化
     merge(persistedState, currentState) {
       const state = persistedState as any;
       if (!state) return { ...currentState };
