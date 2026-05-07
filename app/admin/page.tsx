@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useUserStore } from "../store/user";
-import { AuthPage } from "../components/auth";
+import BotPng from "../icons/bot.svg";
+import Locale from "../locales";
 
 interface UserItem {
   id: string;
@@ -28,6 +29,160 @@ interface Stats {
   messages: number;
   dbSize: string;
   dataSize: string;
+}
+
+// 管理后台内部登录表单，登录后不跳转，留在当前页面
+function AdminLogin() {
+  const userStore = useUserStore();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!username.trim()) {
+      setError("用户名不能为空");
+      return;
+    }
+    if (!password) {
+      setError("密码不能为空");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "登录失败");
+        return;
+      }
+      userStore.setAuth(data.token, data.user);
+    } catch {
+      setError("网络错误");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        background: "var(--background-color)",
+        color: "var(--foreground-color)",
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          background: "var(--disabled-background)",
+          padding: 32,
+          borderRadius: 12,
+          width: 340,
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <BotPng width={48} height={48} />
+        </div>
+        <h2 style={{ margin: "0 0 8px", fontSize: 20, textAlign: "center" }}>
+          CSGPT 管理后台
+        </h2>
+        <p
+          style={{
+            margin: "0 0 20px",
+            fontSize: 14,
+            color: "var(--secondary-text)",
+            textAlign: "center",
+          }}
+        >
+          请使用管理员账号登录
+        </p>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => {
+            setUsername(e.target.value);
+            setError("");
+          }}
+          placeholder={Locale.Auth.Username}
+          autoFocus
+          style={{
+            width: "100%",
+            marginBottom: 12,
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "1px solid var(--border-color)",
+            background: "var(--background-color)",
+            color: "var(--foreground-color)",
+            fontSize: 14,
+            boxSizing: "border-box",
+          }}
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setError("");
+          }}
+          placeholder={Locale.Auth.Password}
+          style={{
+            width: "100%",
+            marginBottom: 12,
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "1px solid var(--border-color)",
+            background: "var(--background-color)",
+            color: "var(--foreground-color)",
+            fontSize: 14,
+            boxSizing: "border-box",
+          }}
+        />
+        {error && (
+          <p
+            style={{
+              color: "#e53e3e",
+              fontSize: 13,
+              margin: "0 0 12px",
+              textAlign: "center",
+            }}
+          >
+            {error}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={loading || !username || !password}
+          style={{
+            width: "100%",
+            padding: "8px 0",
+            borderRadius: 6,
+            border: "none",
+            background: "var(--foreground-color)",
+            color: "var(--background-color)",
+            fontSize: 14,
+            cursor: "pointer",
+            opacity: loading ? 0.6 : 1,
+            boxSizing: "border-box",
+          }}
+        >
+          {loading ? "登录中..." : Locale.Auth.Login}
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export default function AdminPage() {
@@ -99,9 +254,9 @@ export default function AdminPage() {
     }
   }
 
-  // 未登录：显示登录页面
+  // 未登录：显示登录表单
   if (!userStore.isLoggedIn) {
-    return <AuthPage />;
+    return <AdminLogin />;
   }
 
   // 正在检查管理员权限
