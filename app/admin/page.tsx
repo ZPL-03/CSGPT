@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useUserStore } from "../store/user";
 import styles from "./admin.module.scss";
 
@@ -43,6 +43,9 @@ interface Stats {
 
 type TabKey = "overview" | "users" | "conversations";
 
+// 管理后台验证阶段
+type AdminPhase = "login" | "verifying" | "denied" | "error" | "granted";
+
 function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr).toLocaleString("zh-CN");
@@ -52,8 +55,7 @@ function formatDate(dateStr: string): string {
 }
 
 // 管理后台登录表单
-function AdminLogin() {
-  const userStore = useUserStore();
+function AdminLogin({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -82,7 +84,8 @@ function AdminLogin() {
         setError(data.error || "登录失败");
         return;
       }
-      userStore.setAuth(data.token, data.user);
+      useUserStore.getState().setAuth(data.token, data.user);
+      onLoginSuccess();
     } catch {
       setError("网络错误");
     } finally {
@@ -132,10 +135,9 @@ function AdminLogin() {
 
 export default function AdminPage() {
   const userStore = useUserStore();
+  const [phase, setPhase] = useState<AdminPhase>("verifying");
+  const [errorMsg, setErrorMsg] = useState("");
   const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [deleteConfirm, setDeleteConfirm] = useState<{
     type: "user" | "conversation";
@@ -146,47 +148,74 @@ export default function AdminPage() {
   const [convMessages, setConvMessages] = useState<MessageItem[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  const fetchStats = useCallback(async () => {
-    const token = userStore.token;
+  // 验证管理员身份 — 直接从 store 读取 token，不依赖响应式追踪
+  async function verifyAdmin() {
+    const token = useUserStore.getState().token;
     if (!token) {
-      setError("未获取到登录凭证，请重新登录");
-      setLoading(false);
+      setPhase("login");
       return;
     }
-    setLoading(true);
-    setError("");
+    setPhase("verifying");
+    setErrorMsg("");
     try {
       const res = await fetch("/api/admin/stats", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (res.status === 401) {
-        setIsAdmin(false);
+        setPhase("denied");
         return;
       }
       if (!res.ok) {
-        setError(data.error || data.detail || "获取数据失败");
-        setIsAdmin(false);
+        setErrorMsg(data.error || data.detail || "获取数据失败");
+        setPhase("error");
         return;
       }
       setStats(data);
-      setIsAdmin(true);
+      setPhase("granted");
     } catch {
-      setError("网络错误");
-      setIsAdmin(false);
-    } finally {
-      setLoading(false);
+      setErrorMsg("网络错误，请检查网络连接后重试");
+      setPhase("error");
     }
-  }, [userStore.token]);
+  }
 
+  // 登录成功后重新验证
+  function handleLoginSuccess() {
+    verifyAdmin();
+  }
+
+  // 组件挂载及登录状态变化时验证
   useEffect(() => {
-    if (userStore.isLoggedIn && userStore.token) {
-      fetchStats();
+    if (userStore.isLoggedIn) {
+      verifyAdmin();
+    } else {
+      setPhase("login");
     }
-  }, [userStore.isLoggedIn, userStore.token, fetchStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userStore.isLoggedIn]);
+
+  // 刷新统计数据（仅在已授权后使用）
+  async function refreshStats() {
+    const token = useUserStore.getState().token;
+    if (!token) return;
+    setErrorMsg("");
+    try {
+      const res = await fetch("/api/admin/stats", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || data.detail || "获取数据失败");
+        return;
+      }
+      setStats(data);
+    } catch {
+      setErrorMsg("网络错误");
+    }
+  }
 
   async function fetchConvMessages(convId: string) {
-    const token = userStore.token;
+    const token = useUserStore.getState().token;
     setLoadingMessages(true);
     try {
       const res = await fetch(`/api/admin/stats?id=${convId}`, {
@@ -194,12 +223,12 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "获取消息失败");
+        setErrorMsg(data.error || "获取消息失败");
         return;
       }
       setConvMessages(data.messages || []);
     } catch {
-      setError("获取对话消息失败");
+      setErrorMsg("获取对话消息失败");
     } finally {
       setLoadingMessages(false);
     }
@@ -217,8 +246,8 @@ export default function AdminPage() {
   }
 
   async function handleDelete(type: "user" | "conversation", id: string) {
-    const token = userStore.token;
-    setError("");
+    const token = useUserStore.getState().token;
+    setErrorMsg("");
     try {
       const res = await fetch(`/api/admin/stats?type=${type}&id=${id}`, {
         method: "DELETE",
@@ -226,7 +255,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "删除失败");
+        setErrorMsg(data.error || "删除失败");
         return;
       }
       setDeleteConfirm(null);
@@ -234,48 +263,39 @@ export default function AdminPage() {
         setExpandedConvId(null);
         setConvMessages([]);
       }
-      fetchStats();
+      refreshStats();
     } catch {
-      setError("网络错误");
+      setErrorMsg("网络错误");
     }
   }
 
   function doLogout() {
-    userStore.logout();
+    useUserStore.getState().logout();
     window.location.reload();
   }
 
-  // 未登录 → 登录表单
-  if (!userStore.isLoggedIn) {
-    return <AdminLogin />;
+  // 登录页
+  if (phase === "login") {
+    return <AdminLogin onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // 验证管理员身份中
-  if (isAdmin === null) {
+  // 验证中
+  if (phase === "verifying") {
     return (
       <div className={styles["admin-status"]}>
         <div className={styles["admin-status-body"]}>
-          <p className={styles["admin-status-text"]}>
-            {loading ? "加载中..." : "验证中..."}
-          </p>
-          {error && <p className={styles["admin-status-error"]}>{error}</p>}
-          {error && (
-            <button onClick={fetchStats} className={styles["admin-btn"]}>
-              重试
-            </button>
-          )}
+          <p className={styles["admin-status-text"]}>加载中...</p>
         </div>
       </div>
     );
   }
 
-  // 非管理员
-  if (!isAdmin) {
+  // 无权限
+  if (phase === "denied") {
     return (
       <div className={styles["admin-status"]}>
         <div className={styles["admin-status-body"]}>
           <h2 className={styles["admin-status-title"]}>无访问权限</h2>
-          {error && <p className={styles["admin-status-error"]}>{error}</p>}
           <p className={styles["admin-status-desc"]}>当前账号不是管理员</p>
           <button onClick={doLogout} className={styles["admin-btn"]}>
             退出登录
@@ -285,6 +305,24 @@ export default function AdminPage() {
     );
   }
 
+  // 验证出错（网络问题等）
+  if (phase === "error") {
+    return (
+      <div className={styles["admin-status"]}>
+        <div className={styles["admin-status-body"]}>
+          <p className={styles["admin-status-text"]}>验证失败</p>
+          {errorMsg && (
+            <p className={styles["admin-status-error"]}>{errorMsg}</p>
+          )}
+          <button onClick={verifyAdmin} className={styles["admin-btn"]}>
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 已授权 — 管理后台主界面
   const tabs: { key: TabKey; label: string }[] = [
     { key: "overview", label: "概览" },
     { key: "users", label: "用户" },
@@ -359,32 +397,28 @@ export default function AdminPage() {
       </nav>
 
       {/* 错误提示 */}
-      {error && (
+      {errorMsg && (
         <div className={styles["admin-error-bar"]}>
-          <div className={styles["admin-error-msg"]}>{error}</div>
+          <div className={styles["admin-error-msg"]}>{errorMsg}</div>
         </div>
       )}
 
       {/* 主内容 */}
       <div className={styles["admin-content"]}>
-        {activeTab === "overview" && (
-          <OverviewTab stats={stats} loading={loading} />
-        )}
+        {activeTab === "overview" && <OverviewTab stats={stats} />}
         {activeTab === "users" && (
           <UsersTab
             stats={stats}
-            loading={loading}
             isSelf={(u) => u === userStore.user?.username}
             onDelete={(u) =>
               setDeleteConfirm({ type: "user", id: u.id, name: u.username })
             }
-            onRefresh={fetchStats}
+            onRefresh={refreshStats}
           />
         )}
         {activeTab === "conversations" && (
           <ConversationsTab
             stats={stats}
-            loading={loading}
             expandedConvId={expandedConvId}
             convMessages={convMessages}
             loadingMessages={loadingMessages}
@@ -396,7 +430,7 @@ export default function AdminPage() {
                 name: c.topic || "（无主题）",
               })
             }
-            onRefresh={fetchStats}
+            onRefresh={refreshStats}
           />
         )}
       </div>
@@ -405,13 +439,7 @@ export default function AdminPage() {
 }
 
 // 概览标签页
-function OverviewTab({
-  stats,
-  loading,
-}: {
-  stats: Stats | null;
-  loading: boolean;
-}) {
+function OverviewTab({ stats }: { stats: Stats | null }) {
   const cards = [
     { label: "注册用户", value: stats?.users },
     { label: "对话总数", value: stats?.conversations },
@@ -427,7 +455,7 @@ function OverviewTab({
           <div key={c.label} className={styles["admin-stat-card"]}>
             <div className={styles["admin-stat-label"]}>{c.label}</div>
             <div className={styles["admin-stat-value"]}>
-              {loading ? "..." : c.value ?? "-"}
+              {stats ? c.value ?? "-" : "..."}
             </div>
           </div>
         ))}
@@ -525,13 +553,11 @@ function OverviewTab({
 // 用户管理标签页
 function UsersTab({
   stats,
-  loading,
   isSelf,
   onDelete,
   onRefresh,
 }: {
   stats: Stats | null;
-  loading: boolean;
   isSelf: (u: string) => boolean;
   onDelete: (u: UserItem) => void;
   onRefresh: () => void;
@@ -540,11 +566,7 @@ function UsersTab({
     <div className={styles["admin-card"]}>
       <div className={styles["admin-card-header"]}>
         <h3 className={styles["admin-card-title"]}>所有用户</h3>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className={styles["admin-btn-sm"]}
-        >
+        <button onClick={onRefresh} className={styles["admin-btn-sm"]}>
           刷新
         </button>
       </div>
@@ -608,7 +630,6 @@ function UsersTab({
 // 对话管理标签页
 function ConversationsTab({
   stats,
-  loading,
   expandedConvId,
   convMessages,
   loadingMessages,
@@ -617,7 +638,6 @@ function ConversationsTab({
   onRefresh,
 }: {
   stats: Stats | null;
-  loading: boolean;
   expandedConvId: string | null;
   convMessages: MessageItem[];
   loadingMessages: boolean;
@@ -629,11 +649,7 @@ function ConversationsTab({
     <div className={styles["admin-card"]}>
       <div className={styles["admin-card-header"]}>
         <h3 className={styles["admin-card-title"]}>所有对话</h3>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className={styles["admin-btn-sm"]}
-        >
+        <button onClick={onRefresh} className={styles["admin-btn-sm"]}>
           刷新
         </button>
       </div>
