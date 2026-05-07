@@ -31,7 +31,7 @@ interface Stats {
   dataSize: string;
 }
 
-// 管理后台内部登录表单，登录后不跳转，留在当前页面
+// 管理后台登录表单，登录后停留在当前页面
 function AdminLogin() {
   const userStore = useUserStore();
   const [username, setUsername] = useState("");
@@ -39,7 +39,7 @@ function AdminLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -66,11 +66,11 @@ function AdminLogin() {
       }
       userStore.setAuth(data.token, data.user);
     } catch {
-      setError("网络错误");
+      setError("网络错误，请稍后重试");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <div
@@ -192,6 +192,22 @@ function AdminLogin() {
   );
 }
 
+const SHARED_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: "100vh",
+  background: "var(--background-color)",
+  color: "var(--foreground-color)",
+  fontFamily: "system-ui, sans-serif",
+} as const;
+
+const cardStyle: React.CSSProperties = {
+  background: "var(--disabled-background)",
+  borderRadius: 10,
+  padding: 20,
+};
+
 export default function AdminPage() {
   const userStore = useUserStore();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -215,20 +231,22 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/stats", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await res.json();
+
       if (res.status === 401) {
         setIsAdmin(false);
         return;
       }
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "请求失败");
+        setError(data.error || data.detail || "获取数据失败");
+        setIsAdmin(false);
         return;
       }
-      const data = await res.json();
       setStats(data);
       setIsAdmin(true);
     } catch {
-      setError("网络错误");
+      setError("网络错误，请检查网络连接后刷新页面");
+      setIsAdmin(false);
     } finally {
       setLoading(false);
     }
@@ -261,26 +279,48 @@ export default function AdminPage() {
     }
   }
 
-  // 未登录：显示登录表单
+  // 未登录
   if (!userStore.isLoggedIn) {
     return <AdminLogin />;
   }
 
-  // 正在检查管理员权限
+  // 加载中或权限检查中
   if (isAdmin === null) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-          background: "var(--background-color)",
-          color: "var(--foreground-color)",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        {loading ? "加载中..." : "验证中..."}
+      <div style={SHARED_STYLE}>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: 16, marginBottom: 12 }}>
+            {loading ? "加载中..." : "验证中..."}
+          </p>
+          {error && (
+            <p
+              style={{
+                color: "#e53e3e",
+                fontSize: 13,
+                margin: "0 0 16px",
+                maxWidth: 300,
+              }}
+            >
+              {error}
+            </p>
+          )}
+          {(error || !loading) && (
+            <button
+              onClick={fetchStats}
+              style={{
+                padding: "6px 20px",
+                borderRadius: 6,
+                border: "1px solid var(--border-color)",
+                background: "transparent",
+                color: "var(--foreground-color)",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              重试
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -288,19 +328,21 @@ export default function AdminPage() {
   // 非管理员
   if (!isAdmin) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-          background: "var(--background-color)",
-          color: "var(--foreground-color)",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
+      <div style={SHARED_STYLE}>
         <div style={{ textAlign: "center" }}>
           <h2 style={{ marginBottom: 12, fontSize: 22 }}>无访问权限</h2>
+          {error && (
+            <p
+              style={{
+                color: "#e53e3e",
+                fontSize: 13,
+                marginBottom: 16,
+                maxWidth: 400,
+              }}
+            >
+              {error}
+            </p>
+          )}
           <p
             style={{
               color: "var(--secondary-text)",
@@ -332,7 +374,6 @@ export default function AdminPage() {
     );
   }
 
-  // 确认删除对话框
   function renderDeleteConfirm() {
     if (!deleteConfirm) return null;
 
@@ -406,12 +447,6 @@ export default function AdminPage() {
     );
   }
 
-  const cardStyle: React.CSSProperties = {
-    background: "var(--disabled-background)",
-    borderRadius: 10,
-    padding: 20,
-  };
-
   return (
     <div
       style={{
@@ -479,7 +514,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* 概览卡片 */}
         <div
           style={{
             display: "grid",
@@ -511,7 +545,6 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* 用户列表 */}
         <div style={{ ...cardStyle, marginBottom: 24 }}>
           <div
             style={{
@@ -621,7 +654,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* 对话列表 */}
         <div style={cardStyle}>
           <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>所有对话</h3>
           {stats?.conversationList && stats.conversationList.length > 0 ? (

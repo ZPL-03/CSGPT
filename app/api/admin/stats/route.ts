@@ -79,24 +79,25 @@ export async function GET(req: NextRequest) {
       `SELECT pg_size_pretty(pg_database_size('neondb')) as db_size, pg_size_pretty(pg_total_relation_size('"User"') + pg_total_relation_size('"Conversation"') + pg_total_relation_size('"Message"') + pg_total_relation_size('"AuthToken"')) as data_size`,
     );
 
+    // Prisma count() 和 _count 返回 BigInt，JSON 序列化前转为 Number
     return NextResponse.json({
-      users: userCount,
+      users: Number(userCount),
       userList: users.map((u) => ({
         id: u.id,
         username: u.username,
         createdAt: u.createdAt,
-        conversationCount: u._count.sessions,
+        conversationCount: Number(u._count.sessions),
       })),
-      conversations: conversationCount,
+      conversations: Number(conversationCount),
       conversationList: conversations.map((c) => ({
         id: c.id,
         topic: c.topic,
         userId: c.userId,
         username: c.user.username,
         lastUpdate: c.lastUpdate,
-        messageCount: c._count.messages,
+        messageCount: Number(c._count.messages),
       })),
-      messages: messageCount,
+      messages: Number(messageCount),
       dbSize: dbSizeResult[0]?.db_size || "N/A",
       dataSize: dbSizeResult[0]?.data_size || "N/A",
     });
@@ -131,7 +132,6 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: "用户不存在" }, { status: 404 });
       }
 
-      // 不允许删除自己
       const authUser = await getUserFromAuth(req);
       if (authUser === user.username) {
         return NextResponse.json(
@@ -140,7 +140,7 @@ export async function DELETE(req: NextRequest) {
         );
       }
 
-      // 级联删除：Conversation → Message，AuthToken
+      // 级联删除：User 删除时会自动删除关联的 Conversation、Message、AuthToken
       await prisma.user.delete({ where: { id: targetId } });
       return NextResponse.json({
         success: true,
