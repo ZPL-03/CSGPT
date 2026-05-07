@@ -98,8 +98,8 @@ declare global {
       ENABLE_MCP?: string; // enable mcp functionality
 
       // CSGPT 专用配置
-      CSGPT_BASE_URL?: string; // vLLM 服务地址
-      CSGPT_API_KEY?: string; // vLLM API 密钥
+      CSGPT_BASE_URL?: string; // CSGPT API 服务地址
+      CSGPT_API_KEY?: string; // CSGPT API 密钥
       CSGPT_MODEL_NAME?: string; // 前端展示的 CSGPT 默认模型名称
       CSGPT_UPSTREAM_MODEL_NAME?: string; // 临时上游实际模型名称
     }
@@ -191,13 +191,6 @@ export const getServerSideConfig = () => {
   const isChatGLM = !!process.env.CHATGLM_API_KEY;
   const isSiliconFlow = !!process.env.SILICONFLOW_API_KEY;
   const isAI302 = !!process.env.AI302_API_KEY;
-  // const apiKeyEnvVar = process.env.OPENAI_API_KEY ?? "";
-  // const apiKeys = apiKeyEnvVar.split(",").map((v) => v.trim());
-  // const randomIndex = Math.floor(Math.random() * apiKeys.length);
-  // const apiKey = apiKeys[randomIndex];
-  // console.log(
-  //   `[Server Config] using ${randomIndex + 1} of ${apiKeys.length} api key`,
-  // );
 
   const allowedWebDavEndpoints = (
     process.env.WHITE_WEBDAV_ENDPOINTS ?? ""
@@ -275,7 +268,7 @@ export const getServerSideConfig = () => {
     ai302Url: process.env.AI302_URL,
     ai302ApiKey: getApiKey(process.env.AI302_API_KEY),
 
-    // CSGPT 专用配置：vLLM 服务地址、API 密钥、模型名称
+    // CSGPT 专用配置：API 服务地址、API 密钥、模型名称
     csgptBaseUrl: process.env.CSGPT_BASE_URL,
     csgptApiKey: process.env.CSGPT_API_KEY,
     csgptModelName,
