@@ -171,20 +171,29 @@ function Screen() {
   const [serverLoading, setServerLoading] = useState(false);
 
   useEffect(() => {
-    if (userStore.isLoggedIn && !serverDataReady && !serverLoading) {
-      setServerLoading(true);
-      useChatStore
-        .getState()
-        .loadSessionsFromServer()
-        .finally(() => {
-          setServerDataReady(true);
-          setServerLoading(false);
-        });
-    }
     if (!userStore.isLoggedIn) {
       setServerDataReady(false);
       setServerLoading(false);
+      return;
     }
+
+    if (serverDataReady || serverLoading) return;
+
+    // 检查数据是否已由 AuthPage 直接加载
+    const sessions = useChatStore.getState().sessions;
+    if (sessions.some((s) => s.messages?.length > 0)) {
+      setServerDataReady(true);
+      return;
+    }
+
+    setServerLoading(true);
+    useChatStore
+      .getState()
+      .loadSessionsFromServer()
+      .finally(() => {
+        setServerDataReady(true);
+        setServerLoading(false);
+      });
   }, [userStore.isLoggedIn, serverDataReady, serverLoading]);
 
   // 退出登录时清除本地聊天缓存，防止账号切换时数据串扰

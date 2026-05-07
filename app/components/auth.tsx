@@ -6,6 +6,7 @@ import { IconButton } from "./button";
 import { useState } from "react";
 import clsx from "clsx";
 import { useUserStore } from "../store/user";
+import { useChatStore } from "../store";
 import Locale from "../locales";
 import BotPng from "../icons/bot.svg";
 
@@ -51,6 +52,8 @@ export function AuthPage() {
       }
 
       userStore.setAuth(data.token, data.user);
+      // 登录后直接从数据库加载对话，确保数据在导航前就绪
+      await useChatStore.getState().loadSessionsFromServer();
       window.location.hash = "#/";
     } catch (e) {
       setError("网络错误，请稍后重试");
