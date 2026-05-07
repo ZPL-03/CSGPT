@@ -6,7 +6,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
+  width: 100vw;
+  height: 100dvh;
   background: var(--white);
   color: var(--black);
   font-family: system-ui, sans-serif;
@@ -88,7 +89,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  width: 100vw;
+  height: 100dvh;
   background: var(--white);
   color: var(--black);
   font-family: system-ui, sans-serif;
@@ -153,7 +155,12 @@
 
 // 主布局
 .admin-page {
-  min-height: 100vh;
+  width: 100vw;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--white);
   color: var(--black);
   font-family: system-ui, sans-serif;
