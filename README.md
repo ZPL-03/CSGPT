@@ -87,6 +87,9 @@ DEFAULT_MODEL=CSGPT-Qwen3-14B@CSGPT
 
 # 访问控制码（可选）
 ACCESS_CODE=your-access-code
+
+# 管理员用户名（逗号分隔，可访问 /admin 管理后台）
+ADMIN_USERNAMES=admin
 ```
 
 ## 项目结构
