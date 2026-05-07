@@ -284,29 +284,22 @@ export const useChatStore = createPersistStore(
         }));
       },
 
-      // 从服务器加载对话并合并到本地
+      // 从服务器加载对话，完全替换本地数据
       async loadSessionsFromServer() {
         const serverSessions = await loadAllConversationsFromDB();
-        if (serverSessions.length > 0) {
-          get().mergeFromServer(serverSessions);
-        }
+        get().replaceFromServer(serverSessions);
       },
 
-      // 将服务器对话合并到本地存储，服务器数据优先
-      mergeFromServer(serverSessions: ChatSession[]) {
-        const localSessions = get().sessions;
-        const serverIdSet = new Set(serverSessions.map((s) => s.id));
-        const merged: ChatSession[] = [];
+      // 服务器数据完全替换本地存储，不做合并
+      replaceFromServer(serverSessions: ChatSession[]) {
+        const sessions: ChatSession[] = [];
 
-        // 服务器会话覆盖本地同 ID 会话
         for (const ss of serverSessions) {
-          const local = localSessions.find((s) => s.id === ss.id);
           const mask = ss.mask || createEmptyMask();
-          // 服务器 maskConfig 中的模型配置覆盖本地默认值
           if (ss.mask && typeof ss.mask === "object") {
             Object.assign(mask.modelConfig, (ss.mask as any).modelConfig || {});
           }
-          merged.push({
+          sessions.push({
             ...createEmptySession(),
             id: ss.id,
             topic: ss.topic,
@@ -314,24 +307,17 @@ export const useChatStore = createPersistStore(
             messages: ss.messages || [],
             lastUpdate: ss.lastUpdate || Date.now(),
             lastSummarizeIndex: ss.lastSummarizeIndex || 0,
-            clearContextIndex: local?.clearContextIndex ?? ss.clearContextIndex,
-            stat: local?.stat || { tokenCount: 0, wordCount: 0, charCount: 0 },
+            clearContextIndex: ss.clearContextIndex,
+            stat: { tokenCount: 0, wordCount: 0, charCount: 0 },
             mask,
           });
         }
 
-        // 保留本地独有的会话（离线创建，尚未同步）
-        for (const ls of localSessions) {
-          if (!serverIdSet.has(ls.id)) {
-            merged.push(ls);
-          }
+        if (sessions.length === 0) {
+          sessions.push(createEmptySession());
         }
 
-        if (merged.length === 0) {
-          merged.push(createEmptySession());
-        }
-
-        set({ sessions: merged, currentSessionIndex: 0 });
+        set({ sessions, currentSessionIndex: 0 });
       },
 
       selectSession(index: number) {

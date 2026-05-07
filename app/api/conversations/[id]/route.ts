@@ -34,7 +34,7 @@ export async function GET(
       return NextResponse.json({ error: "对话不存在" }, { status: 404 });
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       conversation: {
         id: conversation.id,
         topic: conversation.topic,
@@ -56,6 +56,11 @@ export async function GET(
         })),
       },
     });
+    res.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate",
+    );
+    return res;
   } catch (error) {
     console.error("[Conversation GET] Error:", error);
     return NextResponse.json({ error: "获取对话失败" }, { status: 500 });

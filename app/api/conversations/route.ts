@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       conversations: conversations.map((c: any) => ({
         id: c.id,
         topic: c.topic,
@@ -35,6 +35,13 @@ export async function GET(request: NextRequest) {
         updatedAt: c.updatedAt,
       })),
     });
+    res.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate",
+    );
+    res.headers.set("Pragma", "no-cache");
+    res.headers.set("Expires", "0");
+    return res;
   } catch (error) {
     console.error("[Conversations GET] Error:", error);
     return NextResponse.json({ error: "获取对话列表失败" }, { status: 500 });
@@ -105,7 +112,12 @@ export async function POST(request: NextRequest) {
       return conv;
     });
 
-    return NextResponse.json({ success: true, id: conversation.id });
+    const res = NextResponse.json({ success: true, id: conversation.id });
+    res.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate",
+    );
+    return res;
   } catch (error) {
     console.error("[Conversations POST] Error:", error);
     return NextResponse.json({ error: "保存对话失败" }, { status: 500 });

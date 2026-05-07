@@ -2,7 +2,7 @@
 
 require("../polyfill");
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./home.module.scss";
 
 import BotIcon from "../icons/bot.svg";
@@ -166,22 +166,46 @@ function Screen() {
     }
   }, [userStore]);
 
-  // 登录后从数据库加载对话
-  const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false);
+  // 登录后从数据库加载对话，阻塞渲染直到数据就绪
+  const [serverDataReady, setServerDataReady] = useState(false);
+  const [serverLoading, setServerLoading] = useState(false);
+
   useEffect(() => {
-    if (userStore.isLoggedIn && !hasLoadedFromServer) {
-      setHasLoadedFromServer(true);
-      useChatStore.getState().loadSessionsFromServer();
+    if (userStore.isLoggedIn && !serverDataReady && !serverLoading) {
+      setServerLoading(true);
+      useChatStore
+        .getState()
+        .loadSessionsFromServer()
+        .finally(() => {
+          setServerDataReady(true);
+          setServerLoading(false);
+        });
     }
     if (!userStore.isLoggedIn) {
-      setHasLoadedFromServer(false);
+      setServerDataReady(false);
+      setServerLoading(false);
     }
-  }, [userStore.isLoggedIn, hasLoadedFromServer]);
+  }, [userStore.isLoggedIn, serverDataReady, serverLoading]);
+
+  // 退出登录时清除本地聊天缓存，防止账号切换时数据串扰
+  const lastLoggedInRef = useRef(userStore.isLoggedIn);
+  useEffect(() => {
+    if (lastLoggedInRef.current && !userStore.isLoggedIn) {
+      useChatStore.getState().clearSessions();
+    }
+    lastLoggedInRef.current = userStore.isLoggedIn;
+  }, [userStore.isLoggedIn]);
 
   // 认证门控：用户未登录时强制跳转到认证页面
   if (!userStore.isLoggedIn && !isAuth) {
     return <AuthPage />;
   }
+
+  // 已登录但服务器数据尚未加载完毕，显示加载动画
+  if (userStore.isLoggedIn && !serverDataReady) {
+    return <Loading />;
+  }
+
   const renderContent = () => {
     if (isAuth) return <AuthPage />;
     return (

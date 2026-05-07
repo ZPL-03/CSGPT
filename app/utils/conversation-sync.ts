@@ -14,6 +14,7 @@ export async function syncConversationToDB(session: any) {
   try {
     await fetch("/api/conversations", {
       method: "POST",
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${userStore.token}`,
@@ -48,6 +49,7 @@ export async function deleteConversationFromDB(sessionId: string) {
   try {
     await fetch(`/api/conversations/${sessionId}`, {
       method: "DELETE",
+      cache: "no-store",
       headers: {
         Authorization: `Bearer ${userStore.token}`,
       },
@@ -64,6 +66,7 @@ export async function loadConversationsFromDB(): Promise<any[]> {
 
   try {
     const res = await fetch("/api/conversations", {
+      cache: "no-store",
       headers: {
         Authorization: `Bearer ${userStore.token}`,
       },
@@ -88,6 +91,7 @@ export async function loadConversationDetail(
 
   try {
     const res = await fetch(`/api/conversations/${sessionId}`, {
+      cache: "no-store",
       headers: {
         Authorization: `Bearer ${userStore.token}`,
       },
@@ -111,6 +115,7 @@ export async function loadAllConversationsFromDB(): Promise<any[]> {
   try {
     // 获取对话列表
     const listRes = await fetch("/api/conversations", {
+      cache: "no-store",
       headers: { Authorization: `Bearer ${userStore.token}` },
     });
     if (!listRes.ok) return [];
@@ -124,6 +129,7 @@ export async function loadAllConversationsFromDB(): Promise<any[]> {
       conversations.map(async (conv: any) => {
         try {
           const detailRes = await fetch(`/api/conversations/${conv.id}`, {
+            cache: "no-store",
             headers: { Authorization: `Bearer ${userStore.token}` },
           });
           if (!detailRes.ok) return null;
