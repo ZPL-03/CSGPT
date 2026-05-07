@@ -1,5 +1,6 @@
 // 管理后台 API
-// GET  /api/admin/stats — 统计数据
+// GET  /api/admin/stats — 统计数据概览
+// GET  /api/admin/stats?id=xxx — 查看指定对话的消息列表
 // DELETE /api/admin/stats?type=user&id=xxx — 删除用户
 // DELETE /api/admin/stats?type=conversation&id=xxx — 删除对话
 
@@ -45,6 +46,60 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "未授权访问" }, { status: 401 });
   }
 
+  const url = new URL(req.url);
+  const conversationId = url.searchParams.get("id");
+
+  // 查看对话消息
+  if (conversationId) {
+    try {
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: {
+          id: true,
+          topic: true,
+          userId: true,
+          user: { select: { username: true } },
+          messages: {
+            select: {
+              id: true,
+              role: true,
+              content: true,
+              date: true,
+              isError: true,
+              model: true,
+            },
+            orderBy: { date: "asc" },
+          },
+        },
+      });
+
+      if (!conversation) {
+        return NextResponse.json({ error: "对话不存在" }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        id: conversation.id,
+        topic: conversation.topic,
+        userId: conversation.userId,
+        username: conversation.user.username,
+        messages: conversation.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          date: m.date,
+          isError: m.isError,
+          model: m.model,
+        })),
+      });
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: "获取对话消息失败", detail: error.message },
+        { status: 500 },
+      );
+    }
+  }
+
+  // 统计数据概览
   try {
     const [userCount, conversationCount, messageCount, users, conversations] =
       await Promise.all([
@@ -79,7 +134,6 @@ export async function GET(req: NextRequest) {
       `SELECT pg_size_pretty(pg_database_size('neondb')) as db_size, pg_size_pretty(pg_total_relation_size('"User"') + pg_total_relation_size('"Conversation"') + pg_total_relation_size('"Message"') + pg_total_relation_size('"AuthToken"')) as data_size`,
     );
 
-    // Prisma count() 和 _count 返回 BigInt，JSON 序列化前转为 Number
     return NextResponse.json({
       users: Number(userCount),
       userList: users.map((u) => ({
@@ -140,7 +194,6 @@ export async function DELETE(req: NextRequest) {
         );
       }
 
-      // 级联删除：User 删除时会自动删除关联的 Conversation、Message、AuthToken
       await prisma.user.delete({ where: { id: targetId } });
       return NextResponse.json({
         success: true,
