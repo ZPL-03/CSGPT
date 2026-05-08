@@ -201,7 +201,7 @@ function escapeBrackets(text: string) {
 }
 
 function tryWrapHtmlCode(text: string) {
-  // try add wrap html code (fixed: html codeblock include 2 newline)
+  // wrap embedded HTML content in proper tags when not inside a code block
   // ignore embed codeblock
   if (text.includes("```")) {
     return text;

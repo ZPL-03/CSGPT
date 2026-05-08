@@ -39,7 +39,7 @@ export const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn";
 export const AI302_BASE_URL = "https://api.302.ai";
 
 export const CACHE_URL_PREFIX = "/api/cache";
-export const UPLOAD_URL = `${CACHE_URL_PREFIX}/upload`;
+export const FILES_URL_PREFIX = "/api/files";
 
 export enum Path {
   Home = "/",

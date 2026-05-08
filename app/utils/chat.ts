@@ -1,6 +1,6 @@
 import {
   CACHE_URL_PREFIX,
-  UPLOAD_URL,
+  FILES_URL_PREFIX,
   REQUEST_TIMEOUT_MS,
 } from "@/app/constant";
 import { MultimodalContent, RequestMessage } from "@/app/client/api";
@@ -136,7 +136,10 @@ export async function preProcessImageContentForAlibabaDashScope(
 
 const imageCaches: Record<string, string> = {};
 export function cacheImageToBase64Image(imageUrl: string) {
-  if (imageUrl.includes(CACHE_URL_PREFIX)) {
+  if (
+    imageUrl.includes(CACHE_URL_PREFIX) ||
+    imageUrl.includes(FILES_URL_PREFIX)
+  ) {
     if (!imageCaches[imageUrl]) {
       const reader = new FileReader();
       return fetch(imageUrl, {
@@ -166,13 +169,9 @@ export function base64Image2Blob(base64Data: string, contentType: string) {
 }
 
 export function uploadImage(file: Blob): Promise<string> {
-  if (!window._SW_ENABLED) {
-    // if serviceWorker register error, using compressImage
-    return compressImage(file, 256 * 1024);
-  }
   const body = new FormData();
   body.append("file", file);
-  return fetch(UPLOAD_URL, {
+  return fetch("/api/files", {
     method: "post",
     body,
     mode: "cors",
@@ -180,20 +179,11 @@ export function uploadImage(file: Blob): Promise<string> {
   })
     .then((res) => res.json())
     .then((res) => {
-      // console.log("res", res);
       if (res?.code == 0 && res?.data) {
         return res?.data;
       }
-      throw Error(`upload Error: ${res?.msg}`);
+      throw Error(`上传失败: ${res?.message}`);
     });
-}
-
-export function removeImage(imageUrl: string) {
-  return fetch(imageUrl, {
-    method: "DELETE",
-    mode: "cors",
-    credentials: "include",
-  });
 }
 
 export function streamWithThink(

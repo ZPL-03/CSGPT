@@ -10,6 +10,16 @@ import { getUserFromRequest } from "@/app/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// 解析消息 content 字段：存库时 MultimodalContent[] 被 JSON.stringify，加载时需还原
+function parseMessageContent(content: string): string | any[] {
+  if (!content) return content;
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {}
+  return content;
+}
+
 // 获取对话详情
 export async function GET(
   request: NextRequest,
@@ -48,7 +58,7 @@ export async function GET(
         messages: conversation.messages.map((m: any) => ({
           id: m.id,
           role: m.role,
-          content: m.content,
+          content: parseMessageContent(m.content),
           date: m.date,
           isError: m.isError,
           model: m.model,

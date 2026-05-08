@@ -1,6 +1,7 @@
 /**
- * 从各类文件中提取文本内容，用于发送给模型。
+ * 从各类文件中提取文本内容和内嵌图片。
  * 支持：纯文本文件（.txt/.md/.csv/.json 等）、.docx、.pdf
+ * .docx 可提取内嵌图片，.pdf 可将首页渲染为图片供模型识别
  */
 
 // 可通过 FileReader 直接读取为文本的文件扩展名
@@ -56,6 +57,13 @@ const TEXT_EXTENSIONS = new Set([
   "org",
 ]);
 
+export interface FileExtractionResult {
+  /** 从文件中提取的文本内容 */
+  text: string;
+  /** 从文件中提取的内嵌图片 data URL */
+  images: string[];
+}
+
 function getExtension(filename: string): string {
   const lastDot = filename.lastIndexOf(".");
   if (lastDot < 0) return "";
@@ -63,14 +71,12 @@ function getExtension(filename: string): string {
 }
 
 function dataUrlToText(dataUrl: string): string {
-  // data URL 格式: data:[<mediatype>][;base64],<data>
   const commaIndex = dataUrl.indexOf(",");
   if (commaIndex < 0) return "";
   const base64 = dataUrl.slice(commaIndex + 1);
   try {
     return atob(base64);
   } catch {
-    // 非 base64 编码的 data URL（如 data:text/plain,hello）
     return decodeURIComponent(base64);
   }
 }
@@ -88,8 +94,7 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 }
 
 /**
- * 将 URL（缓存 URL 或 data URL）转换为 data URL 字符串。
- * 如果已经是 data URL 则直接返回，否则 fetch 后转换。
+ * 将 URL（缓存 URL / 服务端文件 URL / data URL）转换为 data URL 字符串。
  */
 async function resolveToDataUrl(url: string): Promise<string> {
   if (url.startsWith("data:")) {
@@ -105,36 +110,105 @@ async function resolveToDataUrl(url: string): Promise<string> {
   });
 }
 
+/**
+ * 将 PDF 所有页面渲染为图片 data URL，使模型能完整理解文档内容（含图表、公式、图片）
+ */
+async function renderPdfPagesToImages(dataUrl: string): Promise<string[]> {
+  const images: string[] = [];
+  try {
+    const pdfjsLib = await import("pdfjs-dist");
+    const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        // 创建离屏 canvas 渲染页面
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        images.push(canvas.toDataURL("image/jpeg", 0.85));
+      } catch (e) {
+        console.error(`[FileExtractor] PDF page ${i} render error:`, e);
+      }
+    }
+  } catch (e) {
+    console.error("[FileExtractor] PDF render error:", e);
+  }
+  return images;
+}
+
 export async function extractTextFromFile(
   fileUrl: string,
   fileName: string,
-): Promise<string> {
+): Promise<FileExtractionResult> {
   const ext = getExtension(fileName);
   const dataUrl = await resolveToDataUrl(fileUrl);
 
   // 纯文本文件：直接从 data URL 解码文本
   if (TEXT_EXTENSIONS.has(ext)) {
     try {
-      return dataUrlToText(dataUrl);
+      return { text: dataUrlToText(dataUrl), images: [] };
     } catch {
-      return `[文件: ${fileName}，文本解码失败]`;
+      return { text: `[文件: ${fileName}，文本解码失败]`, images: [] };
     }
   }
 
-  // .docx：使用 mammoth 提取文本
+  // .docx：使用 mammoth 提取文本和图片
   if (ext === "docx") {
     try {
       const mammoth = await import("mammoth");
       const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      return result.value || `[文件: ${fileName}，未提取到文本内容]`;
+      const images: string[] = [];
+
+      // 使用 convertToHtml 同时提取文本和图片
+      const result = await mammoth.convertToHtml(
+        { arrayBuffer },
+        {
+          convertImage: mammoth.images.imgElement((image: any) =>
+            image.read("base64").then((buffer: string) => {
+              const src = `data:${image.contentType};base64,${buffer}`;
+              images.push(src);
+              return { src };
+            }),
+          ),
+        },
+      );
+
+      // 从 HTML 中提取纯文本
+      const html = result.value || "";
+      const text = html
+        .replace(/<img[^>]*>/g, "[图片]")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      return {
+        text: text || `[文件: ${fileName}，未提取到文本内容]`,
+        images,
+      };
     } catch (e) {
       console.error("[FileExtractor] .docx parsing error:", e);
-      return `[文件: ${fileName}，.docx 解析失败，请将文件内容粘贴到对话中]`;
+      return {
+        text: `[文件: ${fileName}，.docx 解析失败，请将文件内容粘贴到对话中]`,
+        images: [],
+      };
     }
   }
 
-  // .pdf：使用 pdfjs-dist 提取文本
+  // .pdf：提取文本，同时将前几页渲染为图片
   if (ext === "pdf") {
     try {
       const pdfjsLib = await import("pdfjs-dist");
@@ -150,13 +224,26 @@ export async function extractTextFromFile(
           .join(" ");
         pages.push(pageText);
       }
-      return pages.join("\n\n") || `[文件: ${fileName}，未提取到文本内容]`;
+
+      // 渲染页面为图片，使模型能识别 PDF 中的图表和图片
+      const images = await renderPdfPagesToImages(dataUrl);
+
+      return {
+        text: pages.join("\n\n") || `[文件: ${fileName}，未提取到文本内容]`,
+        images,
+      };
     } catch (e) {
       console.error("[FileExtractor] .pdf parsing error:", e);
-      return `[文件: ${fileName}，PDF 解析失败，请将文件内容粘贴到对话中]`;
+      return {
+        text: `[文件: ${fileName}，PDF 解析失败，请将文件内容粘贴到对话中]`,
+        images: [],
+      };
     }
   }
 
   // 不支持的文件类型
-  return `[文件: ${fileName}，此文件类型暂不支持文本提取，请将文件内容粘贴到对话中]`;
+  return {
+    text: `[文件: ${fileName}，此文件类型暂不支持文本提取，请将文件内容粘贴到对话中]`,
+    images: [],
+  };
 }

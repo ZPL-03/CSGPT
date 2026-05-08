@@ -16,7 +16,7 @@ const pow = Math.pow;
 
 // Will be initialized below
 // Using a Uint32Array instead of a simple array makes the minified code
-// a bit bigger (we lose our `unshift()` hack), but comes with huge
+// larger (removes the `unshift()` optimization), but comes with significant
 // performance gains
 const DEFAULT_STATE = new uint32Array(8);
 const ROUND_CONSTANTS: number[] = [];

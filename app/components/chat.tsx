@@ -1500,18 +1500,14 @@ function _Chat() {
         for (let i = 0; i < files.length; i++) {
           const file = event.target.files[i];
           uploadPromises.push(
-            uploadImageRemote(file)
-              .then((dataUrl) => {
-                results.push({
-                  url: dataUrl,
-                  name: file.name,
-                  size: file.size,
-                  type: file.type,
-                });
-              })
-              .catch((e) => {
-                throw e;
-              }),
+            uploadImageRemote(file).then((dataUrl) => {
+              results.push({
+                url: dataUrl,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+              });
+            }),
           );
         }
         Promise.all(uploadPromises)

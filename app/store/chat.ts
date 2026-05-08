@@ -487,19 +487,30 @@ export const useChatStore = createPersistStore(
           const { extractTextFromFile } = await import(
             "../utils/file-text-extractor"
           );
-          const fileTexts = await Promise.all(
+          const fileResults = await Promise.all(
             attachImages
               .filter((att) => !att.type.startsWith("image/"))
               .map(async (att) => {
-                const extractedText = await extractTextFromFile(
-                  att.url,
-                  att.name,
-                );
-                return extractedText;
+                const result = await extractTextFromFile(att.url, att.name);
+                return { ...result, fileName: att.name };
               }),
           );
           extractedFileContent =
-            fileTexts.filter((t) => t).join("\n\n") || undefined;
+            fileResults
+              .map((r) => (r.text ? `[文件: ${r.fileName}]\n${r.text}` : ""))
+              .filter((t) => t)
+              .join("\n\n") || undefined;
+
+          // 从文档中提取的内嵌图片，作为 image_url 发送给模型
+          const extractedImages: MultimodalContent[] = [];
+          for (const r of fileResults) {
+            for (const img of r.images) {
+              extractedImages.push({
+                type: "image_url",
+                image_url: { url: img },
+              } as MultimodalContent);
+            }
+          }
 
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
@@ -511,6 +522,7 @@ export const useChatStore = createPersistStore(
                     file_url: { url: att.url, name: att.name, size: att.size },
                   },
             ),
+            ...extractedImages,
           ];
         }
 
