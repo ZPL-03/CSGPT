@@ -73,6 +73,8 @@ export type ChatMessage = RequestMessage & {
   tools?: ChatMessageTool[];
   audio_url?: string;
   isMcpResponse?: boolean;
+  /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
+  fileContent?: string;
 };
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -478,8 +480,10 @@ export const useChatStore = createPersistStore(
           ? content
           : fillTemplateWith(content, modelConfig);
 
+        // 从非图片文件中提取的文本，发送给模型但不显示在 UI 中
+        let extractedFileContent: string | undefined;
+
         if (!isMcpResponse && attachImages && attachImages.length > 0) {
-          // 提取非图片文件中的文本内容
           const { extractTextFromFile } = await import(
             "../utils/file-text-extractor"
           );
@@ -494,12 +498,11 @@ export const useChatStore = createPersistStore(
                 return extractedText;
               }),
           );
+          extractedFileContent =
+            fileTexts.filter((t) => t).join("\n\n") || undefined;
 
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
-            ...fileTexts
-              .filter((t) => t)
-              .map((t) => ({ type: "text" as const, text: t })),
             ...attachImages.map((att) =>
               att.type.startsWith("image/")
                 ? { type: "image_url" as const, image_url: { url: att.url } }
@@ -515,6 +518,7 @@ export const useChatStore = createPersistStore(
           role: "user",
           content: mContent,
           isMcpResponse,
+          fileContent: extractedFileContent,
         });
 
         const botMessage: ChatMessage = createMessage({

@@ -11,6 +11,7 @@ import {
   CSGPT_BASE_URL,
 } from "@/app/constant";
 import {
+  ChatMessage,
   ChatMessageTool,
   useAccessStore,
   useAppConfig,
@@ -294,14 +295,22 @@ export class ChatGPTApi implements LLMApi {
       const visionModel = isVisionModel(options.config.model);
       const messages: ChatOptions["messages"] = [];
       for (const v of options.messages) {
+        // 从上传文件中提取的文本（不显示在 UI 中，仅发送给模型）
+        const fileContent = (v as ChatMessage).fileContent;
         let content: string | MultimodalContent[];
         if (visionModel) {
           content = await preProcessImageContent(v.content);
+          if (fileContent) {
+            content =
+              typeof content === "string"
+                ? fileContent + "\n\n" + content
+                : [{ type: "text", text: fileContent }, ...(content as any)];
+          }
         } else if (typeof v.content === "string") {
-          content = v.content;
+          content = fileContent ? fileContent + "\n\n" + v.content : v.content;
         } else {
           // 非视觉模型：将多模态内容转为文本
-          content = v.content
+          const textParts = v.content
             .map((part) => {
               if (part.type === "text") return part.text ?? "";
               if (part.type === "image_url") return "[图片]";
@@ -311,6 +320,7 @@ export class ChatGPTApi implements LLMApi {
             })
             .filter(Boolean)
             .join("\n");
+          content = fileContent ? fileContent + "\n\n" + textParts : textParts;
         }
         if (!(isO1OrO3 && v.role === "system"))
           messages.push({ role: v.role, content });
