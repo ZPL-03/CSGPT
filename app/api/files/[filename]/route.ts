@@ -8,7 +8,10 @@ import path from "path";
 
 export const runtime = "nodejs";
 
-const FILES_DIR = path.join(process.cwd(), "data", "files");
+// 文件存储目录：Vercel 环境使用 /tmp，本地开发使用项目目录下的 data/files
+const FILES_DIR = process.env.VERCEL
+  ? "/tmp/files"
+  : path.join(process.cwd(), "data", "files");
 
 // GET：下载/查看文件
 export async function GET(

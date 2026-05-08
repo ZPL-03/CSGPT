@@ -312,19 +312,28 @@ async function handleCS2ChatCompletions(
 
   const apiUrl = joinUrl(baseUrl, "chat/completions");
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: apiKey ? `Bearer ${apiKey}` : "",
-    },
-    body: JSON.stringify({
-      model: upstreamModel,
-      messages: processedMessages,
-      stream,
-      ...rest,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: apiKey ? `Bearer ${apiKey}` : "",
+      },
+      body: JSON.stringify({
+        model: upstreamModel,
+        messages: processedMessages,
+        stream,
+        ...rest,
+      }),
+    });
+  } catch (fetchError: any) {
+    console.error("[CS2 API] 网络请求失败:", fetchError.message);
+    return NextResponse.json(
+      { error: true, message: `无法连接到 CS2 后端: ${fetchError.message}` },
+      { status: 502 },
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -377,20 +386,29 @@ async function handleCS3ChatCompletions(
 
   const apiUrl = joinUrl(baseUrl, "chat/completions");
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: apiKey ? `Bearer ${apiKey}` : "",
-      "User-Agent": "CSGPT/1.0",
-    },
-    body: JSON.stringify({
-      model: upstreamModel,
-      messages: processedMessages,
-      stream,
-      ...rest,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: apiKey ? `Bearer ${apiKey}` : "",
+        "User-Agent": "CSGPT/1.0",
+      },
+      body: JSON.stringify({
+        model: upstreamModel,
+        messages: processedMessages,
+        stream,
+        ...rest,
+      }),
+    });
+  } catch (fetchError: any) {
+    console.error("[CS3 API] 网络请求失败:", fetchError.message);
+    return NextResponse.json(
+      { error: true, message: `无法连接到 CS3 后端: ${fetchError.message}` },
+      { status: 502 },
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -475,14 +493,26 @@ async function handleChatCompletions(
 
   console.log(`[${provider} API] 转发请求到:`, apiUrl);
 
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: getAuthorizationHeader(req, backend.apiKey),
-    },
-    body: JSON.stringify(requestBody),
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: getAuthorizationHeader(req, backend.apiKey),
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (fetchError: any) {
+    console.error(`[${provider} API] 网络请求失败:`, fetchError.message);
+    return NextResponse.json(
+      {
+        error: true,
+        message: `无法连接到后端服务: ${fetchError.message}`,
+      },
+      { status: 502 },
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

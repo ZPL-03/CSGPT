@@ -218,7 +218,9 @@ export class ChatGPTApi implements LLMApi {
         },
       ];
     }
-    return res.choices?.at(0)?.message?.content ?? res;
+    // 推理模型可能仅返回 reasoning_content 而无 content（如 DeepSeek）
+    const message = res.choices?.at(0)?.message;
+    return message?.content || message?.reasoning_content || res;
   }
 
   async speech(options: SpeechOptions): Promise<ArrayBuffer> {
