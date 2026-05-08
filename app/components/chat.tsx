@@ -663,12 +663,10 @@ export function ChatActions(props: {
           icon={<BreakIcon />}
           onClick={() => {
             chatStore.updateTargetSession(session, (session) => {
-              if (session.clearContextIndex === session.messages.length) {
-                session.clearContextIndex = undefined;
-              } else {
-                session.clearContextIndex = session.messages.length;
-                session.memoryPrompt = ""; // will clear memory
-              }
+              session.messages = [];
+              session.memoryPrompt = "";
+              session.clearContextIndex = undefined;
+              session.lastSummarizeIndex = 0;
             });
           }}
         />
@@ -1052,10 +1050,12 @@ function _Chat() {
     prev: () => chatStore.nextSession(-1),
     next: () => chatStore.nextSession(1),
     clear: () =>
-      chatStore.updateTargetSession(
-        session,
-        (session) => (session.clearContextIndex = session.messages.length),
-      ),
+      chatStore.updateTargetSession(session, (session) => {
+        session.messages = [];
+        session.memoryPrompt = "";
+        session.clearContextIndex = undefined;
+        session.lastSummarizeIndex = 0;
+      }),
     fork: () => chatStore.forkSession(),
     del: () => chatStore.deleteSession(chatStore.currentSessionIndex),
   });

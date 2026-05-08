@@ -294,9 +294,24 @@ export class ChatGPTApi implements LLMApi {
       const visionModel = isVisionModel(options.config.model);
       const messages: ChatOptions["messages"] = [];
       for (const v of options.messages) {
-        const content = visionModel
-          ? await preProcessImageContent(v.content)
-          : getMessageTextContent(v);
+        let content: string | MultimodalContent[];
+        if (visionModel) {
+          content = await preProcessImageContent(v.content);
+        } else if (typeof v.content === "string") {
+          content = v.content;
+        } else {
+          // 非视觉模型：将多模态内容转为文本
+          content = v.content
+            .map((part) => {
+              if (part.type === "text") return part.text ?? "";
+              if (part.type === "image_url") return "[图片]";
+              if (part.type === "file_url")
+                return `[文件: ${part.file_url?.name ?? "未知"}]`;
+              return "";
+            })
+            .filter(Boolean)
+            .join("\n");
+        }
         if (!(isO1OrO3 && v.role === "system"))
           messages.push({ role: v.role, content });
       }

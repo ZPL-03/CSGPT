@@ -25,7 +25,7 @@ export const BUILTIN_MASK_STORE = {
 
 export const BUILTIN_MASKS: BuiltinMask[] = [];
 
-// 加载中英文所有预设面具，按名称去重
+// 加载中英文所有预设面具
 const allMasks = [...CSGPT_MASKS, ...CSGPT_MASKS_EN];
 allMasks.forEach((mask) => {
   BUILTIN_MASKS.push(BUILTIN_MASK_STORE.add(mask));
