@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
-import { CSGPT_DEFAULT_MODEL, CSGPT_MODEL_2 } from "@/app/constant";
+import {
+  CSGPT_DEFAULT_MODEL,
+  CSGPT_MODEL_2,
+  CSGPT_MODEL_3,
+} from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
@@ -28,6 +32,10 @@ function isCS2Model(model: string): boolean {
   return model === CSGPT_MODEL_2;
 }
 
+function isCS3Model(model: string): boolean {
+  return model === CSGPT_MODEL_3;
+}
+
 function resolveUpstreamCSGPTModel(
   requestedModel: string | undefined,
   config: ReturnType<typeof getServerSideConfig>,
@@ -37,6 +45,11 @@ function resolveUpstreamCSGPTModel(
   // CS2 模型使用 Xiaomi 上游
   if (requestedModel && isCS2Model(requestedModel)) {
     return config.csgptCs2UpstreamModelName || "mimo-v2.5-pro";
+  }
+
+  // CS3 模型使用自部署 vLLM 上游
+  if (requestedModel && isCS3Model(requestedModel)) {
+    return config.csgptCs3UpstreamModelName || "csllm-cpv";
   }
 
   if (!requestedModel || requestedModel === publicDefaultModel) {
@@ -241,6 +254,18 @@ async function handleModelsRequest(
         parent: null,
       });
     }
+    // CS3 上游已配置时，返回 CS3 模型
+    if (config.csgptCs3BaseUrl || config.csgptCs3ApiKey) {
+      data.push({
+        id: CSGPT_MODEL_3,
+        object: "model",
+        created: Date.now(),
+        owned_by: "csgpt",
+        permission: [],
+        root: CSGPT_MODEL_3,
+        parent: null,
+      });
+    }
     return NextResponse.json({ object: "list", data });
   }
 
@@ -329,6 +354,72 @@ async function handleCS2ChatCompletions(
   return NextResponse.json(data);
 }
 
+// CS3 模型：转发到自部署 vLLM 后端（OpenAI 兼容格式，Cloudflare 代理）
+async function handleCS3ChatCompletions(
+  config: ReturnType<typeof getServerSideConfig>,
+  bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
+) {
+  const { messages, stream, model, rest } = bodyData;
+  const baseUrl = config.csgptCs3BaseUrl || "https://csllm-cpv.lqfewle.com/v1";
+  const apiKey = config.csgptCs3ApiKey || "";
+  const upstreamModel = resolveUpstreamCSGPTModel(model, config);
+
+  const processedMessages = [...messages];
+  const hasSystemMessage = processedMessages.some(
+    (msg: any) => msg.role === "system",
+  );
+  if (!hasSystemMessage) {
+    processedMessages.unshift({
+      role: "system",
+      content: CSGPT_SYSTEM_PROMPT,
+    });
+  }
+
+  const apiUrl = joinUrl(baseUrl, "chat/completions");
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: apiKey ? `Bearer ${apiKey}` : "",
+      "User-Agent": "CSGPT/1.0",
+    },
+    body: JSON.stringify({
+      model: upstreamModel,
+      messages: processedMessages,
+      stream,
+      ...rest,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return NextResponse.json(
+      {
+        error: true,
+        message: `CS3 后端错误: ${response.status}`,
+        detail: errorText,
+      },
+      { status: response.status },
+    );
+  }
+
+  if (stream && response.body) {
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
+  const data = await response.json();
+  return NextResponse.json(data);
+}
+
 // 处理聊天补全请求
 async function handleChatCompletions(
   req: NextRequest,
@@ -342,6 +433,16 @@ async function handleChatCompletions(
   // CS2 模型：路由到 Xiaomi API
   if (backend.isCSGPT && model && isCS2Model(model)) {
     return handleCS2ChatCompletions(config, {
+      messages,
+      stream,
+      model,
+      rest,
+    });
+  }
+
+  // CS3 模型：路由到自部署 vLLM 后端
+  if (backend.isCSGPT && model && isCS3Model(model)) {
+    return handleCS3ChatCompletions(config, {
       messages,
       stream,
       model,
