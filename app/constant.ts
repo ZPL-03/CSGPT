@@ -399,8 +399,8 @@ You are an AI assistant with access to system tools. Your role is to help users 
 
 export const CSGPT_DEFAULT_MODEL = "QWen3-14B-CS1";
 export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "QWen3-14B-CS1";
-export const CSGPT_MODEL_2 = "QWen-14B-CS2";
-export const CSGPT_MODEL_2_DISPLAY_NAME = "QWen-14B-CS2";
+export const CSGPT_MODEL_2 = "QWen3-14B-CS2";
+export const CSGPT_MODEL_2_DISPLAY_NAME = "QWen3-14B-CS2";
 export function isLegacyCSGPTModelName(model?: string) {
   if (!model) return false;
   return model.startsWith("gpt-") || model.startsWith("chatgpt-");

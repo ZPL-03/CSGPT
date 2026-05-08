@@ -35,7 +35,7 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - **前端**：Next.js 14 + TypeScript + Zustand
 - **后端**：Next.js API Routes（SSE 流式代理）
 - **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域微调模型，通过 vLLM/OpenAI 兼容接口部署）
-- **第二模型**：QWen-14B-CS2（Qwen-14B 辅助模型，独立推理后端）
+- **第二模型**：QWen3-14B-CS2（Qwen3-14B 辅助模型，独立推理后端）
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 
 ## 快速开始
@@ -85,7 +85,7 @@ CSGPT_CS1_API_KEY=your-api-key
 CSGPT_MODEL_NAME=QWen3-14B-CS1
 
 # ===== 模型配置 =====
-CUSTOM_MODELS=+QWen-14B-CS2@CSGPT
+CUSTOM_MODELS=+QWen3-14B-CS2@CSGPT
 DEFAULT_MODEL=QWen3-14B-CS1@CSGPT
 
 # ===== 数据库配置（必填）=====
