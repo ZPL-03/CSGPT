@@ -2122,15 +2122,14 @@ function _Chat() {
                               </span>
                             </div>
                           )}
-                          <div className={styles["attach-image-mask"]}>
-                            <DeleteImageButton
-                              deleteImage={() => {
-                                setAttachImages(
-                                  attachImages.filter((_, i) => i !== index),
-                                );
-                              }}
-                            />
-                          </div>
+                          <div className={styles["attach-image-mask"]} />
+                          <DeleteImageButton
+                            deleteImage={() => {
+                              setAttachImages(
+                                attachImages.filter((_, i) => i !== index),
+                              );
+                            }}
+                          />
                         </div>
                       );
                     })}
