@@ -58,8 +58,15 @@ export function Avatar(props: {
   let LlmIcon = BotIconDefault;
 
   if (props.model) {
-    const modelName = props.model.toLowerCase();
-    const providerName = props.providerName?.toLowerCase();
+    let modelName = props.model.toLowerCase();
+    let providerName = props.providerName?.toLowerCase();
+
+    // 从 model@Provider 格式中解析 Provider（模型选择器传入的 value 格式）
+    if (!providerName && modelName.includes("@")) {
+      const parts = modelName.split("@");
+      modelName = parts[0];
+      providerName = parts[1]?.toLowerCase();
+    }
 
     // 第一步：根据 Provider 名称匹配图标（同 Provider 下所有模型使用统一图标）
     if (providerName === ServiceProvider.CSGPT.toLowerCase()) {
