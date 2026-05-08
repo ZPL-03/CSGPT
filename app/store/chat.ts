@@ -467,57 +467,44 @@ export const useChatStore = createPersistStore(
       async onUserInput(
         content: string,
         attachments?: Array<{
+          id?: string;
           url: string;
           name: string;
           size: number;
           type: string;
+          status?: string;
+          extractedText?: string;
+          extractedImages?: string[];
+          extractionMeta?: Record<string, any>;
         }>,
         isMcpResponse?: boolean,
+        fileContentOverride?: string,
       ) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
 
-        // MCP Response no need to fill template
-        let mContent: string | MultimodalContent[] = isMcpResponse
+        // MCP 响应不套用用户输入模板。
+        const textContent = isMcpResponse
           ? content
           : fillTemplateWith(content, modelConfig);
 
-        // 从非图片文件中提取的文本，发送给模型但不显示在 UI 中
-        let extractedFileContent: string | undefined;
-        // 从文档中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中
-        let docImageUrls: string[] | undefined;
-
+        let mContent: string | MultimodalContent[] = textContent;
         if (!isMcpResponse && attachments && attachments.length > 0) {
-          const { extractTextFromFile } = await import(
-            "../utils/file-text-extractor"
-          );
-          const fileResults = await Promise.all(
-            attachments
-              .filter((att) => !att.type.startsWith("image/"))
-              .map(async (att) => {
-                const result = await extractTextFromFile(att.url, att.name);
-                return { ...result, fileName: att.name };
-              }),
-          );
-          extractedFileContent =
-            fileResults
-              .map((r) => (r.text ? `[文件: ${r.fileName}]\n${r.text}` : ""))
-              .filter((t) => t)
-              .join("\n\n") || undefined;
-
-          // 从文档中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中
-          docImageUrls = [];
-          for (const r of fileResults) {
-            for (const img of r.images) {
-              docImageUrls.push(img);
-            }
-          }
-
           mContent = [
-            ...(content ? [{ type: "text" as const, text: content }] : []),
+            ...(textContent
+              ? [{ type: "text" as const, text: textContent }]
+              : []),
             ...attachments.map((att) =>
               att.type.startsWith("image/")
-                ? { type: "image_url" as const, image_url: { url: att.url } }
+                ? {
+                    type: "image_url" as const,
+                    image_url: {
+                      url: att.url,
+                      name: att.name,
+                      size: att.size,
+                      type: att.type,
+                    },
+                  }
                 : {
                     type: "file_url" as const,
                     file_url: {
@@ -531,13 +518,29 @@ export const useChatStore = createPersistStore(
           ];
         }
 
+        const attachmentFileContent =
+          fileContentOverride ||
+          (attachments || [])
+            .map((att) =>
+              att.extractedText
+                ? `[文件: ${att.name}]\n${att.extractedText}`
+                : "",
+            )
+            .filter(Boolean)
+            .join("\n\n") ||
+          undefined;
+        const attachmentImages = (attachments || []).flatMap((att) =>
+          att.type.startsWith("image/") ? [] : att.extractedImages || [],
+        );
+
         let userMessage: ChatMessage = createMessage({
           role: "user",
           content: mContent,
           isMcpResponse,
-          fileContent: extractedFileContent,
-          extractedImages: docImageUrls,
         });
+        userMessage.fileContent = attachmentFileContent;
+        userMessage.extractedImages =
+          attachmentImages.length > 0 ? attachmentImages : undefined;
 
         const botMessage: ChatMessage = createMessage({
           role: "assistant",
@@ -545,92 +548,108 @@ export const useChatStore = createPersistStore(
           model: modelConfig.model,
         });
 
-        // get recent messages
-        const recentMessages = await get().getMessagesWithMemory();
-        const sendMessages = recentMessages.concat(userMessage);
-        const messageIndex = session.messages.length + 1;
+        const previousMessages = session.messages.slice();
+        const messageIndex = previousMessages.length + 1;
 
-        // save user's and bot's message
+        // 先写入真实用户消息和 AI 占位消息，降低界面响应延迟。
         get().updateTargetSession(session, (session) => {
-          const savedUserMessage = {
-            ...userMessage,
-            content: mContent,
-          };
-          session.messages = session.messages.concat([
-            savedUserMessage,
-            botMessage,
-          ]);
+          session.messages = session.messages.concat([userMessage, botMessage]);
+          session.lastUpdate = Date.now();
         });
 
-        const api: ClientApi = getClientApi(modelConfig.providerName);
-        // make request
-        api.llm.chat({
-          messages: sendMessages,
-          config: { ...modelConfig, stream: true },
-          onUpdate(message) {
-            botMessage.streaming = true;
-            if (message) {
-              botMessage.content = message;
-            }
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-          },
-          async onFinish(message) {
-            botMessage.streaming = false;
-            if (message) {
-              botMessage.content = message;
-              botMessage.date = new Date().toLocaleString();
-              get().onNewMessage(botMessage, session);
-            }
-            ChatControllerPool.remove(session.id, botMessage.id);
-          },
-          onBeforeTool(tool: ChatMessageTool) {
-            (botMessage.tools = botMessage?.tools || []).push(tool);
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-          },
-          onAfterTool(tool: ChatMessageTool) {
-            botMessage?.tools?.forEach((t, i, tools) => {
-              if (tool.id == t.id) {
-                tools[i] = { ...tool };
+        try {
+          const recentMessages =
+            await get().getMessagesWithMemory(previousMessages);
+          const sendMessages = recentMessages.concat(userMessage);
+          const api: ClientApi = getClientApi(modelConfig.providerName);
+
+          api.llm.chat({
+            messages: sendMessages,
+            config: { ...modelConfig, stream: true },
+            onUpdate(message) {
+              botMessage.streaming = true;
+              if (message) {
+                botMessage.content = message;
               }
-            });
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-          },
-          onError(error) {
-            const isAborted = error.message?.includes?.("aborted");
-            botMessage.content +=
-              "\n\n" +
-              prettyObject({
-                error: true,
-                message: error.message,
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
               });
-            botMessage.streaming = false;
-            userMessage.isError = !isAborted;
-            botMessage.isError = !isAborted;
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-            ChatControllerPool.remove(
-              session.id,
-              botMessage.id ?? messageIndex,
-            );
+            },
+            async onFinish(message) {
+              botMessage.streaming = false;
+              if (message) {
+                botMessage.content = message;
+                botMessage.date = new Date().toLocaleString();
+                get().onNewMessage(botMessage, session);
+              }
+              ChatControllerPool.remove(session.id, botMessage.id);
+            },
+            onBeforeTool(tool: ChatMessageTool) {
+              (botMessage.tools = botMessage?.tools || []).push(tool);
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+            },
+            onAfterTool(tool: ChatMessageTool) {
+              botMessage?.tools?.forEach((t, i, tools) => {
+                if (tool.id == t.id) {
+                  tools[i] = { ...tool };
+                }
+              });
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+            },
+            onError(error) {
+              const isAborted = error.message?.includes?.("aborted");
+              botMessage.content +=
+                "\n\n" +
+                prettyObject({
+                  error: true,
+                  message: error.message,
+                });
+              botMessage.streaming = false;
+              userMessage.isError = !isAborted;
+              botMessage.isError = !isAborted;
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+              ChatControllerPool.remove(
+                session.id,
+                botMessage.id ?? messageIndex,
+              );
 
-            console.error("[Chat] failed ", error);
-          },
-          onController(controller) {
-            // collect controller for stop/retry
-            ChatControllerPool.addController(
-              session.id,
-              botMessage.id ?? messageIndex,
-              controller,
-            );
-          },
-        });
+              console.error("[Chat] 请求异常", error);
+            },
+            onController(controller) {
+              // 保存控制器用于停止或重试。
+              ChatControllerPool.addController(
+                session.id,
+                botMessage.id ?? messageIndex,
+                controller,
+              );
+            },
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          botMessage.content +=
+            "\n\n" +
+            prettyObject({
+              error: true,
+              message,
+            });
+          botMessage.streaming = false;
+          userMessage.isError = true;
+          botMessage.isError = true;
+          get().updateTargetSession(session, (session) => {
+            session.messages = session.messages.concat();
+            session.lastUpdate = Date.now();
+          });
+          debouncedSyncCurrentSession(session);
+          ChatControllerPool.remove(session.id, botMessage.id ?? messageIndex);
+          console.error("[Chat] 请求异常", error);
+        }
       },
 
       getMemoryPrompt() {
@@ -645,12 +664,12 @@ export const useChatStore = createPersistStore(
         }
       },
 
-      async getMessagesWithMemory() {
+      async getMessagesWithMemory(sourceMessages?: ChatMessage[]) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
         const clearContextIndex = session.clearContextIndex ?? 0;
-        const messages = session.messages.slice();
-        const totalMessageCount = session.messages.length;
+        const messages = (sourceMessages ?? session.messages).slice();
+        const totalMessageCount = messages.length;
 
         // in-context prompts
         const contextPrompts = session.mask.context.slice();

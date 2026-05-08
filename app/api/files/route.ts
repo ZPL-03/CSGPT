@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
         originalName: true,
         mimeType: true,
         size: true,
+        extractedText: true,
+        extractionMeta: true,
+        extractedAt: true,
       },
     });
 
@@ -78,6 +81,9 @@ export async function GET(request: NextRequest) {
         originalName: true,
         mimeType: true,
         size: true,
+        extractedText: true,
+        extractionMeta: true,
+        extractedAt: true,
         createdAt: true,
       },
     });

@@ -1,10 +1,8 @@
 /**
- * 从各类文件中提取文本内容和内嵌图片。
- * 支持：纯文本文件（.txt/.md/.csv/.json 等）、.docx、.pdf
- * .docx 可提取内嵌图片，.pdf 可将首页渲染为图片供模型识别
+ * 上传文件解析工具。
+ * 文本接口读取解析文本，多模态接口同时接收原始图片或渲染图片。
  */
 
-// 可通过 FileReader 直接读取为文本的文件扩展名
 const TEXT_EXTENSIONS = new Set([
   "txt",
   "md",
@@ -57,12 +55,39 @@ const TEXT_EXTENSIONS = new Set([
   "org",
 ]);
 
+const IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "gif",
+  "bmp",
+  "tif",
+  "tiff",
+]);
+
+const SPREADSHEET_EXTENSIONS = new Set(["xlsx", "xls", "ods"]);
+const PRESENTATION_EXTENSIONS = new Set(["pptx"]);
+
 export interface FileExtractionResult {
-  /** 从文件中提取的文本内容 */
+  /** 模型可读取的解析文本 */
   text: string;
-  /** 从文件中提取的内嵌图片 data URL */
+  /** 多模态模型可读取的图片 data URL */
   images: string[];
+  /** 数据库可保存的解析元数据 */
+  metadata: Record<string, any>;
 }
+
+export interface FileExtractionOptions {
+  /** 是否输出图片 data URL */
+  includeImages?: boolean;
+  /** 是否对图片、扫描页、文档内图片执行 OCR */
+  ocrImages?: boolean;
+  /** 解析进度回调，范围 0-100 */
+  onProgress?: (progress: number, stage: string) => void;
+}
+
+let ocrWorkerPromise: Promise<any> | null = null;
 
 function getExtension(filename: string): string {
   const lastDot = filename.lastIndexOf(".");
@@ -70,17 +95,9 @@ function getExtension(filename: string): string {
   return filename.slice(lastDot + 1).toLowerCase();
 }
 
-function dataUrlToText(dataUrl: string): string {
-  const commaIndex = dataUrl.indexOf(",");
-  if (commaIndex < 0) return "";
-  const header = dataUrl.slice(0, commaIndex).toLowerCase();
-  const payload = dataUrl.slice(commaIndex + 1);
-  if (!header.includes(";base64")) {
-    return decodeURIComponent(payload);
-  }
-
-  const bytes = dataUrlToUint8Array(dataUrl);
-  return new TextDecoder("utf-8").decode(bytes);
+function dataUrlMimeType(dataUrl: string): string {
+  const match = /^data:([^;,]+)/i.exec(dataUrl);
+  return match?.[1]?.toLowerCase() || "application/octet-stream";
 }
 
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
@@ -98,14 +115,30 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   return bytes;
 }
 
-/**
- * 将服务端文件 URL 或 data URL 转换为 data URL 字符串。
- */
+function decodeBytesAsText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    try {
+      return new TextDecoder("gb18030").decode(bytes);
+    } catch {
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+  }
+}
+
+function dataUrlToText(dataUrl: string): string {
+  return decodeBytesAsText(dataUrlToUint8Array(dataUrl));
+}
+
 async function resolveToDataUrl(url: string): Promise<string> {
   if (url.startsWith("data:")) {
     return url;
   }
   const response = await fetch(url, { mode: "cors", credentials: "include" });
+  if (!response.ok) {
+    throw new Error(`文件读取异常：${response.status}`);
+  }
   const blob = await response.blob();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -115,158 +148,477 @@ async function resolveToDataUrl(url: string): Promise<string> {
   });
 }
 
-/**
- * 将 PDF 所有页面渲染为图片 data URL，使模型能完整理解文档内容（含图表、公式、图片）
- */
+function cleanText(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function htmlToStructuredText(html: string): string {
+  return cleanText(
+    html
+      .replace(/<img[^>]*>/gi, "[图片]")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<\/tr>/gi, "\n")
+      .replace(/<\/t[dh]>/gi, " | ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"'),
+  );
+}
+
+function buildSection(title: string, content: string) {
+  const text = cleanText(content);
+  return text ? `## ${title}\n${text}` : "";
+}
+
+async function getOcrWorker() {
+  if (typeof window === "undefined") {
+    throw new Error("OCR 需要浏览器环境");
+  }
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = import("tesseract.js").then(({ createWorker }) =>
+      createWorker("chi_sim+eng"),
+    );
+  }
+  return ocrWorkerPromise;
+}
+
+async function recognizeImage(dataUrl: string): Promise<string> {
+  const worker = await getOcrWorker();
+  const result = await worker.recognize(dataUrl);
+  return cleanText(result?.data?.text || "");
+}
+
+async function recognizeImages(
+  images: string[],
+  label: string,
+  onProgress?: (completed: number, total: number) => void,
+) {
+  const sections: string[] = [];
+  for (let i = 0; i < images.length; i++) {
+    const text = await recognizeImage(images[i]);
+    sections.push(
+      text
+        ? `## ${label} ${i + 1} OCR\n${text}`
+        : `## ${label} ${i + 1} OCR\n未提取到可读文本`,
+    );
+    onProgress?.(i + 1, images.length);
+  }
+  return sections;
+}
+
 async function renderPdfPagesToImages(dataUrl: string): Promise<string[]> {
+  if (typeof document === "undefined") {
+    return [];
+  }
+
   const images: string[] = [];
-  try {
-    const pdfjsLib = await import("pdfjs-dist");
-    const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-    const pdf = await loadingTask.promise;
+  const pdfjsLib = await import("pdfjs-dist");
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
+  }
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      try {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1.5 });
+  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
 
-        // 创建离屏 canvas 渲染页面
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) continue;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    images.push(canvas.toDataURL("image/jpeg", 0.85));
+  }
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        images.push(canvas.toDataURL("image/jpeg", 0.85));
-      } catch (e) {
-        console.error(`[FileExtractor] PDF page ${i} render error:`, e);
+  return images;
+}
+
+function imageMimeFromPath(path: string) {
+  const ext = getExtension(path);
+  const mimeTypes: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+  };
+  return mimeTypes[ext] || "application/octet-stream";
+}
+
+async function extractTextDocument(dataUrl: string, fileName: string) {
+  return {
+    text: dataUrlToText(dataUrl),
+    images: [] as string[],
+    metadata: { parser: "text", fileName },
+  };
+}
+
+async function extractSpreadsheet(dataUrl: string, fileName: string) {
+  const XLSX = await import("xlsx");
+  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+  const workbook = XLSX.read(arrayBuffer, {
+    type: "array",
+    cellDates: true,
+    cellFormula: true,
+  });
+
+  const sheetSections: string[] = [];
+  const formulaSections: string[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
+      header: 1,
+      raw: false,
+      blankrows: false,
+      defval: "",
+    });
+    const tableText = rows
+      .map((row) => row.map((cell) => String(cell ?? "")).join("\t"))
+      .join("\n");
+    sheetSections.push(buildSection(`工作表：${sheetName}`, tableText));
+
+    const formulaRows: string[] = [];
+    const ref = sheet["!ref"];
+    if (ref) {
+      const range = XLSX.utils.decode_range(ref);
+      for (let row = range.s.r; row <= range.e.r; row++) {
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const address = XLSX.utils.encode_cell({ r: row, c: col });
+          const cell = sheet[address] as any;
+          if (cell?.f) {
+            const value = cell.w ?? cell.v ?? "";
+            formulaRows.push(`${address}: =${cell.f} => ${value}`);
+          }
+        }
       }
     }
-  } catch (e) {
-    console.error("[FileExtractor] PDF render error:", e);
+    if (formulaRows.length > 0) {
+      formulaSections.push(
+        buildSection(`工作表公式：${sheetName}`, formulaRows.join("\n")),
+      );
+    }
   }
-  return images;
+
+  const text = cleanText([...sheetSections, ...formulaSections].join("\n\n"));
+  return {
+    text: text || `[文件: ${fileName}，未提取到可读文本]`,
+    images: [] as string[],
+    metadata: {
+      parser: "spreadsheet",
+      fileName,
+      sheetCount: workbook.SheetNames.length,
+      sheets: workbook.SheetNames,
+    },
+  };
+}
+
+async function extractDocx(
+  dataUrl: string,
+  fileName: string,
+  options: Required<FileExtractionOptions>,
+) {
+  options.onProgress(15, "解析 DOCX 文本");
+  const mammoth = await import("mammoth");
+  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+  const result = await mammoth.convertToHtml(
+    { arrayBuffer },
+    { convertImage: mammoth.images.dataUri },
+  );
+
+  const html = result.value || "";
+  const images: string[] = [];
+  const imgRegex = /<img\s+[^>]*src="(data:[^"]+)"/gi;
+  let match;
+  while ((match = imgRegex.exec(html)) !== null) {
+    images.push(match[1]);
+  }
+
+  const textSections = [buildSection("文档文本", htmlToStructuredText(html))];
+  if (options.ocrImages && images.length > 0) {
+    textSections.push(
+      ...(await recognizeImages(images, "文档图片", (completed, total) => {
+        options.onProgress(
+          25 + Math.round((completed / total) * 70),
+          `识别文档图片 ${completed}/${total}`,
+        );
+      })),
+    );
+  }
+  options.onProgress(100, "DOCX 解析完成");
+
+  return {
+    text:
+      cleanText(textSections.filter(Boolean).join("\n\n")) ||
+      `[文件: ${fileName}，未提取到可读文本]`,
+    images: options.includeImages ? images : [],
+    metadata: {
+      parser: "docx",
+      fileName,
+      imageCount: images.length,
+      ocrImageCount: options.ocrImages ? images.length : 0,
+    },
+  };
+}
+
+async function extractPdf(
+  dataUrl: string,
+  fileName: string,
+  options: Required<FileExtractionOptions>,
+) {
+  options.onProgress(10, "读取 PDF");
+  const pdfjsLib = await import("pdfjs-dist");
+  if (
+    typeof window !== "undefined" &&
+    !pdfjsLib.GlobalWorkerOptions.workerSrc
+  ) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
+  }
+
+  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = cleanText(
+      textContent.items.map((item: any) => item.str ?? "").join(" "),
+    );
+    pages.push(
+      pageText ? `第 ${i} 页\n${pageText}` : `第 ${i} 页\n未提取到可读文本`,
+    );
+    options.onProgress(
+      10 + Math.round((i / pdf.numPages) * 25),
+      `提取 PDF 文本 ${i}/${pdf.numPages}`,
+    );
+  }
+
+  const renderedImages =
+    options.includeImages || options.ocrImages
+      ? await renderPdfPagesToImages(dataUrl)
+      : [];
+  if (renderedImages.length > 0) {
+    options.onProgress(45, "渲染 PDF 页面");
+  }
+  const textSections = [buildSection("PDF 文本", pages.join("\n\n"))];
+  if (options.ocrImages && renderedImages.length > 0) {
+    textSections.push(
+      ...(await recognizeImages(
+        renderedImages,
+        "PDF 页面",
+        (completed, total) => {
+          options.onProgress(
+            45 + Math.round((completed / total) * 50),
+            `识别 PDF 页面 ${completed}/${total}`,
+          );
+        },
+      )),
+    );
+  }
+  options.onProgress(100, "PDF 解析完成");
+
+  return {
+    text:
+      cleanText(textSections.filter(Boolean).join("\n\n")) ||
+      `[文件: ${fileName}，未提取到可读文本]`,
+    images: options.includeImages ? renderedImages : [],
+    metadata: {
+      parser: "pdf",
+      fileName,
+      pageCount: pdf.numPages,
+      renderedPageCount: renderedImages.length,
+      ocrPageCount: options.ocrImages ? renderedImages.length : 0,
+    },
+  };
+}
+
+async function extractPresentation(
+  dataUrl: string,
+  fileName: string,
+  options: Required<FileExtractionOptions>,
+) {
+  options.onProgress(10, "读取 PPTX");
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(dataUrlToUint8Array(dataUrl).buffer);
+
+  const slideFiles = Object.keys(zip.files)
+    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
+    .sort((a, b) => {
+      const ai = Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0);
+      const bi = Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0);
+      return ai - bi;
+    });
+
+  const slideSections: string[] = [];
+  for (let i = 0; i < slideFiles.length; i++) {
+    const file = zip.file(slideFiles[i]);
+    if (!file) continue;
+    const xml = await file.async("string");
+    const texts = Array.from(xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/gi))
+      .map((match) => decodeXmlEntities(match[1]))
+      .filter(Boolean);
+    slideSections.push(buildSection(`幻灯片 ${i + 1}`, texts.join("\n")));
+    options.onProgress(
+      10 + Math.round(((i + 1) / slideFiles.length) * 30),
+      `提取幻灯片文本 ${i + 1}/${slideFiles.length}`,
+    );
+  }
+
+  const mediaPaths = Object.keys(zip.files).filter((path) =>
+    /^ppt\/media\//i.test(path),
+  );
+  const images: string[] = [];
+  for (const mediaPath of mediaPaths) {
+    if (!IMAGE_EXTENSIONS.has(getExtension(mediaPath))) continue;
+    const media = zip.file(mediaPath);
+    if (!media) continue;
+    const base64 = await media.async("base64");
+    images.push(`data:${imageMimeFromPath(mediaPath)};base64,${base64}`);
+  }
+
+  const textSections = slideSections;
+  if (options.ocrImages && images.length > 0) {
+    textSections.push(
+      ...(await recognizeImages(images, "幻灯片图片", (completed, total) => {
+        options.onProgress(
+          45 + Math.round((completed / total) * 50),
+          `识别幻灯片图片 ${completed}/${total}`,
+        );
+      })),
+    );
+  }
+  options.onProgress(100, "PPTX 解析完成");
+
+  return {
+    text:
+      cleanText(textSections.filter(Boolean).join("\n\n")) ||
+      `[文件: ${fileName}，未提取到可读文本]`,
+    images: options.includeImages ? images : [],
+    metadata: {
+      parser: "pptx",
+      fileName,
+      slideCount: slideFiles.length,
+      imageCount: images.length,
+      ocrImageCount: options.ocrImages ? images.length : 0,
+    },
+  };
+}
+
+async function extractImage(
+  dataUrl: string,
+  fileName: string,
+  options: Required<FileExtractionOptions>,
+) {
+  const sections: string[] = [];
+  if (options.ocrImages) {
+    options.onProgress(20, "识别图片");
+    const text = await recognizeImage(dataUrl);
+    sections.push(
+      text ? buildSection("图片 OCR", text) : "## 图片 OCR\n未提取到可读文本",
+    );
+  }
+  options.onProgress(100, "图片解析完成");
+
+  return {
+    text:
+      cleanText(sections.join("\n\n")) ||
+      `[图片: ${fileName}，未提取到可读文本]`,
+    images: options.includeImages ? [dataUrl] : [],
+    metadata: {
+      parser: "image",
+      fileName,
+      mimeType: dataUrlMimeType(dataUrl),
+      ocrImageCount: options.ocrImages ? 1 : 0,
+    },
+  };
 }
 
 export async function extractTextFromFile(
   fileUrl: string,
   fileName: string,
+  options: FileExtractionOptions = {},
 ): Promise<FileExtractionResult> {
+  const normalizedOptions: Required<FileExtractionOptions> = {
+    includeImages: options.includeImages ?? true,
+    ocrImages: options.ocrImages ?? false,
+    onProgress: options.onProgress ?? (() => {}),
+  };
   const ext = getExtension(fileName);
+  normalizedOptions.onProgress(0, "读取文件");
   const dataUrl = await resolveToDataUrl(fileUrl);
+  const mimeType = dataUrlMimeType(dataUrl);
+  normalizedOptions.onProgress(5, "识别文件类型");
 
-  // 纯文本文件：直接从 data URL 解码文本
-  if (TEXT_EXTENSIONS.has(ext)) {
-    try {
-      return { text: dataUrlToText(dataUrl), images: [] };
-    } catch {
-      return { text: `[文件: ${fileName}，文本解码失败]`, images: [] };
-    }
+  if (TEXT_EXTENSIONS.has(ext) || mimeType.startsWith("text/")) {
+    const result = await extractTextDocument(dataUrl, fileName);
+    normalizedOptions.onProgress(100, "文本解析完成");
+    return {
+      ...result,
+      metadata: { ...result.metadata, mimeType },
+    };
   }
 
-  // .docx：使用 mammoth 提取文本和图片
+  if (IMAGE_EXTENSIONS.has(ext) || mimeType.startsWith("image/")) {
+    return extractImage(dataUrl, fileName, normalizedOptions);
+  }
+
+  if (SPREADSHEET_EXTENSIONS.has(ext)) {
+    normalizedOptions.onProgress(20, "解析表格");
+    const result = await extractSpreadsheet(dataUrl, fileName);
+    normalizedOptions.onProgress(100, "表格解析完成");
+    return result;
+  }
+
   if (ext === "docx") {
-    try {
-      const mammoth = await import("mammoth");
-      const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-
-      // 使用 dataUri 转换器将所有图片转为内嵌 data URI，比 imgElement 异步回调更可靠
-      const result = await mammoth.convertToHtml(
-        { arrayBuffer },
-        { convertImage: mammoth.images.dataUri },
-      );
-
-      const html = result.value || "";
-
-      // 从 HTML 中提取图片 data URI
-      const images: string[] = [];
-      const imgRegex = /<img\s+[^>]*src="(data:[^"]+)"/gi;
-      let match;
-      while ((match = imgRegex.exec(html)) !== null) {
-        images.push(match[1]);
-      }
-
-      // 从 HTML 中提取结构化文本，保留段落、列表和表格边界。
-      const text = html
-        .replace(/<img[^>]*>/g, "[图片]")
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<\/p>/gi, "\n")
-        .replace(/<li[^>]*>/gi, "- ")
-        .replace(/<\/li>/gi, "\n")
-        .replace(/<\/tr>/gi, "\n")
-        .replace(/<\/t[dh]>/gi, " | ")
-        .replace(/<[^>]+>/g, "")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-
-      return {
-        text: text || `[文件: ${fileName}，未提取到文本内容]`,
-        images,
-      };
-    } catch (e) {
-      console.error("[FileExtractor] .docx parsing error:", e);
-      return {
-        text: `[文件: ${fileName}，.docx 解析失败，请将文件内容粘贴到对话中]`,
-        images: [],
-      };
-    }
+    return extractDocx(dataUrl, fileName, normalizedOptions);
   }
 
-  // .pdf：提取文本，同时将前几页渲染为图片
-  if (ext === "pdf") {
-    try {
-      const pdfjsLib = await import("pdfjs-dist");
-      // pdfjs-dist v4 在浏览器中需要配置 worker 路径
-      if (
-        typeof window !== "undefined" &&
-        !pdfjsLib.GlobalWorkerOptions.workerSrc
-      ) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
-      }
-      const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      const pages: string[] = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        try {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items
-            .map((item: any) => item.str ?? "")
-            .join(" ");
-          pages.push(pageText);
-        } catch (pageError) {
-          console.error(`[FileExtractor] PDF page ${i} text error:`, pageError);
-        }
-      }
-
-      // 渲染页面为图片，使模型能识别 PDF 中的图表和图片
-      const images = await renderPdfPagesToImages(dataUrl);
-
-      return {
-        text: pages.join("\n\n") || `[文件: ${fileName}，未提取到文本内容]`,
-        images,
-      };
-    } catch (e) {
-      console.error("[FileExtractor] .pdf parsing error:", e);
-      return {
-        text: `[文件: ${fileName}，PDF 解析失败，请将文件内容粘贴到对话中]`,
-        images: [],
-      };
-    }
+  if (ext === "pdf" || mimeType === "application/pdf") {
+    return extractPdf(dataUrl, fileName, normalizedOptions);
   }
 
-  // 不支持的文件类型
+  if (PRESENTATION_EXTENSIONS.has(ext)) {
+    return extractPresentation(dataUrl, fileName, normalizedOptions);
+  }
+
   return {
-    text: `[文件: ${fileName}，此文件类型暂不支持文本提取，请将文件内容粘贴到对话中]`,
+    text: `[文件: ${fileName}，文件类型 ${mimeType} 未提取到可读文本]`,
     images: [],
+    metadata: {
+      parser: "binary",
+      fileName,
+      mimeType,
+    },
   };
 }

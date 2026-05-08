@@ -66,6 +66,51 @@ function getAuthorizationHeader(req: NextRequest, apiKey: string) {
   return req.headers.get("authorization") || "";
 }
 
+function formatSize(size?: number) {
+  if (!size || size <= 0) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function normalizeContentToText(content: any) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return String(content ?? "");
+
+  return content
+    .map((part) => {
+      if (part?.type === "text") return part.text ?? "";
+      if (part?.type === "image_url") {
+        const image = part.image_url ?? {};
+        const meta = [image.name || "用户上传图片", formatSize(image.size)]
+          .filter(Boolean)
+          .join("，");
+        return image.extractedText
+          ? `[图片: ${meta}]\n${image.extractedText}`
+          : `[图片: ${meta}]`;
+      }
+      if (part?.type === "file_url") {
+        const file = part.file_url ?? {};
+        const meta = [file.name || "用户上传文件", formatSize(file.size)]
+          .filter(Boolean)
+          .join("，");
+        return file.extractedText
+          ? `[文件: ${meta}]\n${file.extractedText}`
+          : `[文件: ${meta}]`;
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function normalizeMessagesToText(messages: any[]) {
+  return messages.map((message) => ({
+    ...message,
+    content: normalizeContentToText(message.content),
+  }));
+}
+
 async function handle(req: NextRequest, { params }: { params: RouteParams }) {
   const { provider, path: pathSegments } = params;
   const rawPath = pathSegments.join("/");
@@ -316,6 +361,7 @@ async function handleCS2ChatCompletions(
   }
 
   const apiUrl = joinUrl(baseUrl, "chat/completions");
+  const upstreamMessages = normalizeMessagesToText(processedMessages);
 
   const cs2Headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -331,7 +377,7 @@ async function handleCS2ChatCompletions(
       headers: cs2Headers,
       body: JSON.stringify({
         model: upstreamModel,
-        messages: processedMessages,
+        messages: upstreamMessages,
         stream,
         ...rest,
       }),
@@ -400,6 +446,7 @@ async function handleCS3ChatCompletions(
   }
 
   const apiUrl = joinUrl(baseUrl, "chat/completions");
+  const upstreamMessages = normalizeMessagesToText(processedMessages);
 
   const cs3Headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -416,7 +463,7 @@ async function handleCS3ChatCompletions(
       headers: cs3Headers,
       body: JSON.stringify({
         model: upstreamModel,
-        messages: processedMessages,
+        messages: upstreamMessages,
         stream,
         ...rest,
       }),
@@ -503,7 +550,9 @@ async function handleChatCompletions(
 
   const requestBody = {
     model: backend.isCSGPT ? resolveUpstreamCSGPTModel(model, config) : model,
-    messages: processedMessages,
+    messages: backend.isCSGPT
+      ? normalizeMessagesToText(processedMessages)
+      : processedMessages,
     stream,
     ...rest,
   };

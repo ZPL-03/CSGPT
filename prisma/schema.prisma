@@ -68,6 +68,7 @@ model Message {
   isError        Boolean      @default(false)
   model          String?
   tools          Json? // 工具调用 JSON 数组
+  fileContent    String?
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
@@ -76,14 +77,17 @@ model Message {
 
 // 用户上传文件表
 model UploadedFile {
-  id           String   @id @default(cuid())
-  userId       String?
-  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  originalName String
-  mimeType     String
-  size         Int
-  data         Bytes
-  createdAt    DateTime @default(now())
+  id             String    @id @default(cuid())
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalName   String
+  mimeType       String
+  size           Int
+  data           Bytes
+  extractedText  String?
+  extractionMeta Json?
+  extractedAt    DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([userId, createdAt])
 }

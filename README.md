@@ -38,7 +38,18 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - **第二模型**：QWen3-14B-CS2（辅助模型，独立推理后端）
 - **第三模型**：QWen3-14B-CS3（`D:\Project\VS_Code\CS_LLM_cpv` 训练产物对应的自部署推理服务）
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
-- **文件存储**：用户上传的文件原始数据保存到 PostgreSQL，聊天消息保存文件引用和可展示元数据
+- **文件存储**：用户上传文件的原始二进制数据、解析文本和解析元数据保存到 PostgreSQL
+- **文件解析**：上传阶段解析文本、图片 OCR、DOCX、PDF、XLSX/XLS、ODS、PPTX，界面显示上传和解析进度
+
+### 文件处理链路
+
+```
+用户选择文件 → 上传原始文件 → 写入 UploadedFile.data → 浏览器解析/OCR → 写入 UploadedFile.extractedText → 发送模型请求
+```
+
+- 聊天消息保存文件引用、文件名、大小、MIME 类型和本轮模型使用的解析文本。
+- CS1、CS2、CS3 当前按上游接口能力发送请求：文本接口接收解析文本，多模态接口接收图片内容和解析文本。
+- 原始文件通过 `/api/files/{id}` 读取，解析结果通过管理后台文件页查看。
 
 ## 快速开始
 
@@ -113,12 +124,14 @@ CSGPT/
 ├── app/
 │   ├── api/           # API 路由
 │   │   └── [provider]/ # 通用 Provider 代理路由
-│   │   └── files/     # 上传文件读写接口
+│   │   └── files/     # 上传文件读写与解析结果接口
 │   ├── components/    # React 组件
 │   ├── config/        # 配置文件
 │   ├── masks/         # 预设模板
 │   ├── prompts/       # 系统提示词
+│   ├── utils/         # 文件解析、请求流、同步工具
 │   └── store/         # 状态管理
+├── prisma/            # PostgreSQL 数据模型
 ├── public/            # 静态资源
 └── .env.local         # 环境变量
 ```

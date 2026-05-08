@@ -227,10 +227,6 @@ const en: LocaleType = {
     SendKey: "Send Key",
     Theme: "Theme",
     TightBorder: "Tight Border",
-    SendPreviewBubble: {
-      Title: "Send Preview Bubble",
-      SubTitle: "Preview markdown in bubble",
-    },
     AutoGenerateTitle: {
       Title: "Auto Generate Title",
       SubTitle: "Generate a suitable title based on the conversation content",

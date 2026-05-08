@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
               isError: msg.isError || false,
               model: msg.model || null,
               tools: msg.tools || undefined,
+              fileContent: msg.fileContent || null,
             })),
           });
         }

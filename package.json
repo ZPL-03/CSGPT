@@ -29,6 +29,7 @@
     "html-to-image": "^1.11.11",
     "idb-keyval": "^6.2.1",
     "jsonwebtoken": "^9.0.3",
+    "jszip": "^3.10.1",
     "katex": "^0.16.45",
     "lodash-es": "^4.17.21",
     "mammoth": "^1.12.0",
@@ -49,7 +50,9 @@
     "rt-client": "https://github.com/Azure-Samples/aoai-realtime-audio-sdk/releases/download/js/v0.5.0/rt-client-0.5.0.tgz",
     "sass": "^1.59.2",
     "spark-md5": "^3.0.2",
+    "tesseract.js": "^7.0.0",
     "use-debounce": "^9.0.4",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.1",
     "zustand": "^4.3.8"
   },

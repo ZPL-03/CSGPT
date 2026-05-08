@@ -160,6 +160,7 @@ export async function loadAllConversationsFromDB(): Promise<any[]> {
               isError: m.isError || false,
               model: m.model,
               tools: m.tools,
+              fileContent: m.fileContent,
               streaming: false,
             })),
             stat: { tokenCount: 0, wordCount: 0, charCount: 0 },

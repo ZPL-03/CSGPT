@@ -169,6 +169,7 @@ export function base64Image2Blob(base64Data: string, contentType: string) {
 export async function uploadFile(
   file: Blob,
   filename?: string,
+  onProgress?: (progress: number) => void,
 ): Promise<string> {
   const token = useUserStore.getState().token;
   if (!token) {
@@ -182,19 +183,31 @@ export async function uploadFile(
     "upload.bin";
   formData.append("file", file, uploadName);
 
-  const response = await fetch("/api/files", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/files");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status < 200 || xhr.status >= 300 || data?.code !== 0) {
+          reject(new Error(data?.error || data?.message || "文件上传失败"));
+          return;
+        }
+        onProgress?.(100);
+        resolve(data.data);
+      } catch {
+        reject(new Error("文件上传响应异常"));
+      }
+    };
+    xhr.onerror = () => reject(new Error("文件上传网络异常"));
+    xhr.send(formData);
   });
-  const data = await response.json();
-  if (!response.ok || data?.code !== 0 || !data?.data) {
-    throw new Error(data?.error || data?.message || "文件上传失败");
-  }
-
-  return data.data;
 }
 
 export function streamWithThink(

@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
               date: true,
               isError: true,
               model: true,
+              fileContent: true,
             },
             orderBy: { date: "asc" },
           },
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
           date: m.date,
           isError: m.isError,
           model: m.model,
+          fileContent: m.fileContent,
         })),
       });
     } catch (error: any) {
@@ -102,37 +104,61 @@ export async function GET(req: NextRequest) {
 
   // 统计数据概览
   try {
-    const [userCount, conversationCount, messageCount, users, conversations] =
-      await Promise.all([
-        prisma.user.count(),
-        prisma.conversation.count(),
-        prisma.message.count(),
-        prisma.user.findMany({
-          select: {
-            id: true,
-            username: true,
-            createdAt: true,
-            _count: { select: { sessions: true } },
-          },
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.conversation.findMany({
-          select: {
-            id: true,
-            topic: true,
-            userId: true,
-            lastUpdate: true,
-            user: { select: { username: true } },
-            _count: { select: { messages: true } },
-          },
-          orderBy: { lastUpdate: "desc" },
-        }),
-      ]);
+    const [
+      userCount,
+      conversationCount,
+      messageCount,
+      fileCount,
+      users,
+      conversations,
+      files,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.conversation.count(),
+      prisma.message.count(),
+      prisma.uploadedFile.count(),
+      prisma.user.findMany({
+        select: {
+          id: true,
+          username: true,
+          createdAt: true,
+          _count: { select: { sessions: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.conversation.findMany({
+        select: {
+          id: true,
+          topic: true,
+          userId: true,
+          lastUpdate: true,
+          user: { select: { username: true } },
+          _count: { select: { messages: true } },
+        },
+        orderBy: { lastUpdate: "desc" },
+      }),
+      prisma.uploadedFile.findMany({
+        select: {
+          id: true,
+          userId: true,
+          originalName: true,
+          mimeType: true,
+          size: true,
+          extractedText: true,
+          extractionMeta: true,
+          extractedAt: true,
+          createdAt: true,
+          user: { select: { username: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+    ]);
 
     const dbSizeResult = await prisma.$queryRawUnsafe<
       { db_size: string; data_size: string }[]
     >(
-      `SELECT pg_size_pretty(pg_database_size('neondb')) as db_size, pg_size_pretty(pg_total_relation_size('"User"') + pg_total_relation_size('"Conversation"') + pg_total_relation_size('"Message"') + pg_total_relation_size('"AuthToken"')) as data_size`,
+      `SELECT pg_size_pretty(pg_database_size('neondb')) as db_size, pg_size_pretty(pg_total_relation_size('"User"') + pg_total_relation_size('"Conversation"') + pg_total_relation_size('"Message"') + pg_total_relation_size('"AuthToken"') + pg_total_relation_size('"UploadedFile"')) as data_size`,
     );
 
     return NextResponse.json({
@@ -153,6 +179,19 @@ export async function GET(req: NextRequest) {
         messageCount: Number(c._count.messages),
       })),
       messages: Number(messageCount),
+      files: Number(fileCount),
+      fileList: files.map((file) => ({
+        id: file.id,
+        userId: file.userId,
+        username: file.user?.username || "",
+        originalName: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+        extractedText: file.extractedText,
+        extractionMeta: file.extractionMeta,
+        extractedAt: file.extractedAt,
+        createdAt: file.createdAt,
+      })),
       dbSize: dbSizeResult[0]?.db_size || "N/A",
       dataSize: dbSizeResult[0]?.data_size || "N/A",
     });

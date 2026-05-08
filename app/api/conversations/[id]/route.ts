@@ -63,6 +63,7 @@ export async function GET(
           isError: m.isError,
           model: m.model,
           tools: m.tools,
+          fileContent: m.fileContent,
         })),
       },
     });

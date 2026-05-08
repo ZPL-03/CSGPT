@@ -47,7 +47,6 @@ import McpToolIcon from "../icons/tool.svg";
 import {
   BOT_HELLO,
   ChatMessage,
-  createMessage,
   DEFAULT_TOPIC,
   ModelType,
   SubmitKey,
@@ -100,6 +99,7 @@ import {
   ServiceProvider,
   UNFINISHED_INPUT,
 } from "../constant";
+import { useUserStore } from "../store/user";
 import { Avatar } from "./emoji";
 import { ContextPrompts, MaskAvatar, MaskConfig } from "./mask";
 import { useMaskStore } from "../store/mask";
@@ -482,11 +482,51 @@ function useScrollToBottom(
   };
 }
 
+type AttachmentStatus = "uploading" | "parsing" | "ready" | "error";
+
 export interface AttachmentInfo {
+  id: string;
   url: string;
   name: string;
   size: number;
   type: string;
+  status: AttachmentStatus;
+  progress: number;
+  stage?: string;
+  error?: string;
+  extractedText?: string;
+  extractedImages?: string[];
+  extractionMeta?: Record<string, any>;
+}
+
+function createAttachmentId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
+}
+
+async function saveFileExtractionResult(
+  fileUrl: string,
+  extractedText: string,
+  extractionMeta: Record<string, any>,
+) {
+  const token = useUserStore.getState().token;
+  if (!token) return;
+
+  const response = await fetch(fileUrl, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ extractedText, extractionMeta }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || data?.message || "保存解析结果失败");
+  }
 }
 
 export function ChatActions(props: {
@@ -949,8 +989,6 @@ export function ShortcutKeyModal(props: { onClose: () => void }) {
 }
 
 function _Chat() {
-  type RenderMessage = ChatMessage & { preview?: boolean };
-
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
   const config = useAppConfig();
@@ -962,7 +1000,6 @@ function _Chat() {
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [userInput, setUserInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const { submitKey, shouldSubmit } = useSubmitHandler();
   const scrollRef = useRef<HTMLDivElement>(null);
   const isScrolledToBottom = scrollRef?.current
@@ -1010,7 +1047,97 @@ function _Chat() {
   const isMobileScreen = useMobileScreen();
   const navigate = useNavigate();
   const [attachments, setAttachments] = useState<AttachmentInfo[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const attachmentProcessing = attachments.some(
+    (att) => att.status === "uploading" || att.status === "parsing",
+  );
+  const attachmentHasError = attachments.some((att) => att.status === "error");
+
+  const updateAttachment = useCallback(
+    (id: string, patch: Partial<AttachmentInfo>) => {
+      setAttachments((current) =>
+        current.map((att) => (att.id === id ? { ...att, ...patch } : att)),
+      );
+    },
+    [],
+  );
+
+  const uploadAndParseFile = useCallback(
+    async (file: File) => {
+      const id = createAttachmentId();
+      const initialAttachment: AttachmentInfo = {
+        id,
+        url: "",
+        name: file.name || "upload.bin",
+        size: file.size,
+        type: file.type || "application/octet-stream",
+        status: "uploading",
+        progress: 0,
+        stage: "上传中",
+      };
+
+      setAttachments((current) => current.concat(initialAttachment));
+
+      try {
+        const fileUrl = await uploadFileRemote(file, file.name, (progress) => {
+          updateAttachment(id, {
+            progress: Math.min(50, Math.round(progress * 0.5)),
+            stage: "上传中",
+          });
+        });
+
+        updateAttachment(id, {
+          url: fileUrl,
+          status: "parsing",
+          progress: 55,
+          stage: "解析中",
+        });
+
+        const { extractTextFromFile } = await import(
+          "../utils/file-text-extractor"
+        );
+        const extraction = await extractTextFromFile(fileUrl, file.name, {
+          includeImages: true,
+          ocrImages: true,
+          onProgress(progress, stage) {
+            updateAttachment(id, {
+              progress: Math.min(98, 50 + Math.round(progress * 0.48)),
+              stage,
+            });
+          },
+        });
+
+        await saveFileExtractionResult(fileUrl, extraction.text, {
+          ...extraction.metadata,
+          originalName: file.name || "upload.bin",
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+        });
+
+        updateAttachment(id, {
+          status: "ready",
+          progress: 100,
+          stage: "解析完成",
+          extractedText: extraction.text,
+          extractedImages: extraction.images,
+          extractionMeta: {
+            ...extraction.metadata,
+            originalName: file.name || "upload.bin",
+            mimeType: file.type || "application/octet-stream",
+            size: file.size,
+          },
+        });
+      } catch (error) {
+        updateAttachment(id, {
+          status: "error",
+          progress: 100,
+          stage: "解析失败",
+          error: error instanceof Error ? error.message : "文件处理失败",
+        });
+        showToast(error instanceof Error ? error.message : "文件处理失败");
+      }
+    },
+    [updateAttachment],
+  );
 
   // prompt hints
   const promptStore = usePromptStore();
@@ -1084,6 +1211,14 @@ function _Chat() {
 
   const doSubmit = (userInput: string) => {
     if (userInput.trim() === "" && isEmpty(attachments)) return;
+    if (attachmentProcessing) {
+      showToast("文件仍在上传或解析中");
+      return;
+    }
+    if (attachmentHasError) {
+      showToast("请删除解析失败的附件后再发送");
+      return;
+    }
     const matchCommand = chatCommands.match(userInput);
     if (matchCommand.matched) {
       setUserInput("");
@@ -1091,10 +1226,7 @@ function _Chat() {
       matchCommand.invoke();
       return;
     }
-    setIsLoading(true);
-    chatStore
-      .onUserInput(userInput, attachments)
-      .then(() => setIsLoading(false));
+    chatStore.onUserInput(userInput, attachments);
     setAttachments([]);
     chatStore.setLastInput(userInput);
     setUserInput("");
@@ -1243,27 +1375,35 @@ function _Chat() {
     deleteMessage(botMessage?.id);
 
     // resend the message
-    setIsLoading(true);
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
     const files = getMessageFiles(userMessage);
     const attachments: AttachmentInfo[] = [
       ...images.map((url) => ({
+        id: createAttachmentId(),
         url,
         name: url.split("/").pop() || "image",
         size: 0,
         type: "image/png",
+        status: "ready" as const,
+        progress: 100,
       })),
       ...files.map((file) => ({
+        id: createAttachmentId(),
         url: file.url,
         name: file.name,
         size: file.size,
         type: file.type,
+        status: "ready" as const,
+        progress: 100,
       })),
     ];
-    chatStore
-      .onUserInput(textContent, attachments)
-      .then(() => setIsLoading(false));
+    chatStore.onUserInput(
+      textContent,
+      attachments,
+      false,
+      userMessage.fileContent,
+    );
     inputRef.current?.focus();
   };
 
@@ -1282,7 +1422,7 @@ function _Chat() {
 
   const accessStore = useAccessStore();
 
-  const context: RenderMessage[] = useMemo(() => {
+  const context: ChatMessage[] = useMemo(() => {
     return session.mask.hideContext ? [] : session.mask.context.slice();
   }, [session.mask.context, session.mask.hideContext]);
 
@@ -1297,43 +1437,9 @@ function _Chat() {
     context.push(copiedHello);
   }
 
-  // preview messages
   const renderMessages = useMemo(() => {
-    return context
-      .concat(session.messages as RenderMessage[])
-      .concat(
-        isLoading
-          ? [
-              {
-                ...createMessage({
-                  role: "assistant",
-                  content: "……",
-                }),
-                preview: true,
-              },
-            ]
-          : [],
-      )
-      .concat(
-        userInput.length > 0 && config.sendPreviewBubble
-          ? [
-              {
-                ...createMessage({
-                  role: "user",
-                  content: userInput,
-                }),
-                preview: true,
-              },
-            ]
-          : [],
-      );
-  }, [
-    config.sendPreviewBubble,
-    context,
-    isLoading,
-    session.messages,
-    userInput,
-  ]);
+    return context.concat(session.messages);
+  }, [context, session.messages]);
 
   const [msgRenderIndex, _setMsgRenderIndex] = useState(
     Math.max(0, renderMessages.length - CHAT_PAGE_SIZE),
@@ -1469,76 +1575,26 @@ function _Chat() {
           event.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            const nextAttachments: AttachmentInfo[] = [...attachments];
-            try {
-              setUploading(true);
-              const fileUrl = await uploadFileRemote(file);
-              nextAttachments.push({
-                url: fileUrl,
-                name: file.name,
-                size: file.size,
-                type: file.type,
-              });
-              setUploading(false);
-            } catch (error) {
-              setUploading(false);
-              showToast(
-                error instanceof Error ? error.message : "文件上传失败",
-              );
-            }
-            setAttachments(nextAttachments);
+            uploadAndParseFile(file);
           }
         }
       }
     },
-    [attachments],
+    [uploadAndParseFile],
   );
 
   async function selectUploadFiles() {
-    const nextAttachments: AttachmentInfo[] = [...attachments];
-
-    try {
-      const uploaded = await new Promise<AttachmentInfo[]>((res, rej) => {
-        const fileInput = document.createElement("input");
-        fileInput.type = "file";
-        fileInput.accept = "*/*";
-        fileInput.multiple = true;
-        fileInput.onchange = (event: any) => {
-          setUploading(true);
-          const files = event.target.files;
-          const results: AttachmentInfo[] = [];
-          const uploadPromises: Promise<void>[] = [];
-          for (let i = 0; i < files.length; i++) {
-            const file = event.target.files[i];
-            uploadPromises.push(
-              uploadFileRemote(file).then((fileUrl) => {
-                results.push({
-                  url: fileUrl,
-                  name: file.name,
-                  size: file.size,
-                  type: file.type,
-                });
-              }),
-            );
-          }
-          Promise.all(uploadPromises)
-            .then(() => {
-              setUploading(false);
-              res(results);
-            })
-            .catch((e) => {
-              setUploading(false);
-              rej(e);
-            });
-        };
-        fileInput.click();
-      });
-
-      nextAttachments.push(...uploaded);
-      setAttachments(nextAttachments);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "文件上传失败");
-    }
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "*/*";
+    fileInput.multiple = true;
+    fileInput.onchange = (event: any) => {
+      const files = event.target.files as FileList;
+      for (let i = 0; i < files.length; i++) {
+        uploadAndParseFile(files[i]);
+      }
+    };
+    fileInput.click();
   }
 
   // 拖放文件上传
@@ -1547,27 +1603,11 @@ function _Chat() {
       event.preventDefault();
       const files = event.dataTransfer.files;
       if (files.length === 0) return;
-      const nextAttachments: AttachmentInfo[] = [...attachments];
-      try {
-        setUploading(true);
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          const fileUrl = await uploadFileRemote(file);
-          nextAttachments.push({
-            url: fileUrl,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-          });
-        }
-        setUploading(false);
-      } catch (error) {
-        setUploading(false);
-        showToast(error instanceof Error ? error.message : "文件上传失败");
+      for (let i = 0; i < files.length; i++) {
+        uploadAndParseFile(files[i]);
       }
-      setAttachments(nextAttachments);
     },
-    [attachments],
+    [uploadAndParseFile],
   );
 
   const handleDragOver = useCallback(
@@ -1762,10 +1802,8 @@ function _Chat() {
                 const isUser = message.role === "user";
                 const isContext = i < context.length;
                 const showActions =
-                  i > 0 &&
-                  !(message.preview || message.content.length === 0) &&
-                  !isContext;
-                const showTyping = message.preview || message.streaming;
+                  i > 0 && message.content.length !== 0 && !isContext;
+                const showTyping = message.streaming;
 
                 const shouldShowClearContextDivider =
                   i === clearContextIndex - 1;
@@ -1934,7 +1972,7 @@ function _Chat() {
                             key={message.streaming ? "loading" : "done"}
                             content={getMessageTextContent(message)}
                             loading={
-                              (message.preview || message.streaming) &&
+                              message.streaming &&
                               message.content.length === 0 &&
                               !isUser
                             }
@@ -2069,7 +2107,7 @@ function _Chat() {
                 showPromptModal={() => setShowPromptModal(true)}
                 scrollToBottom={scrollToBottom}
                 hitBottom={hitBottom}
-                uploading={uploading}
+                uploading={attachmentProcessing}
                 showPromptHints={() => {
                   // Click again to close
                   if (promptHints.length > 0) {
@@ -2115,10 +2153,16 @@ function _Chat() {
                       const isImage = att.type.startsWith("image/");
                       return (
                         <div
-                          key={index}
-                          className={styles["attachment"]}
+                          key={att.id}
+                          className={clsx(styles["attachment"], {
+                            [styles["attachment-processing"]]:
+                              att.status === "uploading" ||
+                              att.status === "parsing",
+                            [styles["attachment-error"]]:
+                              att.status === "error",
+                          })}
                           style={
-                            isImage
+                            isImage && att.url
                               ? { backgroundImage: `url("${att.url}")` }
                               : undefined
                           }
@@ -2128,6 +2172,33 @@ function _Chat() {
                               <span className={styles["attach-file-name"]}>
                                 {att.name}
                               </span>
+                            </div>
+                          )}
+                          {att.status !== "ready" && (
+                            <div className={styles["attachment-progress"]}>
+                              <span>{att.stage || "处理中"}</span>
+                              <div
+                                className={styles["attachment-progress-track"]}
+                              >
+                                <div
+                                  className={
+                                    styles["attachment-progress-value"]
+                                  }
+                                  style={{
+                                    width: `${Math.max(
+                                      0,
+                                      Math.min(att.progress || 0, 100),
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                              {att.error && (
+                                <span
+                                  className={styles["attachment-error-text"]}
+                                >
+                                  {att.error}
+                                </span>
+                              )}
                             </div>
                           )}
                           <div className={styles["attachment-mask"]} />
@@ -2148,6 +2219,7 @@ function _Chat() {
                   text={Locale.Chat.Send}
                   className={styles["chat-input-send"]}
                   type="primary"
+                  disabled={attachmentProcessing || attachmentHasError}
                   onClick={() => doSubmit(userInput)}
                 />
               </label>

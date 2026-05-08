@@ -78,42 +78,6 @@ export interface DalleRequestPayload {
   style: DalleStyle;
 }
 
-async function extractFilePartsForModel(
-  content: ChatOptions["messages"][number]["content"],
-) {
-  if (typeof content === "string") {
-    return { text: "", images: [] as string[] };
-  }
-
-  const fileParts = content.filter(
-    (part) => part.type === "file_url" && part.file_url?.url,
-  );
-  if (fileParts.length === 0) {
-    return { text: "", images: [] as string[] };
-  }
-
-  const { extractTextFromFile } = await import(
-    "@/app/utils/file-text-extractor"
-  );
-  const results = await Promise.all(
-    fileParts.map(async (part) => {
-      const file = part.file_url!;
-      const result = await extractTextFromFile(file.url, file.name);
-      return { ...result, fileName: file.name };
-    }),
-  );
-
-  return {
-    text: results
-      .map((result) =>
-        result.text ? `[文件: ${result.fileName}]\n${result.text}` : "",
-      )
-      .filter(Boolean)
-      .join("\n\n"),
-    images: results.flatMap((result) => result.images),
-  };
-}
-
 export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
 
@@ -315,36 +279,40 @@ export class ChatGPTApi implements LLMApi {
         model: options.config.model,
         prompt,
         // URLs are only valid for 60 minutes after the image has been generated.
-        response_format: "b64_json", // using b64_json, and save image in CacheStorage
+        // 使用 b64_json 后写入服务端文件表，保证生成图片可持久访问。
+        response_format: "b64_json",
         n: 1,
         size: options.config?.size ?? "1024x1024",
         quality: options.config?.quality ?? "standard",
         style: options.config?.style ?? "vivid",
       };
     } else {
+      const isCSGPTProvider =
+        modelConfig.providerName === ServiceProvider.CSGPT;
       const messages: ChatOptions["messages"] = [];
       for (const v of options.messages) {
-        // 从上传文件中提取的文本仅进入模型请求体。
+        // 上传阶段生成的解析文本仅进入模型请求体。
         let fileContent = (v as ChatMessage).fileContent;
-        // 从上传文档中提取的内嵌图片仅进入模型请求体。
+        // 上传阶段生成的图片内容仅进入模型请求体。
         let extractedImages = (v as ChatMessage).extractedImages ?? [];
-        if (
-          typeof v.content !== "string" &&
-          (!fileContent || extractedImages.length === 0)
-        ) {
-          const extracted = await extractFilePartsForModel(v.content);
-          if (!fileContent) fileContent = extracted.text;
-          if (extractedImages.length === 0) extractedImages = extracted.images;
-        }
 
-        let content = await preProcessImageContent(v.content);
+        const providerContent =
+          !isCSGPTProvider && Array.isArray(v.content)
+            ? v.content.filter((part) => part.type !== "file_url")
+            : v.content;
+        let content = isCSGPTProvider
+          ? v.content
+          : await preProcessImageContent(providerContent);
         if (fileContent) {
           content =
             typeof content === "string"
               ? fileContent + "\n\n" + content
               : [{ type: "text", text: fileContent }, ...content];
         }
-        if (extractedImages.length > 0) {
+        if (!isCSGPTProvider && Array.isArray(content)) {
+          content = content.filter((part) => part.type !== "file_url");
+        }
+        if (!isCSGPTProvider && extractedImages.length > 0) {
           const imageParts: MultimodalContent[] = extractedImages.map(
             (url) => ({ type: "image_url", image_url: { url } }),
           );

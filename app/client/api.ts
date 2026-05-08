@@ -20,12 +20,19 @@ export interface MultimodalContent {
   text?: string;
   image_url?: {
     url: string;
+    name?: string;
+    size?: number;
+    type?: string;
+    extractedText?: string;
+    extractionMeta?: Record<string, any>;
   };
   file_url?: {
     url: string;
     name: string;
     size: number;
     type?: string;
+    extractedText?: string;
+    extractionMeta?: Record<string, any>;
   };
 }
 

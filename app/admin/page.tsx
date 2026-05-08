@@ -29,6 +29,20 @@ interface MessageItem {
   date: string;
   isError: boolean;
   model: string;
+  fileContent?: string;
+}
+
+interface FileItem {
+  id: string;
+  userId: string | null;
+  username: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  extractedText?: string;
+  extractionMeta?: Record<string, any>;
+  extractedAt?: string;
+  createdAt: string;
 }
 
 interface Stats {
@@ -37,11 +51,13 @@ interface Stats {
   conversations: number;
   conversationList: ConversationItem[];
   messages: number;
+  files: number;
+  fileList: FileItem[];
   dbSize: string;
   dataSize: string;
 }
 
-type TabKey = "overview" | "users" | "conversations";
+type TabKey = "overview" | "users" | "conversations" | "files";
 
 // 管理后台验证阶段
 type AdminPhase = "login" | "verifying" | "denied" | "error" | "granted";
@@ -52,6 +68,13 @@ function formatDate(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+function formatSize(size: number): string {
+  if (!size || size <= 0) return "0 B";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 // 管理后台登录表单
@@ -327,6 +350,7 @@ export default function AdminPage() {
     { key: "overview", label: "概览" },
     { key: "users", label: "用户" },
     { key: "conversations", label: "对话" },
+    { key: "files", label: "文件" },
   ];
 
   return (
@@ -433,6 +457,9 @@ export default function AdminPage() {
             onRefresh={refreshStats}
           />
         )}
+        {activeTab === "files" && (
+          <FilesTab stats={stats} onRefresh={refreshStats} />
+        )}
       </div>
     </div>
   );
@@ -444,6 +471,7 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
     { label: "注册用户", value: stats?.users },
     { label: "对话总数", value: stats?.conversations },
     { label: "消息总数", value: stats?.messages },
+    { label: "上传文件", value: stats?.files },
     { label: "数据库", value: stats?.dbSize },
     { label: "数据", value: stats?.dataSize },
   ];
@@ -622,6 +650,49 @@ function UsersTab({
         </div>
       ) : (
         <p className={styles["admin-empty"]}>暂无注册用户</p>
+      )}
+    </div>
+  );
+}
+
+// 文件管理标签页
+function FilesTab({
+  stats,
+  onRefresh,
+}: {
+  stats: Stats | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className={styles["admin-card"]}>
+      <div className={styles["admin-card-header"]}>
+        <h3 className={styles["admin-card-title"]}>上传文件</h3>
+        <button onClick={onRefresh} className={styles["admin-btn-sm"]}>
+          刷新
+        </button>
+      </div>
+      {stats?.fileList && stats.fileList.length > 0 ? (
+        <div className={styles["admin-file-list"]}>
+          {stats.fileList.map((file) => (
+            <div key={file.id} className={styles["admin-file-item"]}>
+              <div className={styles["admin-file-meta"]}>
+                <span className={styles["admin-file-name"]}>
+                  {file.originalName}
+                </span>
+                <span>{file.username || file.userId || "未知用户"}</span>
+                <span>{formatSize(file.size)}</span>
+                <span>{file.mimeType}</span>
+                <span>{formatDate(file.createdAt)}</span>
+                <span>{file.extractedAt ? "已解析" : "未解析"}</span>
+              </div>
+              <div className={styles["admin-file-content"]}>
+                {file.extractedText || "暂无解析内容"}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className={styles["admin-empty"]}>暂无上传文件</p>
       )}
     </div>
   );
@@ -807,6 +878,14 @@ function ConvRow({
                         <div className={styles["admin-msg-content"]}>
                           {m.content || "（空）"}
                         </div>
+                        {m.fileContent && (
+                          <div className={styles["admin-msg-file-content"]}>
+                            <div className={styles["admin-msg-file-title"]}>
+                              文件解析内容
+                            </div>
+                            {m.fileContent}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
