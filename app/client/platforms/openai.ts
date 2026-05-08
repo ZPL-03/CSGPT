@@ -299,6 +299,8 @@ export class ChatGPTApi implements LLMApi {
       for (const v of options.messages) {
         // 从上传文件中提取的文本（不显示在 UI 中，仅发送给模型）
         const fileContent = (v as ChatMessage).fileContent;
+        // 从上传文档（docx/pdf）中提取的内嵌图片（不显示在 UI 中，仅发送给模型）
+        const extractedImages = (v as ChatMessage).extractedImages;
         let content: string | MultimodalContent[];
         if (visionModel) {
           content = await preProcessImageContent(v.content);
@@ -307,6 +309,16 @@ export class ChatGPTApi implements LLMApi {
               typeof content === "string"
                 ? fileContent + "\n\n" + content
                 : [{ type: "text", text: fileContent }, ...(content as any)];
+          }
+          // 将文档内嵌图片追加到多模态内容中
+          if (extractedImages && extractedImages.length > 0) {
+            const imageParts: MultimodalContent[] = extractedImages.map(
+              (url) => ({ type: "image_url" as const, image_url: { url } }),
+            );
+            content =
+              typeof content === "string"
+                ? [{ type: "text" as const, text: content }, ...imageParts]
+                : [...(content as MultimodalContent[]), ...imageParts];
           }
         } else if (typeof v.content === "string") {
           content = fileContent ? fileContent + "\n\n" + v.content : v.content;

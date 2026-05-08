@@ -166,24 +166,24 @@ export async function extractTextFromFile(
     try {
       const mammoth = await import("mammoth");
       const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-      const images: string[] = [];
 
-      // 使用 convertToHtml 同时提取文本和图片
+      // 使用 dataUri 转换器将所有图片转为内嵌 data URI，比 imgElement 异步回调更可靠
       const result = await mammoth.convertToHtml(
         { arrayBuffer },
-        {
-          convertImage: mammoth.images.imgElement((image: any) =>
-            image.read("base64").then((buffer: string) => {
-              const src = `data:${image.contentType};base64,${buffer}`;
-              images.push(src);
-              return { src };
-            }),
-          ),
-        },
+        { convertImage: mammoth.images.dataUri },
       );
 
-      // 从 HTML 中提取纯文本
       const html = result.value || "";
+
+      // 从 HTML 中提取图片 data URI
+      const images: string[] = [];
+      const imgRegex = /<img\s+[^>]*src="(data:[^"]+)"/gi;
+      let match;
+      while ((match = imgRegex.exec(html)) !== null) {
+        images.push(match[1]);
+      }
+
+      // 从 HTML 中提取纯文本
       const text = html
         .replace(/<img[^>]*>/g, "[图片]")
         .replace(/<[^>]+>/g, "")
@@ -212,17 +212,29 @@ export async function extractTextFromFile(
   if (ext === "pdf") {
     try {
       const pdfjsLib = await import("pdfjs-dist");
+      // pdfjs-dist v4 在浏览器中需要配置 worker 路径
+      if (
+        typeof window !== "undefined" &&
+        !pdfjsLib.GlobalWorkerOptions.workerSrc
+      ) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
+      }
       const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
       const pages: string[] = [];
       for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str ?? "")
-          .join(" ");
-        pages.push(pageText);
+        try {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str ?? "")
+            .join(" ");
+          pages.push(pageText);
+        } catch (pageError) {
+          console.error(`[FileExtractor] PDF page ${i} text error:`, pageError);
+        }
       }
 
       // 渲染页面为图片，使模型能识别 PDF 中的图表和图片

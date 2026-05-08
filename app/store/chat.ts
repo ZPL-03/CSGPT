@@ -75,6 +75,8 @@ export type ChatMessage = RequestMessage & {
   isMcpResponse?: boolean;
   /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
   fileContent?: string;
+  /** 从上传文件（docx/pdf）中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中 */
+  extractedImages?: string[];
 };
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -482,6 +484,8 @@ export const useChatStore = createPersistStore(
 
         // 从非图片文件中提取的文本，发送给模型但不显示在 UI 中
         let extractedFileContent: string | undefined;
+        // 从文档中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中
+        let docImageUrls: string[] | undefined;
 
         if (!isMcpResponse && attachImages && attachImages.length > 0) {
           const { extractTextFromFile } = await import(
@@ -501,14 +505,11 @@ export const useChatStore = createPersistStore(
               .filter((t) => t)
               .join("\n\n") || undefined;
 
-          // 从文档中提取的内嵌图片，作为 image_url 发送给模型
-          const extractedImages: MultimodalContent[] = [];
+          // 从文档中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中
+          docImageUrls = [];
           for (const r of fileResults) {
             for (const img of r.images) {
-              extractedImages.push({
-                type: "image_url",
-                image_url: { url: img },
-              } as MultimodalContent);
+              docImageUrls.push(img);
             }
           }
 
@@ -522,7 +523,6 @@ export const useChatStore = createPersistStore(
                     file_url: { url: att.url, name: att.name, size: att.size },
                   },
             ),
-            ...extractedImages,
           ];
         }
 
@@ -531,6 +531,7 @@ export const useChatStore = createPersistStore(
           content: mContent,
           isMcpResponse,
           fileContent: extractedFileContent,
+          extractedImages: docImageUrls,
         });
 
         const botMessage: ChatMessage = createMessage({
