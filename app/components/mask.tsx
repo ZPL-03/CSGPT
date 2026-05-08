@@ -13,7 +13,7 @@ import EyeIcon from "../icons/eye.svg";
 import CopyIcon from "../icons/copy.svg";
 import DragIcon from "../icons/drag.svg";
 
-import { DEFAULT_MASK_AVATAR, Mask, useMaskStore } from "../store/mask";
+import { Mask, useMaskStore } from "../store/mask";
 import {
   ChatMessage,
   createMessage,
@@ -70,11 +70,11 @@ export function MaskAvatar(props: {
   model?: ModelType | string;
   providerName?: string;
 }) {
-  return props.avatar !== DEFAULT_MASK_AVATAR ? (
-    <Avatar avatar={props.avatar} />
-  ) : (
-    <Avatar model={props.model} providerName={props.providerName} />
-  );
+  // 模型信息存在时，优先使用 Provider 图标；emoji 仅作为无模型时的回退
+  if (props.model) {
+    return <Avatar model={props.model} providerName={props.providerName} />;
+  }
+  return <Avatar avatar={props.avatar} />;
 }
 
 export function MaskConfig(props: {
