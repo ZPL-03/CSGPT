@@ -462,7 +462,12 @@ export const useChatStore = createPersistStore(
 
       async onUserInput(
         content: string,
-        attachImages?: string[],
+        attachImages?: Array<{
+          url: string;
+          name: string;
+          size: number;
+          type: string;
+        }>,
         isMcpResponse?: boolean,
       ) {
         const session = get().currentSession();
@@ -476,10 +481,14 @@ export const useChatStore = createPersistStore(
         if (!isMcpResponse && attachImages && attachImages.length > 0) {
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
-            ...attachImages.map((url) => ({
-              type: "image_url" as const,
-              image_url: { url },
-            })),
+            ...attachImages.map((att) =>
+              att.type.startsWith("image/")
+                ? { type: "image_url" as const, image_url: { url: att.url } }
+                : {
+                    type: "file_url" as const,
+                    file_url: { url: att.url, name: att.name, size: att.size },
+                  },
+            ),
           ];
         }
 

@@ -22,6 +22,10 @@ import BotIconGrok from "../icons/llm-icons/grok.svg";
 import BotIconHunyuan from "../icons/llm-icons/hunyuan.svg";
 import BotIconDoubao from "../icons/llm-icons/doubao.svg";
 import BotIconChatglm from "../icons/llm-icons/chatglm.svg";
+import BotIconIflytek from "../icons/llm-icons/iflytek.svg";
+import BotIconSiliconflow from "../icons/llm-icons/siliconflow.svg";
+import BotIconAzure from "../icons/llm-icons/azure.svg";
+import BotIconAI302 from "../icons/llm-icons/ai302.svg";
 
 export function getEmojiUrl(unified: string, style: EmojiStyle) {
   // Whoever owns this Content Delivery Network (CDN), I am using your CDN to serve emojis
@@ -57,13 +61,27 @@ export function Avatar(props: {
     const modelName = props.model.toLowerCase();
     const providerName = props.providerName?.toLowerCase();
 
-    // CSGPT 内置 Qwen3-14B 微调模型
-    if (
+    // 优先根据提供商匹配图标
+    if (providerName === ServiceProvider.Iflytek.toLowerCase()) {
+      LlmIcon = BotIconIflytek;
+    } else if (providerName === ServiceProvider.SiliconFlow.toLowerCase()) {
+      LlmIcon = BotIconSiliconflow;
+    } else if (providerName === ServiceProvider.Azure.toLowerCase()) {
+      LlmIcon = BotIconAzure;
+    } else if (providerName === ServiceProvider["302.AI"].toLowerCase()) {
+      LlmIcon = BotIconAI302;
+    } else if (
+      providerName === ServiceProvider.Moonshot.toLowerCase() ||
+      modelName.startsWith("kimi")
+    ) {
+      LlmIcon = BotIconMoonshot;
+    } else if (
       providerName === ServiceProvider.CSGPT.toLowerCase() ||
-      modelName.includes("csgpt") ||
       modelName.startsWith("qwen")
     ) {
       LlmIcon = BotIconQwen;
+    } else if (modelName.startsWith("moonshot")) {
+      LlmIcon = BotIconMoonshot;
     } else if (
       modelName.startsWith("gpt") ||
       modelName.startsWith("chatgpt") ||
@@ -88,8 +106,6 @@ export function Avatar(props: {
       LlmIcon = BotIconMistral;
     } else if (modelName.includes("deepseek")) {
       LlmIcon = BotIconDeepseek;
-    } else if (modelName.startsWith("moonshot")) {
-      LlmIcon = BotIconMoonshot;
     } else if (modelName.startsWith("qwen")) {
       LlmIcon = BotIconQwen;
     } else if (modelName.startsWith("ernie")) {

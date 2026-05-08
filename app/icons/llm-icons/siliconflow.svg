@@ -1,0 +1,8 @@
+<svg fill="#333" fill-rule="evenodd" height="1em" style="flex:none;line-height:1" viewBox="0 0 30 30"
+     width="1em" xmlns="http://www.w3.org/2000/svg">
+    <title>SiliconFlow</title>
+    <rect width="30" height="30" fill="#EDE9FE" rx="6"/>
+    <g transform="translate(3, 3)">
+        <path d="M12 1L3 6v10l9 5 9-5V6L12 1zm0 3l6 3.5v7L12 18l-6-3.5v-7L12 4zm-1.5 3.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm3 2a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-3 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" fill="#7C3AED"/>
+    </g>
+</svg>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
-import { CSGPT_DEFAULT_MODEL } from "@/app/constant";
+import { CSGPT_DEFAULT_MODEL, CSGPT_MODEL_2 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
@@ -24,11 +24,21 @@ function getPublicCSGPTModel(config: ReturnType<typeof getServerSideConfig>) {
   return config.csgptModelName || CSGPT_DEFAULT_MODEL;
 }
 
+function isCS2Model(model: string): boolean {
+  return model === CSGPT_MODEL_2;
+}
+
 function resolveUpstreamCSGPTModel(
   requestedModel: string | undefined,
   config: ReturnType<typeof getServerSideConfig>,
 ) {
   const publicDefaultModel = getPublicCSGPTModel(config);
+
+  // CS2 模型使用 Xiaomi 上游
+  if (requestedModel && isCS2Model(requestedModel)) {
+    return config.csgptCs2UpstreamModelName || "mimo-v2.5-pro";
+  }
+
   if (!requestedModel || requestedModel === publicDefaultModel) {
     return (
       config.csgptUpstreamModelName || requestedModel || publicDefaultModel
@@ -208,21 +218,30 @@ async function handleModelsRequest(
   backend: BackendConfig,
 ) {
   if (provider === "csgpt") {
-    const models = {
-      object: "list",
-      data: [
-        {
-          id: getPublicCSGPTModel(config),
-          object: "model",
-          created: Date.now(),
-          owned_by: "csgpt",
-          permission: [],
-          root: getPublicCSGPTModel(config),
-          parent: null,
-        },
-      ],
-    };
-    return NextResponse.json(models);
+    const data = [
+      {
+        id: getPublicCSGPTModel(config),
+        object: "model",
+        created: Date.now(),
+        owned_by: "csgpt",
+        permission: [],
+        root: getPublicCSGPTModel(config),
+        parent: null,
+      },
+    ];
+    // 如果配置了 CS2 上游，则添加 CS2 模型
+    if (config.csgptCs2BaseUrl || config.csgptCs2ApiKey) {
+      data.push({
+        id: CSGPT_MODEL_2,
+        object: "model",
+        created: Date.now(),
+        owned_by: "csgpt",
+        permission: [],
+        root: CSGPT_MODEL_2,
+        parent: null,
+      });
+    }
+    return NextResponse.json({ object: "list", data });
   }
 
   // 其他 Provider：尝试转发 models 请求到后端
@@ -244,6 +263,72 @@ async function handleModelsRequest(
   }
 }
 
+// CS2 模型：转发到 Xiaomi MiMo API（OpenAI 兼容格式）
+async function handleCS2ChatCompletions(
+  config: ReturnType<typeof getServerSideConfig>,
+  bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
+) {
+  const { messages, stream, model, rest } = bodyData;
+  const baseUrl =
+    config.csgptCs2BaseUrl || "https://token-plan-cn.xiaomimimo.com/v1";
+  const apiKey = config.csgptCs2ApiKey || "";
+  const upstreamModel = resolveUpstreamCSGPTModel(model, config);
+
+  const processedMessages = [...messages];
+  const hasSystemMessage = processedMessages.some(
+    (msg: any) => msg.role === "system",
+  );
+  if (!hasSystemMessage) {
+    processedMessages.unshift({
+      role: "system",
+      content: CSGPT_SYSTEM_PROMPT,
+    });
+  }
+
+  const apiUrl = joinUrl(baseUrl, "chat/completions");
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: apiKey ? `Bearer ${apiKey}` : "",
+    },
+    body: JSON.stringify({
+      model: upstreamModel,
+      messages: processedMessages,
+      stream,
+      ...rest,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return NextResponse.json(
+      {
+        error: true,
+        message: `CS2 后端错误: ${response.status}`,
+        detail: errorText,
+      },
+      { status: response.status },
+    );
+  }
+
+  if (stream && response.body) {
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }
+
+  const data = await response.json();
+  return NextResponse.json(data);
+}
+
 // 处理聊天补全请求
 async function handleChatCompletions(
   req: NextRequest,
@@ -253,6 +338,16 @@ async function handleChatCompletions(
 ) {
   const body = await req.json();
   const { messages, stream = true, model, ...rest } = body;
+
+  // CS2 模型：路由到 Xiaomi API
+  if (backend.isCSGPT && model && isCS2Model(model)) {
+    return handleCS2ChatCompletions(config, {
+      messages,
+      stream,
+      model,
+      rest,
+    });
+  }
 
   // CSGPT 专用：注入领域 System Prompt
   let processedMessages = [...messages];

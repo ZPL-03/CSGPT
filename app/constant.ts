@@ -397,8 +397,10 @@ You are an AI assistant with access to system tools. Your role is to help users 
    
 `;
 
-export const CSGPT_DEFAULT_MODEL = "CSGPT-Qwen3-14B";
-export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "CSGPT Qwen3-14B";
+export const CSGPT_DEFAULT_MODEL = "QWen3-14B-CS1";
+export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "QWen3-14B-CS1";
+export const CSGPT_MODEL_2 = "QWen-14B-CS2";
+export const CSGPT_MODEL_2_DISPLAY_NAME = "QWen-14B-CS2";
 export function isLegacyCSGPTModelName(model?: string) {
   if (!model) return false;
   return model.startsWith("gpt-") || model.startsWith("chatgpt-");
@@ -410,7 +412,8 @@ export const DEEPSEEK_SUMMARIZE_MODEL = "deepseek-chat";
 
 export const KnowledgeCutOffDate: Record<string, string> = {
   default: "2021-09",
-  [CSGPT_DEFAULT_MODEL]: "2024-06",
+  [CSGPT_DEFAULT_MODEL]: "2024-07",
+  [CSGPT_MODEL_2]: "2024-12",
   "gpt-4-turbo": "2023-12",
   "gpt-4-turbo-2024-04-09": "2023-12",
   "gpt-4-turbo-preview": "2023-12",
@@ -732,6 +735,18 @@ export const DEFAULT_MODELS = [
   {
     name: CSGPT_DEFAULT_MODEL,
     displayName: CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
+    available: true,
+    sorted: seq++,
+    provider: {
+      id: "csgpt",
+      providerName: "CSGPT",
+      providerType: "csgpt",
+      sorted: 0,
+    },
+  },
+  {
+    name: CSGPT_MODEL_2,
+    displayName: CSGPT_MODEL_2_DISPLAY_NAME,
     available: true,
     sorted: seq++,
     provider: {

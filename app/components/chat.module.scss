@@ -17,6 +17,7 @@
   background-size: cover;
   background-position: center;
   background-color: var(--white);
+  overflow: hidden;
 
   .attach-image-mask {
     width: 100%;
@@ -40,6 +41,29 @@
     float: right;
     background-color: var(--white);
   }
+}
+
+.attach-file-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.attach-file-name {
+  font-size: 10px;
+  color: var(--black);
+  text-align: center;
+  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
 }
 
 .chat-input-actions {

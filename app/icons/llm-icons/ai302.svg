@@ -1,0 +1,8 @@
+<svg fill="#333" fill-rule="evenodd" height="1em" style="flex:none;line-height:1" viewBox="0 0 30 30"
+     width="1em" xmlns="http://www.w3.org/2000/svg">
+    <title>302.AI</title>
+    <rect width="30" height="30" fill="#FFF0E6" rx="6"/>
+    <g transform="translate(3, 3)">
+        <path d="M12 2a2 2 0 012 2v3a2 2 0 01-2 2 2 2 0 00-2 2v3a2 2 0 01-2 2 2 2 0 00-2 2v3a2 2 0 01-2 2 2 2 0 01-2-2v-3a2 2 0 012-2 2 2 0 002-2v-3a2 2 0 012-2 2 2 0 002-2V4a2 2 0 012-2z" fill="#FF6B35"/>
+    </g>
+</svg>
