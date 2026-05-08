@@ -280,6 +280,29 @@ export function getMessageImages(message: RequestMessage): string[] {
   return urls;
 }
 
+export interface FileAttachmentInfo {
+  url: string;
+  name: string;
+  size: number;
+}
+
+export function getMessageFiles(message: RequestMessage): FileAttachmentInfo[] {
+  if (typeof message.content === "string") {
+    return [];
+  }
+  const files: FileAttachmentInfo[] = [];
+  for (const c of message.content) {
+    if (c.type === "file_url") {
+      files.push({
+        url: c.file_url?.url ?? "",
+        name: c.file_url?.name ?? "",
+        size: c.file_url?.size ?? 0,
+      });
+    }
+  }
+  return files;
+}
+
 export function isVisionModel(model: string) {
   const visionModels = useAccessStore.getState().visionModels;
   const envVisionModels = visionModels?.split(",").map((m) => m.trim());

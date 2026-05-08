@@ -94,6 +94,22 @@ export async function preProcessImageContentBase(
       } catch (error) {
         console.error("Error processing image URL:", error);
       }
+    } else if (part?.type == "file_url" && part?.file_url?.url) {
+      // 将缓存 URL 转为 base64 data URL，使模型能访问文件内容
+      try {
+        const dataUrl = await cacheImageToBase64Image(part?.file_url?.url);
+        result.push({
+          type: "file_url",
+          file_url: {
+            url: dataUrl,
+            name: part.file_url.name,
+            size: part.file_url.size,
+          },
+        });
+      } catch (error) {
+        console.error("Error processing file URL:", error);
+        result.push({ ...part });
+      }
     } else {
       result.push({ ...part });
     }

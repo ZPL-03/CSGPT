@@ -479,8 +479,27 @@ export const useChatStore = createPersistStore(
           : fillTemplateWith(content, modelConfig);
 
         if (!isMcpResponse && attachImages && attachImages.length > 0) {
+          // 提取非图片文件中的文本内容
+          const { extractTextFromFile } = await import(
+            "../utils/file-text-extractor"
+          );
+          const fileTexts = await Promise.all(
+            attachImages
+              .filter((att) => !att.type.startsWith("image/"))
+              .map(async (att) => {
+                const extractedText = await extractTextFromFile(
+                  att.url,
+                  att.name,
+                );
+                return extractedText;
+              }),
+          );
+
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
+            ...fileTexts
+              .filter((t) => t)
+              .map((t) => ({ type: "text" as const, text: t })),
             ...attachImages.map((att) =>
               att.type.startsWith("image/")
                 ? { type: "image_url" as const, image_url: { url: att.url } }

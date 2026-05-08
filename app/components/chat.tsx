@@ -60,6 +60,7 @@ import {
 import {
   autoGrowTextArea,
   copyToClipboard,
+  getMessageFiles,
   getMessageImages,
   getMessageTextContent,
   isDalle3,
@@ -1789,7 +1790,8 @@ function _Chat() {
                                   let newContent: string | MultimodalContent[] =
                                     newMessage;
                                   const images = getMessageImages(message);
-                                  if (images.length > 0) {
+                                  const files = getMessageFiles(message);
+                                  if (images.length > 0 || files.length > 0) {
                                     newContent = [
                                       { type: "text", text: newMessage },
                                     ];
@@ -1798,6 +1800,16 @@ function _Chat() {
                                         type: "image_url",
                                         image_url: {
                                           url: images[i],
+                                        },
+                                      });
+                                    }
+                                    for (let i = 0; i < files.length; i++) {
+                                      newContent.push({
+                                        type: "file_url",
+                                        file_url: {
+                                          url: files[i].url,
+                                          name: files[i].name,
+                                          size: files[i].size,
                                         },
                                       });
                                     }
@@ -1959,6 +1971,60 @@ function _Chat() {
                                     src={image}
                                     alt=""
                                   />
+                                );
+                              })}
+                            </div>
+                          )}
+                          {getMessageFiles(message).length > 0 && (
+                            <div className={styles["chat-message-item-files"]}>
+                              {getMessageFiles(message).map((file, index) => {
+                                const ext = file.name
+                                  .split(".")
+                                  .pop()
+                                  ?.toUpperCase();
+                                const sizeText =
+                                  file.size < 1024
+                                    ? `${file.size} B`
+                                    : file.size < 1048576
+                                    ? `${(file.size / 1024).toFixed(1)} KB`
+                                    : `${(file.size / 1048576).toFixed(1)} MB`;
+                                return (
+                                  <div
+                                    key={index}
+                                    className={styles["chat-message-item-file"]}
+                                    title={file.name}
+                                    onClick={() =>
+                                      window.open(file.url, "_blank")
+                                    }
+                                  >
+                                    <div
+                                      className={
+                                        styles["chat-message-item-file-icon"]
+                                      }
+                                    >
+                                      {ext || "FILE"}
+                                    </div>
+                                    <div
+                                      className={
+                                        styles["chat-message-item-file-info"]
+                                      }
+                                    >
+                                      <div
+                                        className={
+                                          styles["chat-message-item-file-name"]
+                                        }
+                                      >
+                                        {file.name}
+                                      </div>
+                                      <div
+                                        className={
+                                          styles["chat-message-item-file-size"]
+                                        }
+                                      >
+                                        {sizeText}
+                                      </div>
+                                    </div>
+                                  </div>
                                 );
                               })}
                             </div>
