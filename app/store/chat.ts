@@ -466,7 +466,7 @@ export const useChatStore = createPersistStore(
 
       async onUserInput(
         content: string,
-        attachImages?: Array<{
+        attachments?: Array<{
           url: string;
           name: string;
           size: number;
@@ -487,12 +487,12 @@ export const useChatStore = createPersistStore(
         // 从文档中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中
         let docImageUrls: string[] | undefined;
 
-        if (!isMcpResponse && attachImages && attachImages.length > 0) {
+        if (!isMcpResponse && attachments && attachments.length > 0) {
           const { extractTextFromFile } = await import(
             "../utils/file-text-extractor"
           );
           const fileResults = await Promise.all(
-            attachImages
+            attachments
               .filter((att) => !att.type.startsWith("image/"))
               .map(async (att) => {
                 const result = await extractTextFromFile(att.url, att.name);
@@ -515,12 +515,17 @@ export const useChatStore = createPersistStore(
 
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
-            ...attachImages.map((att) =>
+            ...attachments.map((att) =>
               att.type.startsWith("image/")
                 ? { type: "image_url" as const, image_url: { url: att.url } }
                 : {
                     type: "file_url" as const,
-                    file_url: { url: att.url, name: att.name, size: att.size },
+                    file_url: {
+                      url: att.url,
+                      name: att.name,
+                      size: att.size,
+                      type: att.type,
+                    },
                   },
             ),
           ];

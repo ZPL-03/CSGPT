@@ -9,8 +9,6 @@ import {
 } from "./constant";
 // import { fetch as tauriFetch, ResponseType } from "@tauri-apps/api/http";
 import { fetch as tauriStreamFetch } from "./utils/stream";
-import { VISION_MODEL_REGEXES, EXCLUDE_VISION_MODEL_REGEXES } from "./constant";
-import { useAccessStore } from "./store";
 import { ModelSize } from "./typing";
 
 export function trimTopic(topic: string) {
@@ -19,7 +17,7 @@ export function trimTopic(topic: string) {
   // and also trim quotes from both the start and end if they exist.
   return (
     topic
-      // fix for gemini
+      // Gemini 返回主题时可能带有引号。
       .replace(/^["“”*]+|["“”*]+$/g, "")
       .replace(/[，。！？”“"、,.!?*]*$/, "")
   );
@@ -284,6 +282,7 @@ export interface FileAttachmentInfo {
   url: string;
   name: string;
   size: number;
+  type: string;
 }
 
 export function getMessageFiles(message: RequestMessage): FileAttachmentInfo[] {
@@ -297,22 +296,29 @@ export function getMessageFiles(message: RequestMessage): FileAttachmentInfo[] {
         url: c.file_url?.url ?? "",
         name: c.file_url?.name ?? "",
         size: c.file_url?.size ?? 0,
+        type: c.file_url?.type ?? inferFileType(c.file_url?.name ?? ""),
       });
     }
   }
   return files;
 }
 
-export function isVisionModel(model: string) {
-  const visionModels = useAccessStore.getState().visionModels;
-  const envVisionModels = visionModels?.split(",").map((m) => m.trim());
-  if (envVisionModels?.includes(model)) {
-    return true;
-  }
-  return (
-    !EXCLUDE_VISION_MODEL_REGEXES.some((regex) => regex.test(model)) &&
-    VISION_MODEL_REGEXES.some((regex) => regex.test(model))
-  );
+function inferFileType(filename: string) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    txt: "text/plain",
+    md: "text/markdown",
+    csv: "text/csv",
+    json: "application/json",
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+  };
+  return (ext && mimeTypes[ext]) || "application/octet-stream";
 }
 
 export function isDalle3(model: string) {

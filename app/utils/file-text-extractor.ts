@@ -73,19 +73,24 @@ function getExtension(filename: string): string {
 function dataUrlToText(dataUrl: string): string {
   const commaIndex = dataUrl.indexOf(",");
   if (commaIndex < 0) return "";
-  const base64 = dataUrl.slice(commaIndex + 1);
-  try {
-    return atob(base64);
-  } catch {
-    return decodeURIComponent(base64);
+  const header = dataUrl.slice(0, commaIndex).toLowerCase();
+  const payload = dataUrl.slice(commaIndex + 1);
+  if (!header.includes(";base64")) {
+    return decodeURIComponent(payload);
   }
+
+  const bytes = dataUrlToUint8Array(dataUrl);
+  return new TextDecoder("utf-8").decode(bytes);
 }
 
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   const commaIndex = dataUrl.indexOf(",");
   if (commaIndex < 0) return new Uint8Array(0);
-  const base64 = dataUrl.slice(commaIndex + 1);
-  const binary = atob(base64);
+  const header = dataUrl.slice(0, commaIndex).toLowerCase();
+  const payload = dataUrl.slice(commaIndex + 1);
+  const binary = header.includes(";base64")
+    ? atob(payload)
+    : decodeURIComponent(payload);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
@@ -94,7 +99,7 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 }
 
 /**
- * 将 URL（缓存 URL / 服务端文件 URL / data URL）转换为 data URL 字符串。
+ * 将服务端文件 URL 或 data URL 转换为 data URL 字符串。
  */
 async function resolveToDataUrl(url: string): Promise<string> {
   if (url.startsWith("data:")) {
@@ -183,9 +188,15 @@ export async function extractTextFromFile(
         images.push(match[1]);
       }
 
-      // 从 HTML 中提取纯文本
+      // 从 HTML 中提取结构化文本，保留段落、列表和表格边界。
       const text = html
         .replace(/<img[^>]*>/g, "[图片]")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n")
+        .replace(/<li[^>]*>/gi, "- ")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<\/tr>/gi, "\n")
+        .replace(/<\/t[dh]>/gi, " | ")
         .replace(/<[^>]+>/g, "")
         .replace(/&nbsp;/g, " ")
         .replace(/&amp;/g, "&")

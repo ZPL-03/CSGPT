@@ -25,8 +25,6 @@ declare global {
       DISABLE_FAST_LINK?: string; // disallow parse settings from url or not
       CUSTOM_MODELS?: string; // to control custom models
       DEFAULT_MODEL?: string; // to control default model in every new chat window
-      VISION_MODELS?: string; // to control vision models
-
       // stability only
       STABILITY_URL?: string;
       STABILITY_API_KEY?: string;
@@ -159,8 +157,6 @@ export const getServerSideConfig = () => {
   const csgptModelEntry = `${csgptModelName}@${ServiceProvider.CSGPT}`;
   let customModels = process.env.CUSTOM_MODELS ?? "";
   let defaultModel = process.env.DEFAULT_MODEL ?? csgptModelEntry;
-  let visionModels = process.env.VISION_MODELS ?? "";
-
   customModels = appendCustomModel(
     customModels,
     csgptModelEntry,
@@ -303,7 +299,6 @@ export const getServerSideConfig = () => {
     disableFastLink: !!process.env.DISABLE_FAST_LINK,
     customModels,
     defaultModel,
-    visionModels,
     allowedWebDavEndpoints,
     enableMcp: process.env.ENABLE_MCP === "true",
   };

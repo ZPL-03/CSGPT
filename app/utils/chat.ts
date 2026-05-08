@@ -1,10 +1,7 @@
-import {
-  CACHE_URL_PREFIX,
-  FILES_URL_PREFIX,
-  REQUEST_TIMEOUT_MS,
-} from "@/app/constant";
+import { FILES_URL_PREFIX, REQUEST_TIMEOUT_MS } from "@/app/constant";
 import { MultimodalContent, RequestMessage } from "@/app/client/api";
 import Locale from "@/app/locales";
+import { useUserStore } from "@/app/store/user";
 import {
   EventStreamContentType,
   fetchEventSource,
@@ -12,11 +9,13 @@ import {
 import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
 
+const MODEL_IMAGE_DATA_URL_LIMIT = 2 * 1024 * 1024;
+
 export function compressImage(file: Blob, maxSize: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (readerEvent: any) => {
-      // 非图片文件直接返回 data URL，不压缩
+      // 非图片文件保持原始 data URL
       if (!file.type.startsWith("image/")) {
         resolve(readerEvent.target.result);
         return;
@@ -51,7 +50,6 @@ export function compressImage(file: Blob, maxSize: number): Promise<string> {
         resolve(dataUrl);
       };
       image.onerror = () => {
-        // 图片加载失败时回退为原始 data URL
         resolve(readerEvent.target.result);
       };
       image.src = readerEvent.target.result;
@@ -89,26 +87,28 @@ export async function preProcessImageContentBase(
   for (const part of content) {
     if (part?.type == "image_url" && part?.image_url?.url) {
       try {
-        const url = await cacheImageToBase64Image(part?.image_url?.url);
+        const url = await resolveAttachmentDataUrl(part?.image_url?.url);
         result.push(await transformImageUrl(url));
       } catch (error) {
         console.error("Error processing image URL:", error);
+        throw error;
       }
     } else if (part?.type == "file_url" && part?.file_url?.url) {
-      // 将缓存 URL 转为 base64 data URL，使模型能访问文件内容
+      // 将文件 URL 转为 data URL，使模型请求体包含文件数据。
       try {
-        const dataUrl = await cacheImageToBase64Image(part?.file_url?.url);
+        const dataUrl = await resolveAttachmentDataUrl(part?.file_url?.url);
         result.push({
           type: "file_url",
           file_url: {
             url: dataUrl,
             name: part.file_url.name,
             size: part.file_url.size,
+            type: part.file_url.type,
           },
         });
       } catch (error) {
         console.error("Error processing file URL:", error);
-        result.push({ ...part });
+        throw error;
       }
     } else {
       result.push({ ...part });
@@ -134,28 +134,25 @@ export async function preProcessImageContentForAlibabaDashScope(
   }));
 }
 
-const imageCaches: Record<string, string> = {};
-export function cacheImageToBase64Image(imageUrl: string) {
-  if (
-    imageUrl.includes(CACHE_URL_PREFIX) ||
-    imageUrl.includes(FILES_URL_PREFIX)
-  ) {
-    if (!imageCaches[imageUrl]) {
-      const reader = new FileReader();
-      return fetch(imageUrl, {
-        method: "GET",
-        mode: "cors",
-        credentials: "include",
-      })
-        .then((res) => res.blob())
-        .then(
-          async (blob) =>
-            (imageCaches[imageUrl] = await compressImage(blob, 256 * 1024)),
-        ); // compressImage
-    }
-    return Promise.resolve(imageCaches[imageUrl]);
+export function resolveAttachmentDataUrl(attachmentUrl: string) {
+  if (attachmentUrl.startsWith("data:")) {
+    return Promise.resolve(attachmentUrl);
   }
-  return Promise.resolve(imageUrl);
+  if (attachmentUrl.includes(FILES_URL_PREFIX)) {
+    return fetch(attachmentUrl, {
+      method: "GET",
+      mode: "cors",
+      credentials: "include",
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`文件读取异常：${res.status}`);
+        }
+        return res.blob();
+      })
+      .then((blob) => compressImage(blob, MODEL_IMAGE_DATA_URL_LIMIT));
+  }
+  return Promise.resolve(attachmentUrl);
 }
 
 export function base64Image2Blob(base64Data: string, contentType: string) {
@@ -168,10 +165,36 @@ export function base64Image2Blob(base64Data: string, contentType: string) {
   return new Blob([byteArray], { type: contentType });
 }
 
-// 将文件转为 data URL 直接返回，不依赖服务端文件存储
-// Vercel serverless 各实例间 /tmp 不共享，无法用文件系统中转
-export function uploadImage(file: Blob): Promise<string> {
-  return compressImage(file, 256 * 1024);
+// 将文件上传到服务端，由数据库保存原始文件数据。
+export async function uploadFile(
+  file: Blob,
+  filename?: string,
+): Promise<string> {
+  const token = useUserStore.getState().token;
+  if (!token) {
+    throw new Error("用户未登录");
+  }
+
+  const formData = new FormData();
+  const uploadName =
+    filename ||
+    ((file as File).name && (file as File).name.trim()) ||
+    "upload.bin";
+  formData.append("file", file, uploadName);
+
+  const response = await fetch("/api/files", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok || data?.code !== 0 || !data?.data) {
+    throw new Error(data?.error || data?.message || "文件上传失败");
+  }
+
+  return data.data;
 }
 
 export function streamWithThink(
@@ -209,7 +232,6 @@ export function streamWithThink(
   function animateResponseText() {
     if (finished || controller.signal.aborted) {
       responseText += remainText;
-      console.log("[Response Animation] finished");
       if (responseText?.length === 0) {
         options.onError?.(new Error("empty response from server"));
       }
@@ -253,7 +275,6 @@ export function streamWithThink(
             )
               .then((res) => {
                 let content = res.data || res?.statusText;
-                // hotfix #5614
                 content =
                   typeof content === "string"
                     ? content
@@ -290,9 +311,8 @@ export function streamWithThink(
           processToolMessage(requestPayload, toolCallMessage, toolCallResult);
           setTimeout(() => {
             // call again
-            console.debug("[ChatAPI] restart");
             running = false;
-            chatApi(chatPath, headers, requestPayload, tools); // call fetchEventSource
+            chatApi(chatPath, headers, requestPayload, tools);
           }, 60);
         });
         return;
@@ -300,7 +320,6 @@ export function streamWithThink(
       if (running) {
         return;
       }
-      console.debug("[ChatAPI] end");
       finished = true;
       options.onFinish(responseText + remainText, responseRes);
     }
@@ -333,7 +352,6 @@ export function streamWithThink(
       async onopen(res) {
         clearTimeout(requestTimeoutId);
         const contentType = res.headers.get("content-type");
-        console.log("[Request] response content type: ", contentType);
         responseRes = res;
 
         if (contentType?.startsWith("text/plain")) {
@@ -407,7 +425,7 @@ export function streamWithThink(
           if (chunk.isThinking) {
             // If in thinking mode
             if (!isInThinkingMode || isThinkingChanged) {
-              // If this is a new thinking block or mode changed, add prefix
+              // 新思考块或模式变化时添加引用前缀。
               isInThinkingMode = true;
               if (remainText.length > 0) {
                 remainText += "\n";
@@ -447,6 +465,5 @@ export function streamWithThink(
       openWhenHidden: true,
     });
   }
-  console.debug("[ChatAPI] start");
-  chatApi(chatPath, headers, requestPayload, tools); // call fetchEventSource
+  chatApi(chatPath, headers, requestPayload, tools);
 }

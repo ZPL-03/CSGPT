@@ -44,12 +44,12 @@ function resolveUpstreamCSGPTModel(
 
   // CS2 模型使用 Xiaomi 上游
   if (requestedModel && isCS2Model(requestedModel)) {
-    return config.csgptCs2UpstreamModelName || "mimo-v2.5-pro";
+    return config.csgptCs2UpstreamModelName || requestedModel;
   }
 
   // CS3 模型使用自部署 vLLM 上游
   if (requestedModel && isCS3Model(requestedModel)) {
-    return config.csgptCs3UpstreamModelName || "csllm-cpv";
+    return config.csgptCs3UpstreamModelName || requestedModel;
   }
 
   if (!requestedModel || requestedModel === publicDefaultModel) {
@@ -115,7 +115,7 @@ function getBackendConfig(
   switch (provider) {
     case "csgpt":
       return {
-        baseUrl: config.csgptBaseUrl || "http://localhost:8000/v1",
+        baseUrl: config.csgptBaseUrl || "",
         apiKey: config.csgptApiKey || "",
         isCSGPT: true,
       };
@@ -294,8 +294,13 @@ async function handleCS2ChatCompletions(
   bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
 ) {
   const { messages, stream, model, rest } = bodyData;
-  const baseUrl =
-    config.csgptCs2BaseUrl || "https://token-plan-cn.xiaomimimo.com/v1";
+  const baseUrl = config.csgptCs2BaseUrl;
+  if (!baseUrl) {
+    return NextResponse.json(
+      { error: true, message: "CS2 后端地址未配置" },
+      { status: 500 },
+    );
+  }
   const apiKey = config.csgptCs2ApiKey || "";
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
 
@@ -367,13 +372,19 @@ async function handleCS2ChatCompletions(
   return NextResponse.json(data);
 }
 
-// CS3 模型：转发到自部署 vLLM 后端（OpenAI 兼容格式，Cloudflare 代理）
+// CS3 模型：转发到自部署 vLLM 后端（OpenAI 兼容格式）
 async function handleCS3ChatCompletions(
   config: ReturnType<typeof getServerSideConfig>,
   bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
 ) {
   const { messages, stream, model, rest } = bodyData;
-  const baseUrl = config.csgptCs3BaseUrl || "https://csllm-cpv.lqfewle.com/v1";
+  const baseUrl = config.csgptCs3BaseUrl;
+  if (!baseUrl) {
+    return NextResponse.json(
+      { error: true, message: "CS3 后端地址未配置" },
+      { status: 500 },
+    );
+  }
   const apiKey = config.csgptCs3ApiKey || "";
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
 
@@ -497,6 +508,13 @@ async function handleChatCompletions(
     ...rest,
   };
 
+  if (!backend.baseUrl) {
+    return NextResponse.json(
+      { error: true, message: `${provider} 后端地址未配置` },
+      { status: 500 },
+    );
+  }
+
   const apiUrl = joinUrl(backend.baseUrl, "chat/completions");
 
   console.log(`[${provider} API] 转发请求到:`, apiUrl);
@@ -564,6 +582,13 @@ async function handleGenericProxy(
   pathStr: string,
 ) {
   try {
+    if (!backend.baseUrl) {
+      return NextResponse.json(
+        { error: true, message: "后端地址未配置" },
+        { status: 500 },
+      );
+    }
+
     const body = req.body ? await req.text() : undefined;
     const apiUrl = joinUrl(backend.baseUrl, pathStr);
 

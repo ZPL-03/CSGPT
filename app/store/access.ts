@@ -151,7 +151,6 @@ const DEFAULT_ACCESS_STATE = {
   disableFastLink: false,
   customModels: "",
   defaultModel: "",
-  visionModels: "",
 };
 
 export const useAccessStore = createPersistStore(
@@ -162,10 +161,6 @@ export const useAccessStore = createPersistStore(
       this.fetch();
 
       return get().needCode;
-    },
-    getVisionModels() {
-      this.fetch();
-      return get().visionModels;
     },
     isValidOpenAI() {
       return ensure(get(), ["openaiApiKey"]);
@@ -324,7 +319,6 @@ export const useAccessStore = createPersistStore(
         // 服务端控制的配置字段始终以 currentState（服务端配置）为准
         customModels: currentState.customModels,
         defaultModel: currentState.defaultModel,
-        visionModels: currentState.visionModels,
         needCode: currentState.needCode,
         hideUserApiKey: currentState.hideUserApiKey,
         hideBalanceQuery: currentState.hideBalanceQuery,

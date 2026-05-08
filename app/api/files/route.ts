@@ -1,83 +1,94 @@
 // 文件上传 API：POST /api/files
-// 将文件存储到服务器磁盘，返回访问 URL
+// 将用户上传的原始文件数据写入数据库。
 
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
-import { nanoid } from "nanoid";
+import { prisma } from "@/app/lib/prisma";
+import { getUserFromRequest } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-// 文件存储目录：Vercel 环境使用 /tmp，本地开发使用项目目录下的 data/files
-const FILES_DIR = process.env.VERCEL
-  ? "/tmp/files"
-  : path.join(process.cwd(), "data", "files");
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
-async function ensureDir(dir: string) {
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true });
-  }
-}
-
-// POST：上传文件
+// POST：保存用户上传文件
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
+    const userId = await getUserFromRequest(request);
+    if (!userId) {
+      return NextResponse.json({ error: "未授权" }, { status: 401 });
+    }
 
-    if (!file) {
+    const formData = await request.formData();
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: "未提供文件" }, { status: 400 });
     }
 
-    await ensureDir(FILES_DIR);
-
-    // 保留原始扩展名
-    const ext = file.name.includes(".")
-      ? file.name.split(".").pop() || "bin"
-      : "bin";
-    const filename = `${nanoid()}.${ext}`;
-    const filePath = path.join(FILES_DIR, filename);
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: "文件大小不能超过 20MB" },
+        { status: 413 },
+      );
+    }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(filePath, buffer);
-
-    // 返回相对 URL
-    const url = `/api/files/${filename}`;
+    const savedFile = await prisma.uploadedFile.create({
+      data: {
+        userId,
+        originalName: file.name || "upload.bin",
+        mimeType: file.type || "application/octet-stream",
+        size: buffer.length,
+        data: buffer,
+      },
+      select: {
+        id: true,
+        originalName: true,
+        mimeType: true,
+        size: true,
+      },
+    });
 
     return NextResponse.json({
       code: 0,
-      data: url,
-      message: "上传成功",
+      data: `/api/files/${savedFile.id}`,
+      file: savedFile,
     });
   } catch (error: any) {
     console.error("[Files] Upload error:", error);
     return NextResponse.json(
-      { code: 1, error: "上传失败", message: error.message },
+      { error: "上传失败", message: error.message },
       { status: 500 },
     );
   }
 }
 
-// GET：列出所有文件（管理用途）
-export async function GET() {
+// GET：列出当前用户上传文件
+export async function GET(request: NextRequest) {
   try {
-    await ensureDir(FILES_DIR);
-    const { readdir, stat } = await import("fs/promises");
-    const files = await readdir(FILES_DIR);
-    const fileList = await Promise.all(
-      files.map(async (name) => {
-        const stats = await stat(path.join(FILES_DIR, name));
-        return {
-          name,
-          url: `/api/files/${name}`,
-          size: stats.size,
-          createdAt: stats.birthtime.toISOString(),
-        };
-      }),
-    );
+    const userId = await getUserFromRequest(request);
+    if (!userId) {
+      return NextResponse.json({ error: "未授权" }, { status: 401 });
+    }
 
-    return NextResponse.json({ files: fileList });
+    const files = await prisma.uploadedFile.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        originalName: true,
+        mimeType: true,
+        size: true,
+        createdAt: true,
+      },
+    });
+
+    return NextResponse.json({
+      files: files.map((file: any) => ({
+        ...file,
+        name: file.originalName,
+        url: `/api/files/${file.id}`,
+      })),
+    });
   } catch (error: any) {
     return NextResponse.json(
       { error: "获取文件列表失败", message: error.message },

@@ -34,9 +34,11 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 
 - **前端**：Next.js 14 + TypeScript + Zustand
 - **后端**：Next.js API Routes（SSE 流式代理）
-- **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域微调模型，通过 vLLM/OpenAI 兼容接口部署）
-- **第二模型**：QWen3-14B-CS2（Qwen3-14B 辅助模型，独立推理后端）
+- **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域模型，通过 vLLM/OpenAI 兼容接口部署）
+- **第二模型**：QWen3-14B-CS2（辅助模型，独立推理后端）
+- **第三模型**：QWen3-14B-CS3（`D:\Project\VS_Code\CS_LLM_cpv` 训练产物对应的自部署推理服务）
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
+- **文件存储**：用户上传的文件原始数据保存到 PostgreSQL，聊天消息保存文件引用和可展示元数据
 
 ## 快速开始
 
@@ -81,11 +83,16 @@ CSGPT_CS1_API_KEY=your-api-key
 # CSGPT_CS2_API_KEY=your-api-key
 # CSGPT_CS2_UPSTREAM_MODEL_NAME=
 
+# ===== CS3 上游推理服务（可选）=====
+# CSGPT_CS3_BASE_URL=http://your-server:8000/v1
+# CSGPT_CS3_API_KEY=your-api-key
+# CSGPT_CS3_UPSTREAM_MODEL_NAME=
+
 # ===== 前端展示 =====
 CSGPT_MODEL_NAME=QWen3-14B-CS1
 
 # ===== 模型配置 =====
-CUSTOM_MODELS=+QWen3-14B-CS2@CSGPT
+CUSTOM_MODELS=
 DEFAULT_MODEL=QWen3-14B-CS1@CSGPT
 
 # ===== 数据库配置（必填）=====
@@ -106,6 +113,7 @@ CSGPT/
 ├── app/
 │   ├── api/           # API 路由
 │   │   └── [provider]/ # 通用 Provider 代理路由
+│   │   └── files/     # 上传文件读写接口
 │   ├── components/    # React 组件
 │   ├── config/        # 配置文件
 │   ├── masks/         # 预设模板
@@ -135,14 +143,13 @@ CSGPT/
 
 ### 自定义模型和接口
 
-设置页开启"自定义接口"后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部测试模型`；选择 CSGPT 默认模型时走内置模型，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。
+设置页开启"自定义接口"后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部模型`；选择 CSGPT 默认模型时走内置模型，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。
 
 ### 验证命令
 
 ```bash
 npx tsc --noEmit
 npm run lint
-npm run test:ci
 npm run build
 ```
 

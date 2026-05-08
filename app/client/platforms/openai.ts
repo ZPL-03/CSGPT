@@ -20,7 +20,7 @@ import {
 import { collectModelsWithDefaultModel } from "@/app/utils/model";
 import {
   preProcessImageContent,
-  uploadImage,
+  uploadFile,
   base64Image2Blob,
   streamWithThink,
 } from "@/app/utils/chat";
@@ -39,7 +39,6 @@ import Locale from "../../locales";
 import { getClientConfig } from "@/app/config/client";
 import {
   getMessageTextContent,
-  isVisionModel,
   isDalle3 as _isDalle3,
   getTimeoutMSByModel,
 } from "@/app/utils";
@@ -79,6 +78,42 @@ export interface DalleRequestPayload {
   style: DalleStyle;
 }
 
+async function extractFilePartsForModel(
+  content: ChatOptions["messages"][number]["content"],
+) {
+  if (typeof content === "string") {
+    return { text: "", images: [] as string[] };
+  }
+
+  const fileParts = content.filter(
+    (part) => part.type === "file_url" && part.file_url?.url,
+  );
+  if (fileParts.length === 0) {
+    return { text: "", images: [] as string[] };
+  }
+
+  const { extractTextFromFile } = await import(
+    "@/app/utils/file-text-extractor"
+  );
+  const results = await Promise.all(
+    fileParts.map(async (part) => {
+      const file = part.file_url!;
+      const result = await extractTextFromFile(file.url, file.name);
+      return { ...result, fileName: file.name };
+    }),
+  );
+
+  return {
+    text: results
+      .map((result) =>
+        result.text ? `[文件: ${result.fileName}]\n${result.text}` : "",
+      )
+      .filter(Boolean)
+      .join("\n\n"),
+    images: results.flatMap((result) => result.images),
+  };
+}
+
 export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
 
@@ -103,13 +138,6 @@ export class ChatGPTApi implements LLMApi {
     }
 
     const normalizedPath = this.normalizeRequestPath(baseUrl, path);
-
-    console.log(
-      "[Proxy Endpoint] Provider:",
-      providerName,
-      baseUrl,
-      normalizedPath,
-    );
 
     return [baseUrl, normalizedPath].join("/");
   }
@@ -206,8 +234,10 @@ export class ChatGPTApi implements LLMApi {
       let url = res.data?.at(0)?.url ?? "";
       const b64_json = res.data?.at(0)?.b64_json ?? "";
       if (!url && b64_json) {
-        // uploadImage
-        url = await uploadImage(base64Image2Blob(b64_json, "image/png"));
+        url = await uploadFile(
+          base64Image2Blob(b64_json, "image/png"),
+          "generated-image.png",
+        );
       }
       return [
         {
@@ -232,8 +262,6 @@ export class ChatGPTApi implements LLMApi {
       speed: options.speed,
     };
 
-    console.log("[Request] openai speech payload: ", requestPayload);
-
     const controller = new AbortController();
     options.onController?.(controller);
 
@@ -256,7 +284,7 @@ export class ChatGPTApi implements LLMApi {
       clearTimeout(requestTimeoutId);
       return await res.arrayBuffer();
     } catch (e) {
-      console.log("[Request] failed to make a speech request", e);
+      console.error("[Request] failed to make a speech request", e);
       throw e;
     }
   }
@@ -294,47 +322,36 @@ export class ChatGPTApi implements LLMApi {
         style: options.config?.style ?? "vivid",
       };
     } else {
-      const visionModel = isVisionModel(options.config.model);
       const messages: ChatOptions["messages"] = [];
       for (const v of options.messages) {
-        // 从上传文件中提取的文本（不显示在 UI 中，仅发送给模型）
-        const fileContent = (v as ChatMessage).fileContent;
-        // 从上传文档（docx/pdf）中提取的内嵌图片（不显示在 UI 中，仅发送给模型）
-        const extractedImages = (v as ChatMessage).extractedImages;
-        let content: string | MultimodalContent[];
-        if (visionModel) {
-          content = await preProcessImageContent(v.content);
-          if (fileContent) {
-            content =
-              typeof content === "string"
-                ? fileContent + "\n\n" + content
-                : [{ type: "text", text: fileContent }, ...(content as any)];
-          }
-          // 将文档内嵌图片追加到多模态内容中
-          if (extractedImages && extractedImages.length > 0) {
-            const imageParts: MultimodalContent[] = extractedImages.map(
-              (url) => ({ type: "image_url" as const, image_url: { url } }),
-            );
-            content =
-              typeof content === "string"
-                ? [{ type: "text" as const, text: content }, ...imageParts]
-                : [...(content as MultimodalContent[]), ...imageParts];
-          }
-        } else if (typeof v.content === "string") {
-          content = fileContent ? fileContent + "\n\n" + v.content : v.content;
-        } else {
-          // 非视觉模型：将多模态内容转为文本
-          const textParts = v.content
-            .map((part) => {
-              if (part.type === "text") return part.text ?? "";
-              if (part.type === "image_url") return "[图片]";
-              if (part.type === "file_url")
-                return `[文件: ${part.file_url?.name ?? "未知"}]`;
-              return "";
-            })
-            .filter(Boolean)
-            .join("\n");
-          content = fileContent ? fileContent + "\n\n" + textParts : textParts;
+        // 从上传文件中提取的文本仅进入模型请求体。
+        let fileContent = (v as ChatMessage).fileContent;
+        // 从上传文档中提取的内嵌图片仅进入模型请求体。
+        let extractedImages = (v as ChatMessage).extractedImages ?? [];
+        if (
+          typeof v.content !== "string" &&
+          (!fileContent || extractedImages.length === 0)
+        ) {
+          const extracted = await extractFilePartsForModel(v.content);
+          if (!fileContent) fileContent = extracted.text;
+          if (extractedImages.length === 0) extractedImages = extracted.images;
+        }
+
+        let content = await preProcessImageContent(v.content);
+        if (fileContent) {
+          content =
+            typeof content === "string"
+              ? fileContent + "\n\n" + content
+              : [{ type: "text", text: fileContent }, ...content];
+        }
+        if (extractedImages.length > 0) {
+          const imageParts: MultimodalContent[] = extractedImages.map(
+            (url) => ({ type: "image_url", image_url: { url } }),
+          );
+          content =
+            typeof content === "string"
+              ? [{ type: "text", text: content }, ...imageParts]
+              : [...content, ...imageParts];
         }
         if (!(isO1OrO3 && v.role === "system"))
           messages.push({ role: v.role, content });
@@ -369,14 +386,7 @@ export class ChatGPTApi implements LLMApi {
         // o1/o3 uses max_completion_tokens to control the number of tokens (https://platform.openai.com/docs/guides/reasoning#controlling-costs)
         requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       }
-
-      // add max_tokens to vision model
-      if (visionModel && !isO1OrO3 && !isGpt5) {
-        requestPayload["max_tokens"] = Math.max(modelConfig.max_tokens, 4000);
-      }
     }
-
-    console.log("[Request] openai payload: ", requestPayload);
 
     const shouldStream = !isDalle3 && !!options.config.stream;
     const controller = new AbortController();
@@ -429,7 +439,6 @@ export class ChatGPTApi implements LLMApi {
           controller,
           // parseSSE
           (text: string, runTools: ChatMessageTool[]) => {
-            // console.log("parseSSE", text, runTools);
             const json = JSON.parse(text);
             const choices = json.choices as Array<{
               delta: {
@@ -533,7 +542,7 @@ export class ChatGPTApi implements LLMApi {
         options.onFinish(message, res);
       }
     } catch (e) {
-      console.log("[Request] failed to make a chat request", e);
+      console.error("[Request] failed to make a chat request", e);
       options.onError?.(e as Error);
     }
   }
@@ -619,8 +628,6 @@ export class ChatGPTApi implements LLMApi {
     const chatModels = resJson.data?.filter(
       (m) => m.id.startsWith("gpt-") || m.id.startsWith("chatgpt-"),
     );
-    console.log("[Models]", chatModels);
-
     if (!chatModels) {
       return [];
     }

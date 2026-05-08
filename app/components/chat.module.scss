@@ -1,13 +1,13 @@
 @import "../styles/animation.scss";
 
-.attach-images {
+.attachments {
   position: absolute;
   left: 30px;
   bottom: 32px;
   display: flex;
 }
 
-.attach-image {
+.attachment {
   cursor: default;
   width: 64px;
   height: 64px;
@@ -20,18 +20,18 @@
   overflow: visible;
   position: relative;
 
-  .attach-image-mask {
+  .attachment-mask {
     width: 100%;
     height: 100%;
     opacity: 0;
     transition: all ease 0.2s;
   }
 
-  .attach-image-mask:hover {
+  .attachment-mask:hover {
     opacity: 1;
   }
 
-  .delete-image {
+  .delete-attachment {
     position: absolute;
     top: -8px;
     right: -8px;

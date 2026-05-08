@@ -48,7 +48,6 @@ export default function RootLayout({
           href="/site.webmanifest"
           crossOrigin="use-credentials"
         ></link>
-        <script src="/serviceWorkerRegister.js" defer></script>
       </head>
       <body>
         {children}

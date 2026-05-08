@@ -15,12 +15,13 @@ model User {
   id        String   @id @default(cuid())
   username  String   @unique
   email     String?  @unique
-  password  String   // bcrypt 加密后的密码
+  password  String // bcrypt 加密后的密码
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   sessions Conversation[]
   tokens   AuthToken[]
+  files    UploadedFile[]
 }
 
 // 认证令牌表
@@ -38,17 +39,17 @@ model AuthToken {
 
 // 对话表
 model Conversation {
-  id              String   @id
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic           String   @default("新的聊天")
-  memoryPrompt    String   @default("")
-  lastUpdate      BigInt   @default(0)
-  lastSummarizeIndex Int   @default(0)
-  clearContextIndex Int?
-  maskConfig      Json?    // 面具配置 JSON
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic              String   @default("新的聊天")
+  memoryPrompt       String   @default("")
+  lastUpdate         BigInt   @default(0)
+  lastSummarizeIndex Int      @default(0)
+  clearContextIndex  Int?
+  maskConfig         Json? // 面具配置 JSON
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   messages Message[]
 
@@ -58,17 +59,31 @@ model Conversation {
 
 // 消息表
 model Message {
-  id             String   @id
+  id             String       @id
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String   // system | user | assistant
-  content        String   @default("")
+  role           String // system | user | assistant
+  content        String       @default("")
   date           String
-  isError        Boolean  @default(false)
+  isError        Boolean      @default(false)
   model          String?
-  tools          Json?    // 工具调用 JSON 数组
-  createdAt      DateTime @default(now())
+  tools          Json? // 工具调用 JSON 数组
+  createdAt      DateTime     @default(now())
 
   @@index([conversationId])
   @@index([conversationId, date])
+}
+
+// 用户上传文件表
+model UploadedFile {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalName String
+  mimeType     String
+  size         Int
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

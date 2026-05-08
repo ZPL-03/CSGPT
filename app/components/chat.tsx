@@ -71,7 +71,7 @@ import {
   selectOrCopy,
 } from "../utils";
 
-import { uploadImage as uploadImageRemote } from "@/app/utils/chat";
+import { uploadFile as uploadFileRemote } from "@/app/utils/chat";
 
 import dynamic from "next/dynamic";
 
@@ -490,9 +490,7 @@ export interface AttachmentInfo {
 }
 
 export function ChatActions(props: {
-  uploadImage: () => void;
-  setAttachImages: (images: AttachmentInfo[]) => void;
-  setUploading: (uploading: boolean) => void;
+  uploadFile: () => void;
   showPromptModal: () => void;
   scrollToBottom: () => void;
   showPromptHints: () => void;
@@ -554,9 +552,7 @@ export function ChatActions(props: {
     return model?.displayName ?? currentModel;
   }, [models, currentModel, currentProviderName]);
   const [showModelSelector, setShowModelSelector] = useState(false);
-  const [showUploadImage, setShowUploadImage] = useState(false);
-  const { setAttachImages, setUploading } = props;
-
+  const [showUploadFile, setShowUploadFile] = useState(false);
   const [showSizeSelector, setShowSizeSelector] = useState(false);
   const [showQualitySelector, setShowQualitySelector] = useState(false);
   const [showStyleSelector, setShowStyleSelector] = useState(false);
@@ -572,7 +568,7 @@ export function ChatActions(props: {
 
   useEffect(() => {
     // 所有模型均支持文件上传
-    setShowUploadImage(true);
+    setShowUploadFile(true);
 
     // if current model is not available
     // switch to first available model
@@ -622,9 +618,9 @@ export function ChatActions(props: {
           />
         )}
 
-        {showUploadImage && (
+        {showUploadFile && (
           <ChatAction
-            onClick={props.uploadImage}
+            onClick={props.uploadFile}
             text={Locale.Chat.InputActions.UploadImage}
             icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
           />
@@ -872,9 +868,14 @@ export function EditMessageModal(props: { onClose: () => void }) {
   );
 }
 
-export function DeleteImageButton(props: { deleteImage: () => void }) {
+export function DeleteAttachmentButton(props: {
+  deleteAttachment: () => void;
+}) {
   return (
-    <div className={styles["delete-image"]} onClick={props.deleteImage}>
+    <div
+      className={styles["delete-attachment"]}
+      onClick={props.deleteAttachment}
+    >
       <DeleteIcon />
     </div>
   );
@@ -1008,7 +1009,7 @@ function _Chat() {
   const [hitBottom, setHitBottom] = useState(true);
   const isMobileScreen = useMobileScreen();
   const navigate = useNavigate();
-  const [attachImages, setAttachImages] = useState<AttachmentInfo[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentInfo[]>([]);
   const [uploading, setUploading] = useState(false);
 
   // prompt hints
@@ -1082,7 +1083,7 @@ function _Chat() {
   };
 
   const doSubmit = (userInput: string) => {
-    if (userInput.trim() === "" && isEmpty(attachImages)) return;
+    if (userInput.trim() === "" && isEmpty(attachments)) return;
     const matchCommand = chatCommands.match(userInput);
     if (matchCommand.matched) {
       setUserInput("");
@@ -1092,9 +1093,9 @@ function _Chat() {
     }
     setIsLoading(true);
     chatStore
-      .onUserInput(userInput, attachImages)
+      .onUserInput(userInput, attachments)
       .then(() => setIsLoading(false));
-    setAttachImages([]);
+    setAttachments([]);
     chatStore.setLastInput(userInput);
     setUserInput("");
     setPromptHints([]);
@@ -1245,12 +1246,21 @@ function _Chat() {
     setIsLoading(true);
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
-    const attachments: AttachmentInfo[] = images.map((url) => ({
-      url,
-      name: url.split("/").pop() || "image",
-      size: 0,
-      type: "image/png",
-    }));
+    const files = getMessageFiles(userMessage);
+    const attachments: AttachmentInfo[] = [
+      ...images.map((url) => ({
+        url,
+        name: url.split("/").pop() || "image",
+        size: 0,
+        type: "image/png",
+      })),
+      ...files.map((file) => ({
+        url: file.url,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      })),
+    ];
     chatStore
       .onUserInput(textContent, attachments)
       .then(() => setIsLoading(false));
@@ -1459,75 +1469,76 @@ function _Chat() {
           event.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            const attachments: AttachmentInfo[] = [...attachImages];
+            const nextAttachments: AttachmentInfo[] = [...attachments];
             try {
               setUploading(true);
-              const dataUrl = await uploadImageRemote(file);
-              attachments.push({
-                url: dataUrl,
+              const fileUrl = await uploadFileRemote(file);
+              nextAttachments.push({
+                url: fileUrl,
                 name: file.name,
                 size: file.size,
                 type: file.type,
               });
               setUploading(false);
-            } catch {
+            } catch (error) {
               setUploading(false);
+              showToast(
+                error instanceof Error ? error.message : "文件上传失败",
+              );
             }
-            if (attachments.length > 3) {
-              attachments.splice(3, attachments.length - 3);
-            }
-            setAttachImages(attachments);
+            setAttachments(nextAttachments);
           }
         }
       }
     },
-    [attachImages],
+    [attachments],
   );
 
-  async function uploadImage() {
-    const attachments: AttachmentInfo[] = [...attachImages];
+  async function selectUploadFiles() {
+    const nextAttachments: AttachmentInfo[] = [...attachments];
 
-    const uploaded = await new Promise<AttachmentInfo[]>((res, rej) => {
-      const fileInput = document.createElement("input");
-      fileInput.type = "file";
-      fileInput.accept = "*/*";
-      fileInput.multiple = true;
-      fileInput.onchange = (event: any) => {
-        setUploading(true);
-        const files = event.target.files;
-        const results: AttachmentInfo[] = [];
-        const uploadPromises: Promise<void>[] = [];
-        for (let i = 0; i < files.length; i++) {
-          const file = event.target.files[i];
-          uploadPromises.push(
-            uploadImageRemote(file).then((dataUrl) => {
-              results.push({
-                url: dataUrl,
-                name: file.name,
-                size: file.size,
-                type: file.type,
-              });
-            }),
-          );
-        }
-        Promise.all(uploadPromises)
-          .then(() => {
-            setUploading(false);
-            res(results);
-          })
-          .catch((e) => {
-            setUploading(false);
-            rej(e);
-          });
-      };
-      fileInput.click();
-    });
+    try {
+      const uploaded = await new Promise<AttachmentInfo[]>((res, rej) => {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "*/*";
+        fileInput.multiple = true;
+        fileInput.onchange = (event: any) => {
+          setUploading(true);
+          const files = event.target.files;
+          const results: AttachmentInfo[] = [];
+          const uploadPromises: Promise<void>[] = [];
+          for (let i = 0; i < files.length; i++) {
+            const file = event.target.files[i];
+            uploadPromises.push(
+              uploadFileRemote(file).then((fileUrl) => {
+                results.push({
+                  url: fileUrl,
+                  name: file.name,
+                  size: file.size,
+                  type: file.type,
+                });
+              }),
+            );
+          }
+          Promise.all(uploadPromises)
+            .then(() => {
+              setUploading(false);
+              res(results);
+            })
+            .catch((e) => {
+              setUploading(false);
+              rej(e);
+            });
+        };
+        fileInput.click();
+      });
 
-    attachments.push(...uploaded);
-    if (attachments.length > 3) {
-      attachments.splice(3, attachments.length - 3);
+      nextAttachments.push(...uploaded);
+      setAttachments(nextAttachments);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "文件上传失败");
     }
-    setAttachImages(attachments);
   }
 
   // 拖放文件上传
@@ -1536,29 +1547,27 @@ function _Chat() {
       event.preventDefault();
       const files = event.dataTransfer.files;
       if (files.length === 0) return;
-      const attachments: AttachmentInfo[] = [...attachImages];
+      const nextAttachments: AttachmentInfo[] = [...attachments];
       try {
         setUploading(true);
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          const dataUrl = await uploadImageRemote(file);
-          attachments.push({
-            url: dataUrl,
+          const fileUrl = await uploadFileRemote(file);
+          nextAttachments.push({
+            url: fileUrl,
             name: file.name,
             size: file.size,
             type: file.type,
           });
         }
         setUploading(false);
-      } catch {
+      } catch (error) {
         setUploading(false);
+        showToast(error instanceof Error ? error.message : "文件上传失败");
       }
-      if (attachments.length > 3) {
-        attachments.splice(3, attachments.length - 3);
-      }
-      setAttachImages(attachments);
+      setAttachments(nextAttachments);
     },
-    [attachImages],
+    [attachments],
   );
 
   const handleDragOver = useCallback(
@@ -1806,6 +1815,7 @@ function _Chat() {
                                           url: files[i].url,
                                           name: files[i].name,
                                           size: files[i].size,
+                                          type: files[i].type,
                                         },
                                       });
                                     }
@@ -2055,9 +2065,7 @@ function _Chat() {
               />
 
               <ChatActions
-                uploadImage={uploadImage}
-                setAttachImages={setAttachImages}
-                setUploading={setUploading}
+                uploadFile={selectUploadFiles}
                 showPromptModal={() => setShowPromptModal(true)}
                 scrollToBottom={scrollToBottom}
                 hitBottom={hitBottom}
@@ -2079,7 +2087,7 @@ function _Chat() {
               <label
                 className={clsx(styles["chat-input-panel-inner"], {
                   [styles["chat-input-panel-inner-attach"]]:
-                    attachImages.length !== 0,
+                    attachments.length !== 0,
                 })}
                 htmlFor="chat-input"
               >
@@ -2101,14 +2109,14 @@ function _Chat() {
                     fontFamily: config.fontFamily,
                   }}
                 />
-                {attachImages.length != 0 && (
-                  <div className={styles["attach-images"]}>
-                    {attachImages.map((att, index) => {
+                {attachments.length != 0 && (
+                  <div className={styles["attachments"]}>
+                    {attachments.map((att, index) => {
                       const isImage = att.type.startsWith("image/");
                       return (
                         <div
                           key={index}
-                          className={styles["attach-image"]}
+                          className={styles["attachment"]}
                           style={
                             isImage
                               ? { backgroundImage: `url("${att.url}")` }
@@ -2122,11 +2130,11 @@ function _Chat() {
                               </span>
                             </div>
                           )}
-                          <div className={styles["attach-image-mask"]} />
-                          <DeleteImageButton
-                            deleteImage={() => {
-                              setAttachImages(
-                                attachImages.filter((_, i) => i !== index),
+                          <div className={styles["attachment-mask"]} />
+                          <DeleteAttachmentButton
+                            deleteAttachment={() => {
+                              setAttachments(
+                                attachments.filter((_, i) => i !== index),
                               );
                             }}
                           />

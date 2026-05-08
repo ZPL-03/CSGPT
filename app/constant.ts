@@ -38,7 +38,6 @@ export const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn";
 
 export const AI302_BASE_URL = "https://api.302.ai";
 
-export const CACHE_URL_PREFIX = "/api/cache";
 export const FILES_URL_PREFIX = "/api/files";
 
 export enum Path {
@@ -349,7 +348,7 @@ You are an AI assistant with access to system tools. Your role is to help users 
   "params": {
     "name": "write_file",
     "arguments": {
-      "path": "/Users/river/dev/nextchat/test/joke.txt",
+      "path": "/Users/river/dev/nextchat/example/joke.txt",
       "content": "为什么数学书总是感到忧伤？因为它有太多的问题。"
     }
   }
@@ -465,32 +464,6 @@ export const DEFAULT_TTS_VOICES = [
   "nova",
   "shimmer",
 ];
-
-export const VISION_MODEL_REGEXES = [
-  /vision/,
-  /gpt-4o/,
-  /gpt-4\.1/,
-  /claude.*[34]/,
-  /gemini-1\.5/,
-  /gemini-exp/,
-  /gemini-2\.[05]/,
-  /learnlm/,
-  /qwen-vl/,
-  /qwen2-vl/,
-  /gpt-4-turbo(?!.*preview)/,
-  /^dall-e-3$/,
-  /glm-4v/,
-  /vl/i,
-  /o3/,
-  /o4-mini/,
-  /grok-4/i,
-  /gpt-5/,
-  /deepseek/,
-  /doubao/,
-  /hunyuan/,
-];
-
-export const EXCLUDE_VISION_MODEL_REGEXES = [/claude-3-5-haiku-20241022/];
 
 const openaiModels = [
   // As of July 2024, gpt-4o-mini should be used in place of gpt-3.5-turbo,
