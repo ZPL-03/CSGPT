@@ -229,7 +229,7 @@ async function handleModelsRequest(
         parent: null,
       },
     ];
-    // 如果配置了 CS2 上游，则添加 CS2 模型
+    // CS2 上游已配置时，返回 CS2 模型
     if (config.csgptCs2BaseUrl || config.csgptCs2ApiKey) {
       data.push({
         id: CSGPT_MODEL_2,
