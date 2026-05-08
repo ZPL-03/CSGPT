@@ -312,14 +312,18 @@ async function handleCS2ChatCompletions(
 
   const apiUrl = joinUrl(baseUrl, "chat/completions");
 
+  const cs2Headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    cs2Headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
   let response: Response;
   try {
     response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey ? `Bearer ${apiKey}` : "",
-      },
+      headers: cs2Headers,
       body: JSON.stringify({
         model: upstreamModel,
         messages: processedMessages,
@@ -386,15 +390,19 @@ async function handleCS3ChatCompletions(
 
   const apiUrl = joinUrl(baseUrl, "chat/completions");
 
+  const cs3Headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "User-Agent": "CSGPT/1.0",
+  };
+  if (apiKey) {
+    cs3Headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
   let response: Response;
   try {
     response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey ? `Bearer ${apiKey}` : "",
-        "User-Agent": "CSGPT/1.0",
-      },
+      headers: cs3Headers,
       body: JSON.stringify({
         model: upstreamModel,
         messages: processedMessages,
@@ -493,14 +501,19 @@ async function handleChatCompletions(
 
   console.log(`[${provider} API] 转发请求到:`, apiUrl);
 
+  const authHeader = getAuthorizationHeader(req, backend.apiKey);
+  const proxyHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (authHeader) {
+    proxyHeaders["Authorization"] = authHeader;
+  }
+
   let response: Response;
   try {
     response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: getAuthorizationHeader(req, backend.apiKey),
-      },
+      headers: proxyHeaders,
       body: JSON.stringify(requestBody),
     });
   } catch (fetchError: any) {
