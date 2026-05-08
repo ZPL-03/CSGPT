@@ -16,6 +16,12 @@ export function compressImage(file: Blob, maxSize: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (readerEvent: any) => {
+      // 非图片文件直接返回 data URL，不压缩
+      if (!file.type.startsWith("image/")) {
+        resolve(readerEvent.target.result);
+        return;
+      }
+
       const image = new Image();
       image.onload = () => {
         let canvas = document.createElement("canvas");
@@ -35,10 +41,8 @@ export function compressImage(file: Blob, maxSize: number): Promise<string> {
           if (dataUrl.length < maxSize) break;
 
           if (quality > 0.5) {
-            // Prioritize quality reduction
             quality -= 0.1;
           } else {
-            // Then reduce the size
             width *= 0.9;
             height *= 0.9;
           }
@@ -46,7 +50,10 @@ export function compressImage(file: Blob, maxSize: number): Promise<string> {
 
         resolve(dataUrl);
       };
-      image.onerror = reject;
+      image.onerror = () => {
+        // 图片加载失败时回退为原始 data URL
+        resolve(readerEvent.target.result);
+      };
       image.src = readerEvent.target.result;
     };
     reader.onerror = reject;
@@ -64,6 +71,7 @@ export function compressImage(file: Blob, maxSize: number): Promise<string> {
       } catch (e) {
         reject(e);
       }
+      return;
     }
 
     reader.readAsDataURL(file);

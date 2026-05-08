@@ -182,7 +182,11 @@ export function SessionConfigModel(props: { onClose: () => void }) {
             onClick={() => {
               navigate(Path.Masks);
               setTimeout(() => {
-                maskStore.create(session.mask);
+                const maskToSave = { ...session.mask };
+                if (maskToSave.name === DEFAULT_TOPIC) {
+                  maskToSave.name = "";
+                }
+                maskStore.create(maskToSave);
               }, 500);
             }}
           />,

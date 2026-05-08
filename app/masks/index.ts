@@ -1,5 +1,4 @@
 import { Mask } from "../store/mask";
-import { getLang } from "../locales";
 
 import { type BuiltinMask } from "./typing";
 export { type BuiltinMask } from "./typing";
@@ -26,29 +25,8 @@ export const BUILTIN_MASK_STORE = {
 
 export const BUILTIN_MASKS: BuiltinMask[] = [];
 
-// 根据当前语言加载对应的 Mask
-const lang = getLang();
-const masksForLang = lang === "en" ? CSGPT_MASKS_EN : CSGPT_MASKS;
-masksForLang.forEach((mask) => {
+// 加载中英文所有预设面具，按名称去重
+const allMasks = [...CSGPT_MASKS, ...CSGPT_MASKS_EN];
+allMasks.forEach((mask) => {
   BUILTIN_MASKS.push(BUILTIN_MASK_STORE.add(mask));
 });
-
-if (typeof window != "undefined") {
-  fetch("/masks.json")
-    .then((res) => res.json())
-    .catch((error) => {
-      console.error("[Fetch] failed to fetch masks", error);
-      return {};
-    })
-    .then((masks) => {
-      // 兼容 csgpt / cn / en 多种 key
-      const extra = [
-        ...(masks.csgpt || []),
-        ...(masks.cn || []),
-        ...(masks.en || []),
-      ];
-      extra.forEach((m: BuiltinMask) => {
-        BUILTIN_MASKS.push(BUILTIN_MASK_STORE.add(m));
-      });
-    });
-}
