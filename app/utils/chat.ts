@@ -168,22 +168,10 @@ export function base64Image2Blob(base64Data: string, contentType: string) {
   return new Blob([byteArray], { type: contentType });
 }
 
+// 将文件转为 data URL 直接返回，不依赖服务端文件存储
+// Vercel serverless 各实例间 /tmp 不共享，无法用文件系统中转
 export function uploadImage(file: Blob): Promise<string> {
-  const body = new FormData();
-  body.append("file", file);
-  return fetch("/api/files", {
-    method: "post",
-    body,
-    mode: "cors",
-    credentials: "include",
-  })
-    .then((res) => res.json())
-    .then((res) => {
-      if (res?.code == 0 && res?.data) {
-        return res?.data;
-      }
-      throw Error(`上传失败: ${res?.message}`);
-    });
+  return compressImage(file, 256 * 1024);
 }
 
 export function streamWithThink(
