@@ -98,10 +98,10 @@ declare global {
       ENABLE_MCP?: string; // enable mcp functionality
 
       // CSGPT 专用配置
-      CSGPT_BASE_URL?: string; // CSGPT API 服务地址（CS1 上游）
-      CSGPT_API_KEY?: string; // CSGPT API 密钥
+      CSGPT_CS1_BASE_URL?: string; // CS1 上游服务地址
+      CSGPT_CS1_API_KEY?: string; // CS1 上游 API 密钥
+      CSGPT_CS1_UPSTREAM_MODEL_NAME?: string; // CS1 上游实际模型名称
       CSGPT_MODEL_NAME?: string; // 前端展示的 CSGPT 默认模型名称
-      CSGPT_UPSTREAM_MODEL_NAME?: string; // CS1 上游实际模型名称
       CSGPT_CS2_BASE_URL?: string; // CS2 上游服务地址
       CSGPT_CS2_API_KEY?: string; // CS2 上游 API 密钥
       CSGPT_CS2_UPSTREAM_MODEL_NAME?: string; // CS2 上游实际模型名称
@@ -272,10 +272,10 @@ export const getServerSideConfig = () => {
     ai302ApiKey: getApiKey(process.env.AI302_API_KEY),
 
     // CSGPT 专用配置：API 服务地址、API 密钥、模型名称
-    csgptBaseUrl: process.env.CSGPT_BASE_URL,
-    csgptApiKey: process.env.CSGPT_API_KEY,
+    csgptBaseUrl: process.env.CSGPT_CS1_BASE_URL,
+    csgptApiKey: process.env.CSGPT_CS1_API_KEY,
     csgptModelName,
-    csgptUpstreamModelName: process.env.CSGPT_UPSTREAM_MODEL_NAME,
+    csgptUpstreamModelName: process.env.CSGPT_CS1_UPSTREAM_MODEL_NAME,
     csgptCs2BaseUrl: process.env.CSGPT_CS2_BASE_URL,
     csgptCs2ApiKey: process.env.CSGPT_CS2_API_KEY,
     csgptCs2UpstreamModelName: process.env.CSGPT_CS2_UPSTREAM_MODEL_NAME,

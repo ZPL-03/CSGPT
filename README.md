@@ -34,7 +34,8 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 
 - **前端**：Next.js 14 + TypeScript + Zustand
 - **后端**：Next.js API Routes（SSE 流式代理）
-- **默认模型**：CSGPT-Qwen3-14B（Qwen3-14B 复合材料领域微调模型，通过 vLLM/OpenAI 兼容接口部署）
+- **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域微调模型，通过 vLLM/OpenAI 兼容接口部署）
+- **第二模型**：QWen-14B-CS2（Qwen-14B 辅助模型，独立推理后端）
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 
 ## 快速开始
@@ -68,28 +69,34 @@ npm run dev
 在 `.env.local` 文件中配置以下变量：
 
 ```env
-# 模型 API 地址
-CSGPT_BASE_URL=http://your-server:8000/v1
+# ===== CS1 上游推理服务（必填）=====
+CSGPT_CS1_BASE_URL=http://your-server:8000/v1
+CSGPT_CS1_API_KEY=your-api-key
 
-# API Key
-CSGPT_API_KEY=your-api-key
+# CS1 上游实际模型名称（可选，不填则使用请求中的模型名）
+# CSGPT_CS1_UPSTREAM_MODEL_NAME=
 
-# 前端展示的内置默认模型
-CSGPT_MODEL_NAME=CSGPT-Qwen3-14B
+# ===== CS2 上游推理服务（可选）=====
+# CSGPT_CS2_BASE_URL=http://your-server:8080/v1
+# CSGPT_CS2_API_KEY=your-api-key
+# CSGPT_CS2_UPSTREAM_MODEL_NAME=
 
-# 临时上游实际模型名（可选）
-# 如果当前 CSGPT_BASE_URL 仍指向中转服务，可填写真实上游模型；
-# 正式切回 vLLM Qwen3-14B 后留空即可。
-# CSGPT_UPSTREAM_MODEL_NAME=
+# ===== 前端展示 =====
+CSGPT_MODEL_NAME=QWen3-14B-CS1
 
-# 默认会话模型
-DEFAULT_MODEL=CSGPT-Qwen3-14B@CSGPT
+# ===== 模型配置 =====
+CUSTOM_MODELS=+QWen-14B-CS2@CSGPT
+DEFAULT_MODEL=QWen3-14B-CS1@CSGPT
 
-# 访问控制码（可选）
-ACCESS_CODE=your-access-code
+# ===== 数据库配置（必填）=====
+DATABASE_URL="postgresql://user:password@localhost:5432/csgpt?schema=public"
 
+# ===== JWT 密钥（必填）=====
+JWT_SECRET="your-random-jwt-secret"
+
+# ===== 可选配置 =====
 # 管理员用户名（逗号分隔，可访问 /admin 管理后台）
-ADMIN_USERNAMES=admin
+# ADMIN_USERNAMES=admin
 ```
 
 ## 项目结构
@@ -98,7 +105,7 @@ ADMIN_USERNAMES=admin
 CSGPT/
 ├── app/
 │   ├── api/           # API 路由
-│   │   └── csgpt/     # CSGPT 专用 API
+│   │   └── [provider]/ # 通用 Provider 代理路由
 │   ├── components/    # React 组件
 │   ├── config/        # 配置文件
 │   ├── masks/         # 预设模板
@@ -122,13 +129,13 @@ CSGPT/
     role: "system",
     content: "你的系统提示词",
   }],
-  modelConfig: { model: "CSGPT-Qwen3-14B", providerName: "CSGPT" },
+  modelConfig: { model: "QWen3-14B-CS1", providerName: "CSGPT" },
 }
 ```
 
 ### 自定义模型和接口
 
-设置页开启“自定义接口”后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部测试模型`；选择 CSGPT 默认模型时走内置 CSGPT-Qwen3-14B，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。
+设置页开启"自定义接口"后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部测试模型`；选择 CSGPT 默认模型时走内置模型，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。
 
 ### 验证命令
 

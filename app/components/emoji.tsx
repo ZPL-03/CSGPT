@@ -61,67 +61,90 @@ export function Avatar(props: {
     const modelName = props.model.toLowerCase();
     const providerName = props.providerName?.toLowerCase();
 
-    // 优先根据提供商匹配图标
-    if (providerName === ServiceProvider.Iflytek.toLowerCase()) {
-      LlmIcon = BotIconIflytek;
-    } else if (providerName === ServiceProvider.SiliconFlow.toLowerCase()) {
-      LlmIcon = BotIconSiliconflow;
+    // 第一步：根据 Provider 名称匹配图标（同 Provider 下所有模型使用统一图标）
+    if (providerName === ServiceProvider.CSGPT.toLowerCase()) {
+      LlmIcon = BotIconQwen;
+    } else if (providerName === ServiceProvider.OpenAI.toLowerCase()) {
+      LlmIcon = BotIconOpenAI;
     } else if (providerName === ServiceProvider.Azure.toLowerCase()) {
       LlmIcon = BotIconAzure;
+    } else if (providerName === ServiceProvider.Google.toLowerCase()) {
+      LlmIcon = BotIconGemini;
+    } else if (providerName === ServiceProvider.Anthropic.toLowerCase()) {
+      LlmIcon = BotIconClaude;
+    } else if (providerName === ServiceProvider.Baidu.toLowerCase()) {
+      LlmIcon = BotIconWenxin;
+    } else if (providerName === ServiceProvider.ByteDance.toLowerCase()) {
+      LlmIcon = BotIconDoubao;
+    } else if (providerName === ServiceProvider.Alibaba.toLowerCase()) {
+      LlmIcon = BotIconQwen;
+    } else if (providerName === ServiceProvider.Tencent.toLowerCase()) {
+      LlmIcon = BotIconHunyuan;
+    } else if (providerName === ServiceProvider.Moonshot.toLowerCase()) {
+      LlmIcon = BotIconMoonshot;
+    } else if (providerName === ServiceProvider.Iflytek.toLowerCase()) {
+      LlmIcon = BotIconIflytek;
+    } else if (providerName === ServiceProvider.XAI.toLowerCase()) {
+      LlmIcon = BotIconGrok;
+    } else if (providerName === ServiceProvider.ChatGLM.toLowerCase()) {
+      LlmIcon = BotIconChatglm;
+    } else if (providerName === ServiceProvider.DeepSeek.toLowerCase()) {
+      LlmIcon = BotIconDeepseek;
+    } else if (providerName === ServiceProvider.SiliconFlow.toLowerCase()) {
+      LlmIcon = BotIconSiliconflow;
     } else if (providerName === ServiceProvider["302.AI"].toLowerCase()) {
       LlmIcon = BotIconAI302;
-    } else if (
-      providerName === ServiceProvider.Moonshot.toLowerCase() ||
-      modelName.startsWith("kimi")
-    ) {
-      LlmIcon = BotIconMoonshot;
-    } else if (
-      providerName === ServiceProvider.CSGPT.toLowerCase() ||
-      modelName.startsWith("qwen")
-    ) {
-      LlmIcon = BotIconQwen;
-    } else if (modelName.startsWith("moonshot")) {
-      LlmIcon = BotIconMoonshot;
-    } else if (
-      modelName.startsWith("gpt") ||
-      modelName.startsWith("chatgpt") ||
-      modelName.startsWith("dall-e") ||
-      modelName.startsWith("dalle") ||
-      modelName.startsWith("o1") ||
-      modelName.startsWith("o3")
-    ) {
-      LlmIcon = BotIconOpenAI;
-    } else if (modelName.startsWith("gemini")) {
-      LlmIcon = BotIconGemini;
-    } else if (modelName.startsWith("gemma")) {
-      LlmIcon = BotIconGemma;
-    } else if (modelName.startsWith("claude")) {
-      LlmIcon = BotIconClaude;
-    } else if (modelName.includes("llama")) {
-      LlmIcon = BotIconMeta;
-    } else if (
-      modelName.startsWith("mixtral") ||
-      modelName.startsWith("codestral")
-    ) {
-      LlmIcon = BotIconMistral;
-    } else if (modelName.includes("deepseek")) {
-      LlmIcon = BotIconDeepseek;
-    } else if (modelName.startsWith("qwen")) {
-      LlmIcon = BotIconQwen;
-    } else if (modelName.startsWith("ernie")) {
-      LlmIcon = BotIconWenxin;
-    } else if (modelName.startsWith("grok")) {
-      LlmIcon = BotIconGrok;
-    } else if (modelName.startsWith("hunyuan")) {
-      LlmIcon = BotIconHunyuan;
-    } else if (modelName.startsWith("doubao") || modelName.startsWith("ep-")) {
-      LlmIcon = BotIconDoubao;
-    } else if (
-      modelName.includes("glm") ||
-      modelName.startsWith("cogview-") ||
-      modelName.startsWith("cogvideox-")
-    ) {
-      LlmIcon = BotIconChatglm;
+    } else {
+      // 第二步：无法匹配 Provider 时，根据模型名称回退
+      if (modelName.startsWith("qwen")) {
+        LlmIcon = BotIconQwen;
+      } else if (
+        modelName.startsWith("gpt") ||
+        modelName.startsWith("chatgpt") ||
+        modelName.startsWith("dall-e") ||
+        modelName.startsWith("dalle") ||
+        modelName.startsWith("o1") ||
+        modelName.startsWith("o3")
+      ) {
+        LlmIcon = BotIconOpenAI;
+      } else if (modelName.startsWith("gemini")) {
+        LlmIcon = BotIconGemini;
+      } else if (modelName.startsWith("gemma")) {
+        LlmIcon = BotIconGemma;
+      } else if (modelName.startsWith("claude")) {
+        LlmIcon = BotIconClaude;
+      } else if (modelName.includes("llama")) {
+        LlmIcon = BotIconMeta;
+      } else if (
+        modelName.startsWith("mixtral") ||
+        modelName.startsWith("codestral")
+      ) {
+        LlmIcon = BotIconMistral;
+      } else if (modelName.includes("deepseek")) {
+        LlmIcon = BotIconDeepseek;
+      } else if (modelName.startsWith("ernie")) {
+        LlmIcon = BotIconWenxin;
+      } else if (modelName.startsWith("grok")) {
+        LlmIcon = BotIconGrok;
+      } else if (modelName.startsWith("hunyuan")) {
+        LlmIcon = BotIconHunyuan;
+      } else if (
+        modelName.startsWith("doubao") ||
+        modelName.startsWith("ep-")
+      ) {
+        LlmIcon = BotIconDoubao;
+      } else if (
+        modelName.includes("glm") ||
+        modelName.startsWith("cogview-") ||
+        modelName.startsWith("cogvideox-")
+      ) {
+        LlmIcon = BotIconChatglm;
+      } else if (
+        modelName.startsWith("moonshot") ||
+        modelName.startsWith("kimi")
+      ) {
+        LlmIcon = BotIconMoonshot;
+      }
     }
 
     return (
