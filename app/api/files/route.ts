@@ -8,7 +8,7 @@ import { getUserFromRequest } from "@/app/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 // POST：保存用户上传文件
 export async function POST(request: NextRequest) {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "文件大小不能超过 20MB" },
+        { error: "文件大小不能超过 50MB" },
         { status: 413 },
       );
     }
@@ -45,9 +45,6 @@ export async function POST(request: NextRequest) {
         originalName: true,
         mimeType: true,
         size: true,
-        extractedText: true,
-        extractionMeta: true,
-        extractedAt: true,
       },
     });
 
@@ -81,9 +78,6 @@ export async function GET(request: NextRequest) {
         originalName: true,
         mimeType: true,
         size: true,
-        extractedText: true,
-        extractionMeta: true,
-        extractedAt: true,
         createdAt: true,
       },
     });

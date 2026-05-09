@@ -99,7 +99,6 @@ import {
   ServiceProvider,
   UNFINISHED_INPUT,
 } from "../constant";
-import { useUserStore } from "../store/user";
 import { Avatar } from "./emoji";
 import { ContextPrompts, MaskAvatar, MaskConfig } from "./mask";
 import { useMaskStore } from "../store/mask";
@@ -107,8 +106,10 @@ import { ChatCommandPrefix, useChatCommand, useCommand } from "../command";
 import { prettyObject } from "../utils/format";
 import { ExportMessageModal } from "./exporter";
 import { getClientConfig } from "../config/client";
+import { syncConversationToDB } from "../utils/conversation-sync";
 import { useAllModels } from "../utils/hooks";
 import { ClientApi, MultimodalContent } from "../client/api";
+import { useUserStore } from "../store/user";
 
 import { isEmpty } from "lodash-es";
 import { getModelProvider } from "../utils/model";
@@ -494,9 +495,9 @@ export interface AttachmentInfo {
   progress: number;
   stage?: string;
   error?: string;
+  file?: File;
+  previewUrl?: string;
   extractedText?: string;
-  extractedImages?: string[];
-  extractionMeta?: Record<string, any>;
 }
 
 function createAttachmentId() {
@@ -506,27 +507,18 @@ function createAttachmentId() {
   );
 }
 
-async function saveFileExtractionResult(
-  fileUrl: string,
-  extractedText: string,
-  extractionMeta: Record<string, any>,
-) {
-  const token = useUserStore.getState().token;
-  if (!token) return;
-
-  const response = await fetch(fileUrl, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ extractedText, extractionMeta }),
+function readFileAsDataUrl(file: File, onProgress: (progress: number) => void) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data?.error || data?.message || "保存解析结果失败");
-  }
 }
 
 export function ChatActions(props: {
@@ -633,6 +625,17 @@ export function ChatActions(props: {
     }
   }, [chatStore, currentModel, currentProviderName, models, session]);
 
+  function clearSessionMessages() {
+    chatStore.updateTargetSession(session, (session) => {
+      session.messages = [];
+      session.memoryPrompt = "";
+      session.clearContextIndex = undefined;
+      session.lastSummarizeIndex = 0;
+      session.lastUpdate = Date.now();
+    });
+    syncConversationToDB(chatStore.currentSession());
+  }
+
   return (
     <div className={styles["chat-input-actions"]}>
       <>
@@ -698,14 +701,7 @@ export function ChatActions(props: {
         <ChatAction
           text={Locale.Chat.InputActions.Clear}
           icon={<BreakIcon />}
-          onClick={() => {
-            chatStore.updateTargetSession(session, (session) => {
-              session.messages = [];
-              session.memoryPrompt = "";
-              session.clearContextIndex = undefined;
-              session.lastSummarizeIndex = 0;
-            });
-          }}
+          onClick={clearSessionMessages}
         />
 
         <ChatAction
@@ -1061,56 +1057,53 @@ function _Chat() {
     [],
   );
 
-  const uploadAndParseFile = useCallback(
+  const parseSelectedFile = useCallback(
     async (file: File) => {
       const id = createAttachmentId();
+      const previewUrl = file.type.startsWith("image/")
+        ? URL.createObjectURL(file)
+        : undefined;
       const initialAttachment: AttachmentInfo = {
         id,
         url: "",
         name: file.name || "upload.bin",
         size: file.size,
         type: file.type || "application/octet-stream",
-        status: "uploading",
+        status: "parsing",
         progress: 0,
-        stage: "上传中",
+        stage: "读取文件",
+        file,
+        previewUrl,
       };
 
       setAttachments((current) => current.concat(initialAttachment));
 
       try {
-        const fileUrl = await uploadFileRemote(file, file.name, (progress) => {
+        const dataUrl = await readFileAsDataUrl(file, (progress) => {
           updateAttachment(id, {
-            progress: Math.min(50, Math.round(progress * 0.5)),
-            stage: "上传中",
+            progress: Math.min(20, Math.round(progress * 0.2)),
+            stage: "读取文件",
           });
         });
 
         updateAttachment(id, {
-          url: fileUrl,
           status: "parsing",
-          progress: 55,
+          progress: 20,
           stage: "解析中",
         });
 
         const { extractTextFromFile } = await import(
           "../utils/file-text-extractor"
         );
-        const extraction = await extractTextFromFile(fileUrl, file.name, {
-          includeImages: true,
+        const extraction = await extractTextFromFile(dataUrl, file.name, {
+          includeImages: false,
           ocrImages: true,
           onProgress(progress, stage) {
             updateAttachment(id, {
-              progress: Math.min(98, 50 + Math.round(progress * 0.48)),
+              progress: Math.min(99, 20 + Math.round(progress * 0.79)),
               stage,
             });
           },
-        });
-
-        await saveFileExtractionResult(fileUrl, extraction.text, {
-          ...extraction.metadata,
-          originalName: file.name || "upload.bin",
-          mimeType: file.type || "application/octet-stream",
-          size: file.size,
         });
 
         updateAttachment(id, {
@@ -1118,13 +1111,6 @@ function _Chat() {
           progress: 100,
           stage: "解析完成",
           extractedText: extraction.text,
-          extractedImages: extraction.images,
-          extractionMeta: {
-            ...extraction.metadata,
-            originalName: file.name || "upload.bin",
-            mimeType: file.type || "application/octet-stream",
-            size: file.size,
-          },
         });
       } catch (error) {
         updateAttachment(id, {
@@ -1178,13 +1164,16 @@ function _Chat() {
     newm: () => navigate(Path.NewChat),
     prev: () => chatStore.nextSession(-1),
     next: () => chatStore.nextSession(1),
-    clear: () =>
+    clear: () => {
       chatStore.updateTargetSession(session, (session) => {
         session.messages = [];
         session.memoryPrompt = "";
         session.clearContextIndex = undefined;
         session.lastSummarizeIndex = 0;
-      }),
+        session.lastUpdate = Date.now();
+      });
+      syncConversationToDB(chatStore.currentSession());
+    },
     fork: () => chatStore.forkSession(),
     del: () => chatStore.deleteSession(chatStore.currentSessionIndex),
   });
@@ -1212,7 +1201,7 @@ function _Chat() {
   const doSubmit = (userInput: string) => {
     if (userInput.trim() === "" && isEmpty(attachments)) return;
     if (attachmentProcessing) {
-      showToast("文件仍在上传或解析中");
+      showToast("文件仍在解析中");
       return;
     }
     if (attachmentHasError) {
@@ -1226,13 +1215,83 @@ function _Chat() {
       matchCommand.invoke();
       return;
     }
-    chatStore.onUserInput(userInput, attachments);
-    setAttachments([]);
-    chatStore.setLastInput(userInput);
-    setUserInput("");
-    setPromptHints([]);
-    if (!isMobileScreen) inputRef.current?.focus();
-    setAutoScroll(true);
+    (async () => {
+      const uploadedFileUrls: string[] = [];
+      try {
+        const uploadedAttachments: AttachmentInfo[] = [];
+        for (const att of attachments) {
+          if (!att.file || att.url) {
+            uploadedAttachments.push(att);
+            continue;
+          }
+
+          updateAttachment(att.id, {
+            status: "uploading",
+            progress: 0,
+            stage: "保存原始文件",
+          });
+          const fileUrl = await uploadFileRemote(
+            att.file,
+            att.name,
+            (progress) => {
+              updateAttachment(att.id, {
+                progress,
+                stage: "保存原始文件",
+              });
+            },
+          );
+          uploadedFileUrls.push(fileUrl);
+
+          uploadedAttachments.push({
+            ...att,
+            url: fileUrl,
+            file: undefined,
+            status: "ready",
+            progress: 100,
+            stage: "保存完成",
+          });
+        }
+
+        const modelAttachments = uploadedAttachments.map(
+          ({ file, previewUrl, ...att }) => att,
+        );
+        chatStore.onUserInput(userInput, modelAttachments);
+        uploadedAttachments.forEach((att) => {
+          if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+        });
+        setAttachments([]);
+        chatStore.setLastInput(userInput);
+        setUserInput("");
+        setPromptHints([]);
+        if (!isMobileScreen) inputRef.current?.focus();
+        setAutoScroll(true);
+      } catch (error) {
+        const token = useUserStore.getState().token;
+        await Promise.allSettled(
+          uploadedFileUrls.map((url) =>
+            fetch(url, {
+              method: "DELETE",
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            }),
+          ),
+        );
+        setAttachments((current) =>
+          current.map((att) =>
+            att.status === "uploading"
+              ? {
+                  ...att,
+                  status: "error",
+                  progress: 100,
+                  stage: "文件保存失败",
+                  error:
+                    error instanceof Error ? error.message : "文件保存失败",
+                }
+              : att,
+          ),
+        );
+        showToast(error instanceof Error ? error.message : "文件保存失败");
+      }
+    })();
   };
 
   const onPromptSelect = (prompt: RenderPrompt) => {
@@ -1575,12 +1634,12 @@ function _Chat() {
           event.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            uploadAndParseFile(file);
+            parseSelectedFile(file);
           }
         }
       }
     },
-    [uploadAndParseFile],
+    [parseSelectedFile],
   );
 
   async function selectUploadFiles() {
@@ -1591,7 +1650,7 @@ function _Chat() {
     fileInput.onchange = (event: any) => {
       const files = event.target.files as FileList;
       for (let i = 0; i < files.length; i++) {
-        uploadAndParseFile(files[i]);
+        parseSelectedFile(files[i]);
       }
     };
     fileInput.click();
@@ -1604,10 +1663,10 @@ function _Chat() {
       const files = event.dataTransfer.files;
       if (files.length === 0) return;
       for (let i = 0; i < files.length; i++) {
-        uploadAndParseFile(files[i]);
+        parseSelectedFile(files[i]);
       }
     },
-    [uploadAndParseFile],
+    [parseSelectedFile],
   );
 
   const handleDragOver = useCallback(
@@ -2162,8 +2221,12 @@ function _Chat() {
                               att.status === "error",
                           })}
                           style={
-                            isImage && att.url
-                              ? { backgroundImage: `url("${att.url}")` }
+                            isImage && (att.previewUrl || att.url)
+                              ? {
+                                  backgroundImage: `url("${
+                                    att.previewUrl || att.url
+                                  }")`,
+                                }
                               : undefined
                           }
                         >
@@ -2204,6 +2267,9 @@ function _Chat() {
                           <div className={styles["attachment-mask"]} />
                           <DeleteAttachmentButton
                             deleteAttachment={() => {
+                              if (att.previewUrl) {
+                                URL.revokeObjectURL(att.previewUrl);
+                              }
                               setAttachments(
                                 attachments.filter((_, i) => i !== index),
                               );

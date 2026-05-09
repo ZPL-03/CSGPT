@@ -57,7 +57,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, topic, messages, mask, memoryPrompt, lastUpdate } = body;
+    const {
+      id,
+      topic,
+      messages,
+      mask,
+      memoryPrompt,
+      lastUpdate,
+      lastSummarizeIndex,
+      clearContextIndex,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: "对话 ID 不能为空" }, { status: 400 });
@@ -74,12 +83,22 @@ export async function POST(request: NextRequest) {
           topic: topic || "新的聊天",
           memoryPrompt: memoryPrompt || "",
           lastUpdate: BigInt(lastUpdate || Date.now()),
+          lastSummarizeIndex: Number(lastSummarizeIndex || 0),
+          clearContextIndex:
+            typeof clearContextIndex === "number" ? clearContextIndex : null,
           maskConfig: mask || undefined,
         },
         update: {
           topic: topic || undefined,
-          memoryPrompt: memoryPrompt || undefined,
+          memoryPrompt:
+            typeof memoryPrompt === "string" ? memoryPrompt : undefined,
           lastUpdate: BigInt(lastUpdate || Date.now()),
+          lastSummarizeIndex:
+            typeof lastSummarizeIndex === "number"
+              ? lastSummarizeIndex
+              : undefined,
+          clearContextIndex:
+            typeof clearContextIndex === "number" ? clearContextIndex : null,
           maskConfig: mask || undefined,
         },
       });

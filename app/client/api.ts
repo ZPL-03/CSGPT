@@ -23,16 +23,12 @@ export interface MultimodalContent {
     name?: string;
     size?: number;
     type?: string;
-    extractedText?: string;
-    extractionMeta?: Record<string, any>;
   };
   file_url?: {
     url: string;
     name: string;
     size: number;
     type?: string;
-    extractedText?: string;
-    extractionMeta?: Record<string, any>;
   };
 }
 
@@ -156,18 +152,11 @@ export function getHeaders(
 
   const isEnabledAccessControl = accessStore.enabledAccessControl();
 
-  // 获取当前 Provider 对应的 API Key
-  let apiKey = "";
-  try {
-    const effectiveProviderName =
-      providerName ||
-      useAppConfig.getState().modelConfig.providerName ||
-      ServiceProvider.CSGPT;
-    apiKey = getApiKeyForProvider(accessStore, effectiveProviderName);
-  } catch {
-    // 使用 CSGPT API Key
-    apiKey = accessStore.csgptApiKey || accessStore.openaiApiKey;
-  }
+  const effectiveProviderName =
+    providerName ||
+    useAppConfig.getState().modelConfig.providerName ||
+    ServiceProvider.CSGPT;
+  const apiKey = getApiKeyForProvider(accessStore, effectiveProviderName);
 
   if (apiKey) {
     headers["Authorization"] = getBearerToken(apiKey);

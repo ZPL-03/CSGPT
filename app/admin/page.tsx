@@ -39,9 +39,6 @@ interface FileItem {
   originalName: string;
   mimeType: string;
   size: number;
-  extractedText?: string;
-  extractionMeta?: Record<string, any>;
-  extractedAt?: string;
   createdAt: string;
 }
 
@@ -683,10 +680,10 @@ function FilesTab({
                 <span>{formatSize(file.size)}</span>
                 <span>{file.mimeType}</span>
                 <span>{formatDate(file.createdAt)}</span>
-                <span>{file.extractedAt ? "已解析" : "未解析"}</span>
               </div>
               <div className={styles["admin-file-content"]}>
-                {file.extractedText || "暂无解析内容"}
+                原始文件保存在 UploadedFile.data
+                字段，聊天消息中的文件解析内容保存在 Message.fileContent 字段。
               </div>
             </div>
           ))}

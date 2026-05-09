@@ -75,8 +75,6 @@ export type ChatMessage = RequestMessage & {
   isMcpResponse?: boolean;
   /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
   fileContent?: string;
-  /** 从上传文件（docx/pdf）中提取的内嵌图片 data URL，发送给模型但不显示在 UI 中 */
-  extractedImages?: string[];
 };
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -474,8 +472,6 @@ export const useChatStore = createPersistStore(
           type: string;
           status?: string;
           extractedText?: string;
-          extractedImages?: string[];
-          extractionMeta?: Record<string, any>;
         }>,
         isMcpResponse?: boolean,
         fileContentOverride?: string,
@@ -523,15 +519,14 @@ export const useChatStore = createPersistStore(
           (attachments || [])
             .map((att) =>
               att.extractedText
-                ? `[文件: ${att.name}]\n${att.extractedText}`
+                ? `[${att.type.startsWith("image/") ? "图片" : "文件"}: ${
+                    att.name
+                  }]\n${att.extractedText}`
                 : "",
             )
             .filter(Boolean)
             .join("\n\n") ||
           undefined;
-        const attachmentImages = (attachments || []).flatMap((att) =>
-          att.type.startsWith("image/") ? [] : att.extractedImages || [],
-        );
 
         let userMessage: ChatMessage = createMessage({
           role: "user",
@@ -539,8 +534,6 @@ export const useChatStore = createPersistStore(
           isMcpResponse,
         });
         userMessage.fileContent = attachmentFileContent;
-        userMessage.extractedImages =
-          attachmentImages.length > 0 ? attachmentImages : undefined;
 
         const botMessage: ChatMessage = createMessage({
           role: "assistant",

@@ -42,7 +42,7 @@ function resolveUpstreamCSGPTModel(
 ) {
   const publicDefaultModel = getPublicCSGPTModel(config);
 
-  // CS2 模型使用 Xiaomi 上游
+  // CS2 模型使用独立上游配置
   if (requestedModel && isCS2Model(requestedModel)) {
     return config.csgptCs2UpstreamModelName || requestedModel;
   }
@@ -85,18 +85,14 @@ function normalizeContentToText(content: any) {
         const meta = [image.name || "用户上传图片", formatSize(image.size)]
           .filter(Boolean)
           .join("，");
-        return image.extractedText
-          ? `[图片: ${meta}]\n${image.extractedText}`
-          : `[图片: ${meta}]`;
+        return `[图片: ${meta}]`;
       }
       if (part?.type === "file_url") {
         const file = part.file_url ?? {};
         const meta = [file.name || "用户上传文件", formatSize(file.size)]
           .filter(Boolean)
           .join("，");
-        return file.extractedText
-          ? `[文件: ${meta}]\n${file.extractedText}`
-          : `[文件: ${meta}]`;
+        return `[文件: ${meta}]`;
       }
       return "";
     })
@@ -333,7 +329,7 @@ async function handleModelsRequest(
   }
 }
 
-// CS2 模型：转发到 Xiaomi MiMo API（OpenAI 兼容格式）
+// CS2 模型：转发到 OpenAI 格式接口
 async function handleCS2ChatCompletions(
   config: ReturnType<typeof getServerSideConfig>,
   bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
@@ -514,7 +510,7 @@ async function handleChatCompletions(
   const body = await req.json();
   const { messages, stream = true, model, ...rest } = body;
 
-  // CS2 模型：路由到 Xiaomi API
+  // CS2 模型：路由到独立上游
   if (backend.isCSGPT && model && isCS2Model(model)) {
     return handleCS2ChatCompletions(config, {
       messages,

@@ -204,9 +204,53 @@ async function getOcrWorker() {
   return ocrWorkerPromise;
 }
 
+function loadImage(dataUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
+
+async function prepareImageForOcr(dataUrl: string) {
+  if (typeof document === "undefined") return dataUrl;
+
+  const image = await loadImage(dataUrl);
+  const maxSide = 2200;
+  const scale = Math.min(
+    2,
+    Math.max(1, maxSide / Math.max(image.width, image.height)),
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(image.width * scale);
+  canvas.height = Math.round(image.height * scale);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return dataUrl;
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const gray =
+      imageData.data[i] * 0.299 +
+      imageData.data[i + 1] * 0.587 +
+      imageData.data[i + 2] * 0.114;
+    const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+    imageData.data[i] = contrast;
+    imageData.data[i + 1] = contrast;
+    imageData.data[i + 2] = contrast;
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  return canvas.toDataURL("image/png");
+}
+
 async function recognizeImage(dataUrl: string): Promise<string> {
   const worker = await getOcrWorker();
-  const result = await worker.recognize(dataUrl);
+  const result = await worker.recognize(await prepareImageForOcr(dataUrl));
   return cleanText(result?.data?.text || "");
 }
 
@@ -228,35 +272,21 @@ async function recognizeImages(
   return sections;
 }
 
-async function renderPdfPagesToImages(dataUrl: string): Promise<string[]> {
+async function renderPdfPageToImage(page: any, scale = 1.8): Promise<string> {
   if (typeof document === "undefined") {
-    return [];
+    return "";
   }
 
-  const images: string[] = [];
-  const pdfjsLib = await import("pdfjs-dist");
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
-  }
-
-  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    images.push(canvas.toDataURL("image/jpeg", 0.85));
-  }
-
-  return images;
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL("image/jpeg", 0.9);
 }
 
 function imageMimeFromPath(path: string) {
@@ -409,12 +439,21 @@ async function extractPdf(
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
+  const pagesNeedingOcr: number[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = cleanText(
-      textContent.items.map((item: any) => item.str ?? "").join(" "),
-    );
+    let pageText = "";
+    try {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      pageText = cleanText(
+        textContent.items.map((item: any) => item.str ?? "").join(" "),
+      );
+    } catch {
+      pageText = "";
+    }
+    if (!pageText) {
+      pagesNeedingOcr.push(i);
+    }
     pages.push(
       pageText ? `第 ${i} 页\n${pageText}` : `第 ${i} 页\n未提取到可读文本`,
     );
@@ -424,27 +463,49 @@ async function extractPdf(
     );
   }
 
-  const renderedImages =
-    options.includeImages || options.ocrImages
-      ? await renderPdfPagesToImages(dataUrl)
-      : [];
-  if (renderedImages.length > 0) {
-    options.onProgress(45, "渲染 PDF 页面");
+  const renderedImages: string[] = [];
+  if (options.includeImages) {
+    for (let i = 1; i <= pdf.numPages; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        const image = await renderPdfPageToImage(page);
+        if (image) renderedImages[i - 1] = image;
+      } catch {
+        renderedImages[i - 1] = "";
+      }
+      options.onProgress(
+        35 + Math.round((i / pdf.numPages) * 25),
+        `渲染 PDF 页面 ${i}/${pdf.numPages}`,
+      );
+    }
   }
+
   const textSections = [buildSection("PDF 文本", pages.join("\n\n"))];
-  if (options.ocrImages && renderedImages.length > 0) {
-    textSections.push(
-      ...(await recognizeImages(
-        renderedImages,
-        "PDF 页面",
-        (completed, total) => {
-          options.onProgress(
-            45 + Math.round((completed / total) * 50),
-            `识别 PDF 页面 ${completed}/${total}`,
-          );
-        },
-      )),
-    );
+  let ocrPageCount = 0;
+  if (options.ocrImages && pagesNeedingOcr.length > 0) {
+    const ocrSections: string[] = [];
+    for (let i = 0; i < pagesNeedingOcr.length; i++) {
+      const pageNumber = pagesNeedingOcr[i];
+      try {
+        const page = await pdf.getPage(pageNumber);
+        const image =
+          renderedImages[pageNumber - 1] || (await renderPdfPageToImage(page));
+        const text = image ? await recognizeImage(image) : "";
+        ocrSections.push(
+          text
+            ? `## PDF 页面 ${pageNumber} OCR\n${text}`
+            : `## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`,
+        );
+      } catch {
+        ocrSections.push(`## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`);
+      }
+      ocrPageCount += 1;
+      options.onProgress(
+        60 + Math.round(((i + 1) / pagesNeedingOcr.length) * 35),
+        `识别 PDF 页面 ${i + 1}/${pagesNeedingOcr.length}`,
+      );
+    }
+    textSections.push(...ocrSections);
   }
   options.onProgress(100, "PDF 解析完成");
 
@@ -457,8 +518,8 @@ async function extractPdf(
       parser: "pdf",
       fileName,
       pageCount: pdf.numPages,
-      renderedPageCount: renderedImages.length,
-      ocrPageCount: options.ocrImages ? renderedImages.length : 0,
+      renderedPageCount: renderedImages.filter(Boolean).length,
+      ocrPageCount,
     },
   };
 }

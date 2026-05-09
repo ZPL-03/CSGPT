@@ -8,11 +8,16 @@ let syncTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 同步单个对话到数据库
 export async function syncConversationToDB(session: any) {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+
   const userStore = useUserStore.getState();
-  if (!userStore.isLoggedIn || !userStore.token) return;
+  if (!userStore.isLoggedIn || !userStore.token) return false;
 
   try {
-    await fetch("/api/conversations", {
+    const response = await fetch("/api/conversations", {
       method: "POST",
       cache: "no-store",
       headers: {
@@ -26,10 +31,14 @@ export async function syncConversationToDB(session: any) {
         mask: session.mask,
         memoryPrompt: session.memoryPrompt,
         lastUpdate: session.lastUpdate,
+        lastSummarizeIndex: session.lastSummarizeIndex,
+        clearContextIndex: session.clearContextIndex,
       }),
     });
+    return response.ok;
   } catch (error) {
     console.error("[Sync] Failed to sync conversation:", error);
+    return false;
   }
 }
 
@@ -43,6 +52,11 @@ export function debouncedSyncCurrentSession(session: any) {
 
 // 删除数据库中的对话
 export async function deleteConversationFromDB(sessionId: string) {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+
   const userStore = useUserStore.getState();
   if (!userStore.isLoggedIn || !userStore.token) return;
 

@@ -84,9 +84,6 @@ model UploadedFile {
   mimeType       String
   size           Int
   data           Bytes
-  extractedText  String?
-  extractionMeta Json?
-  extractedAt    DateTime?
   createdAt      DateTime  @default(now())
 
   @@index([userId, createdAt])

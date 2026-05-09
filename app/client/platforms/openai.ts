@@ -293,8 +293,6 @@ export class ChatGPTApi implements LLMApi {
       for (const v of options.messages) {
         // 上传阶段生成的解析文本仅进入模型请求体。
         let fileContent = (v as ChatMessage).fileContent;
-        // 上传阶段生成的图片内容仅进入模型请求体。
-        let extractedImages = (v as ChatMessage).extractedImages ?? [];
 
         const providerContent =
           !isCSGPTProvider && Array.isArray(v.content)
@@ -311,15 +309,6 @@ export class ChatGPTApi implements LLMApi {
         }
         if (!isCSGPTProvider && Array.isArray(content)) {
           content = content.filter((part) => part.type !== "file_url");
-        }
-        if (!isCSGPTProvider && extractedImages.length > 0) {
-          const imageParts: MultimodalContent[] = extractedImages.map(
-            (url) => ({ type: "image_url", image_url: { url } }),
-          );
-          content =
-            typeof content === "string"
-              ? [{ type: "text", text: content }, ...imageParts]
-              : [...content, ...imageParts];
         }
         if (!(isO1OrO3 && v.role === "system"))
           messages.push({ role: v.role, content });
