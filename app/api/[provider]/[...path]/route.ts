@@ -47,7 +47,7 @@ function resolveUpstreamCSGPTModel(
     return config.csgptCs2UpstreamModelName || requestedModel;
   }
 
-  // CS3 模型使用自部署 vLLM 上游
+  // CS3 模型使用独立上游配置
   if (requestedModel && isCS3Model(requestedModel)) {
     return config.csgptCs3UpstreamModelName || requestedModel;
   }
@@ -414,7 +414,7 @@ async function handleCS2ChatCompletions(
   return NextResponse.json(data);
 }
 
-// CS3 模型：转发到自部署 vLLM 后端（OpenAI 兼容格式）
+// CS3 模型：转发到 OpenAI 格式接口
 async function handleCS3ChatCompletions(
   config: ReturnType<typeof getServerSideConfig>,
   bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
@@ -520,7 +520,7 @@ async function handleChatCompletions(
     });
   }
 
-  // CS3 模型：路由到自部署 vLLM 后端
+  // CS3 模型：路由到独立上游
   if (backend.isCSGPT && model && isCS3Model(model)) {
     return handleCS3ChatCompletions(config, {
       messages,
@@ -604,7 +604,7 @@ async function handleChatCompletions(
   }
 
   if (stream && response.body) {
-    // 直接透传 vLLM 的 SSE 流，避免 TransformStream 在 Node.js 环境下导致流阻塞
+    // 直接透传上游 SSE 流，避免 TransformStream 在 Node.js 环境下导致流阻塞
     return new Response(response.body, {
       status: 200,
       headers: {

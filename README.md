@@ -29,14 +29,14 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 ### 技术架构
 
 ```
-用户浏览器 → CSGPT 前端(Next.js) → CSGPT 后端(API Routes) → vLLM 推理服务
+用户浏览器 → CSGPT 前端(Next.js) → CSGPT 后端(API Routes) → OpenAI 兼容推理服务
 ```
 
 - **前端**：Next.js 14 + TypeScript + Zustand
 - **后端**：Next.js API Routes（SSE 流式代理）
-- **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域模型，通过 vLLM/OpenAI 兼容接口部署）
-- **第二模型**：QWen3-14B-CS2（辅助模型，独立推理后端）
-- **第三模型**：QWen3-14B-CS3（`D:\Project\VS_Code\CS_LLM_cpv` 训练产物对应的自部署推理服务）
+- **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域微调模型，通过 OpenAI 兼容接口部署）
+- **第二模型**：QWen3-14B-CS2（Qwen3-14B 复合材料领域微调模型，通过独立 OpenAI 兼容接口部署）
+- **第三模型**：QWen3-14B-CS3（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 - **文件存储**：用户发送消息时将原始文件二进制数据保存到 PostgreSQL
 - **文件解析**：选择附件时在浏览器内解析文本、图片 OCR、DOCX、PDF、XLSX/XLS、ODS、PPTX，界面显示解析进度
