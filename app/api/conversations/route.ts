@@ -9,6 +9,55 @@ import { getUserFromRequest } from "@/app/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function collectFileIdsFromMessageContent(content: any) {
+  const ids = new Set<string>();
+  const collectFromValue = (value: any) => {
+    if (!value) return;
+    if (typeof value === "string") {
+      const matches = value.matchAll(/\/api\/files\/([A-Za-z0-9_-]+)/g);
+      for (const match of matches) ids.add(match[1]);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(collectFromValue);
+      return;
+    }
+    if (typeof value === "object") {
+      Object.values(value).forEach(collectFromValue);
+    }
+  };
+
+  try {
+    collectFromValue(
+      typeof content === "string" ? JSON.parse(content) : content,
+    );
+  } catch {
+    collectFromValue(content);
+  }
+  return Array.from(ids);
+}
+
+async function deleteUnreferencedFiles(
+  tx: any,
+  fileIds: string[],
+  userId: string,
+) {
+  for (const fileId of fileIds) {
+    const referencedMessage = await tx.message.findFirst({
+      where: {
+        content: { contains: `/api/files/${fileId}` },
+        conversation: { userId },
+      },
+      select: { id: true },
+    });
+    if (!referencedMessage) {
+      await tx.uploadedFile.deleteMany({
+        where: { id: fileId, userId },
+      });
+    }
+  }
+}
+
 // 获取用户所有对话
 export async function GET(request: NextRequest) {
   try {
@@ -72,6 +121,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "对话 ID 不能为空" }, { status: 400 });
     }
 
+    const existingConversation = await prisma.conversation.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+    if (existingConversation && existingConversation.userId !== userId) {
+      return NextResponse.json({ error: "对话不存在" }, { status: 404 });
+    }
+
     // 使用事务保存对话和消息
     const conversation = await prisma.$transaction(async (tx: any) => {
       // 创建或更新对话
@@ -103,8 +160,29 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 如果有消息，先删除旧消息再插入新消息
+      // 如果有消息数组，按前端当前消息列表保存数据库消息。
       if (messages && Array.isArray(messages)) {
+        const existingMessages: Array<{ content: string }> =
+          await tx.message.findMany({
+            where: { conversationId: id },
+            select: { content: true },
+          });
+        const previousFileIds = Array.from(
+          new Set(
+            existingMessages.flatMap((message) =>
+              collectFileIdsFromMessageContent(message.content),
+            ),
+          ),
+        );
+        const currentFileIds = new Set(
+          messages.flatMap((msg: Record<string, any>) =>
+            collectFileIdsFromMessageContent(msg.content),
+          ),
+        );
+        const detachedFileIds = previousFileIds.filter(
+          (fileId) => !currentFileIds.has(fileId),
+        );
+
         await tx.message.deleteMany({
           where: { conversationId: id },
         });
@@ -126,6 +204,10 @@ export async function POST(request: NextRequest) {
               fileContent: msg.fileContent || null,
             })),
           });
+        }
+
+        if (detachedFileIds.length > 0) {
+          await deleteUnreferencedFiles(tx, detachedFileIds, userId);
         }
       }
 

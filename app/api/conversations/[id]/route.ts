@@ -46,6 +46,27 @@ function collectFileIdsFromMessageContent(content: string) {
   return Array.from(ids);
 }
 
+async function deleteUnreferencedFiles(
+  tx: any,
+  fileIds: string[],
+  userId: string,
+) {
+  for (const fileId of fileIds) {
+    const referencedMessage = await tx.message.findFirst({
+      where: {
+        content: { contains: `/api/files/${fileId}` },
+        conversation: { userId },
+      },
+      select: { id: true },
+    });
+    if (!referencedMessage) {
+      await tx.uploadedFile.deleteMany({
+        where: { id: fileId, userId },
+      });
+    }
+  }
+}
+
 // 获取对话详情
 export async function GET(
   request: NextRequest,
@@ -142,9 +163,7 @@ export async function DELETE(
         where: { id: params.id },
       });
       if (fileIds.length > 0) {
-        await tx.uploadedFile.deleteMany({
-          where: { id: { in: fileIds }, userId },
-        });
+        await deleteUnreferencedFiles(tx, fileIds, userId);
       }
     });
 
