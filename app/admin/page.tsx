@@ -51,7 +51,9 @@ interface Stats {
   files: number;
   fileList: FileItem[];
   dbSize: string;
+  tableSize: string;
   dataSize: string;
+  dataBytes: number;
 }
 
 type TabKey = "overview" | "users" | "conversations" | "files";
@@ -288,8 +290,13 @@ export default function AdminPage() {
       if (expandedConvId === id) {
         setExpandedConvId(null);
         setConvMessages([]);
+      } else if (type === "user") {
+        setExpandedConvId(null);
+        setConvMessages([]);
+      } else if (type === "file" && expandedConvId) {
+        fetchConvMessages(expandedConvId);
       }
-      refreshStats();
+      await refreshStats();
     } catch {
       setErrorMsg("网络错误");
     }
@@ -483,12 +490,25 @@ export default function AdminPage() {
 // 概览标签页
 function OverviewTab({ stats }: { stats: Stats | null }) {
   const cards = [
-    { label: "注册用户", value: stats?.users },
-    { label: "对话总数", value: stats?.conversations },
-    { label: "消息总数", value: stats?.messages },
-    { label: "文件记录", value: stats?.files },
-    { label: "数据库", value: stats?.dbSize },
-    { label: "数据", value: stats?.dataSize },
+    { label: "注册用户", value: stats?.users, desc: "当前用户表记录数" },
+    { label: "对话总数", value: stats?.conversations, desc: "当前对话记录数" },
+    { label: "消息总数", value: stats?.messages, desc: "当前消息记录数" },
+    { label: "文件记录", value: stats?.files, desc: "当前附件记录数" },
+    {
+      label: "数据库占用",
+      value: stats?.dbSize,
+      desc: "PostgreSQL 当前数据库物理占用",
+    },
+    {
+      label: "表存储",
+      value: stats?.tableSize,
+      desc: "应用表、索引和 TOAST 存储占用",
+    },
+    {
+      label: "当前内容",
+      value: stats?.dataSize,
+      desc: "当前文件二进制与消息文本合计",
+    },
   ];
 
   return (
@@ -500,6 +520,7 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
             <div className={styles["admin-stat-value"]}>
               {stats ? c.value ?? "-" : "..."}
             </div>
+            <div className={styles["admin-stat-desc"]}>{c.desc}</div>
           </div>
         ))}
       </div>

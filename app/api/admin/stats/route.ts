@@ -54,6 +54,16 @@ function jsonNoStore(data: any, init?: ResponseInit) {
   return response;
 }
 
+function formatBytes(bytes: number) {
+  if (!bytes || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
 function collectFileIdsFromMessageContent(content: string) {
   const ids = new Set<string>();
   const collectFromValue = (value: any) => {
@@ -80,8 +90,11 @@ function collectFileIdsFromMessageContent(content: string) {
   return Array.from(ids);
 }
 
-async function deleteFilesReferencedByConversation(conversationId: string) {
-  const messages = await prisma.message.findMany({
+async function deleteFilesReferencedByConversation(
+  tx: any,
+  conversationId: string,
+) {
+  const messages: Array<{ content: string }> = await tx.message.findMany({
     where: { conversationId },
     select: { content: true },
   });
@@ -93,7 +106,7 @@ async function deleteFilesReferencedByConversation(conversationId: string) {
     ),
   );
   if (fileIds.length === 0) return;
-  await prisma.uploadedFile.deleteMany({ where: { id: { in: fileIds } } });
+  await tx.uploadedFile.deleteMany({ where: { id: { in: fileIds } } });
 }
 
 export async function GET(req: NextRequest) {
@@ -166,6 +179,8 @@ export async function GET(req: NextRequest) {
       users,
       conversations,
       files,
+      fileSizeResult,
+      messageSizeResult,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.conversation.count(),
@@ -202,15 +217,37 @@ export async function GET(req: NextRequest) {
           user: { select: { username: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 100,
       }),
+      prisma.uploadedFile.aggregate({ _sum: { size: true } }),
+      prisma.$queryRawUnsafe<{ message_bytes: bigint | number | null }[]>(
+        `SELECT COALESCE(SUM(octet_length("content") + octet_length(COALESCE("fileContent", ''))), 0) AS message_bytes FROM "Message"`,
+      ),
     ]);
 
     const dbSizeResult = await prisma.$queryRawUnsafe<
-      { db_size: string; data_size: string }[]
+      { db_size: string; table_size: string }[]
     >(
-      `SELECT pg_size_pretty(pg_database_size('neondb')) as db_size, pg_size_pretty(pg_total_relation_size('"User"') + pg_total_relation_size('"Conversation"') + pg_total_relation_size('"Message"') + pg_total_relation_size('"AuthToken"') + pg_total_relation_size('"UploadedFile"')) as data_size`,
+      `WITH app_tables(name) AS (
+        VALUES ('"User"'), ('"Conversation"'), ('"Message"'), ('"AuthToken"'), ('"UploadedFile"')
+      )
+      SELECT
+        pg_size_pretty(pg_database_size(current_database())) AS db_size,
+        pg_size_pretty(
+          COALESCE(
+            SUM(
+              CASE
+                WHEN to_regclass('public.' || name) IS NULL THEN 0
+                ELSE pg_total_relation_size(to_regclass('public.' || name))
+              END
+            ),
+            0
+          )
+        ) AS table_size
+      FROM app_tables`,
     );
+    const currentDataBytes =
+      Number(fileSizeResult._sum.size || 0) +
+      Number(messageSizeResult[0]?.message_bytes || 0);
 
     return jsonNoStore({
       users: Number(userCount),
@@ -241,7 +278,9 @@ export async function GET(req: NextRequest) {
         createdAt: file.createdAt,
       })),
       dbSize: dbSizeResult[0]?.db_size || "N/A",
-      dataSize: dbSizeResult[0]?.data_size || "N/A",
+      tableSize: dbSizeResult[0]?.table_size || "N/A",
+      dataSize: formatBytes(currentDataBytes),
+      dataBytes: currentDataBytes,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -293,8 +332,18 @@ export async function DELETE(req: NextRequest) {
       if (!targetId) {
         return NextResponse.json({ error: "缺少对话 ID" }, { status: 400 });
       }
-      await deleteFilesReferencedByConversation(targetId);
-      await prisma.conversation.delete({ where: { id: targetId } });
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: targetId },
+        select: { id: true },
+      });
+      if (!conversation) {
+        return NextResponse.json({ error: "对话不存在" }, { status: 404 });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await deleteFilesReferencedByConversation(tx, targetId);
+        await tx.conversation.delete({ where: { id: targetId } });
+      });
       return NextResponse.json({ success: true, message: "已删除对话" });
     }
 

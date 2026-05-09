@@ -6,7 +6,6 @@
 const TEXT_EXTENSIONS = new Set([
   "txt",
   "md",
-  "csv",
   "json",
   "xml",
   "yaml",
@@ -66,7 +65,14 @@ const IMAGE_EXTENSIONS = new Set([
   "tiff",
 ]);
 
-const SPREADSHEET_EXTENSIONS = new Set(["xlsx", "xls", "ods"]);
+const SPREADSHEET_EXTENSIONS = new Set([
+  "csv",
+  "tsv",
+  "xlsx",
+  "xls",
+  "xlsm",
+  "ods",
+]);
 const PRESENTATION_EXTENSIONS = new Set(["pptx"]);
 
 export interface FileExtractionResult {
@@ -519,12 +525,18 @@ async function extractSpreadsheet(
 ) {
   options?.onProgress(20, "解析表格");
   const XLSX = await import("xlsx");
+  const ext = getExtension(fileName);
+  const isDelimitedText = ext === "csv" || ext === "tsv";
   const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-  const workbook = XLSX.read(arrayBuffer, {
-    type: "array",
-    cellDates: true,
-    cellFormula: true,
-  });
+  const workbook = XLSX.read(
+    isDelimitedText ? dataUrlToText(dataUrl) : arrayBuffer,
+    {
+      type: isDelimitedText ? "string" : "array",
+      cellDates: true,
+      cellFormula: true,
+      FS: ext === "tsv" ? "\t" : undefined,
+    },
+  );
 
   const sheetSections: string[] = [];
   const formulaSections: string[] = [];
@@ -591,7 +603,7 @@ async function extractSpreadsheet(
     text: text || `[文件: ${fileName}，未提取到可读文本]`,
     images: options?.includeImages ? images : [],
     metadata: {
-      parser: "spreadsheet",
+      parser: isDelimitedText ? ext : "spreadsheet",
       fileName,
       sheetCount: workbook.SheetNames.length,
       sheets: workbook.SheetNames,

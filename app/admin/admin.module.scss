@@ -299,6 +299,14 @@
   font-weight: 700;
 }
 
+.admin-stat-desc {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--black);
+  opacity: 0.5;
+}
+
 // 双栏布局
 .admin-grid-2 {
   display: grid;
