@@ -97,7 +97,7 @@ const cn = {
       Masks: "所有面具",
       Clear: "清除聊天",
       Settings: "对话设置",
-      UploadImage: "上传文件",
+      UploadImage: "添加文件",
     },
     Rename: "重命名对话",
     Typing: "正在输入…",

@@ -20,6 +20,32 @@ function parseMessageContent(content: string): string | any[] {
   return content;
 }
 
+function collectFileIdsFromMessageContent(content: string) {
+  const ids = new Set<string>();
+  const collectFromValue = (value: any) => {
+    if (!value) return;
+    if (typeof value === "string") {
+      const matches = value.matchAll(/\/api\/files\/([A-Za-z0-9_-]+)/g);
+      for (const match of matches) ids.add(match[1]);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(collectFromValue);
+      return;
+    }
+    if (typeof value === "object") {
+      Object.values(value).forEach(collectFromValue);
+    }
+  };
+
+  try {
+    collectFromValue(JSON.parse(content));
+  } catch {
+    collectFromValue(content);
+  }
+  return Array.from(ids);
+}
+
 // 获取对话详情
 export async function GET(
   request: NextRequest,
@@ -92,14 +118,34 @@ export async function DELETE(
     // 确保只能删除自己的对话
     const conversation = await prisma.conversation.findFirst({
       where: { id: params.id, userId },
+      include: {
+        messages: {
+          select: { content: true },
+        },
+      },
     });
 
     if (!conversation) {
       return NextResponse.json({ error: "对话不存在" }, { status: 404 });
     }
 
-    await prisma.conversation.delete({
-      where: { id: params.id },
+    const fileIds = Array.from(
+      new Set(
+        conversation.messages.flatMap((message) =>
+          collectFileIdsFromMessageContent(message.content),
+        ),
+      ),
+    );
+
+    await prisma.$transaction(async (tx) => {
+      await tx.conversation.delete({
+        where: { id: params.id },
+      });
+      if (fileIds.length > 0) {
+        await tx.uploadedFile.deleteMany({
+          where: { id: { in: fileIds }, userId },
+        });
+      }
     });
 
     return NextResponse.json({ success: true });

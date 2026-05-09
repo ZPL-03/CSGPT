@@ -160,7 +160,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [deleteConfirm, setDeleteConfirm] = useState<{
-    type: "user" | "conversation";
+    type: "user" | "conversation" | "file";
     id: string;
     name: string;
   } | null>(null);
@@ -179,6 +179,7 @@ export default function AdminPage() {
     setErrorMsg("");
     try {
       const res = await fetch("/api/admin/stats", {
+        cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -221,6 +222,7 @@ export default function AdminPage() {
     setErrorMsg("");
     try {
       const res = await fetch("/api/admin/stats", {
+        cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -239,6 +241,7 @@ export default function AdminPage() {
     setLoadingMessages(true);
     try {
       const res = await fetch(`/api/admin/stats?id=${convId}`, {
+        cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -265,7 +268,10 @@ export default function AdminPage() {
     }
   }
 
-  async function handleDelete(type: "user" | "conversation", id: string) {
+  async function handleDelete(
+    type: "user" | "conversation" | "file",
+    id: string,
+  ) {
     const token = useUserStore.getState().token;
     setErrorMsg("");
     try {
@@ -366,7 +372,9 @@ export default function AdminPage() {
             <p className={styles["admin-modal-body"]}>
               {deleteConfirm.type === "user"
                 ? `确定要删除用户「${deleteConfirm.name}」及其所有数据吗？此操作不可撤销。`
-                : `确定要删除对话「${deleteConfirm.name}」吗？此操作不可撤销。`}
+                : deleteConfirm.type === "conversation"
+                ? `确定要删除对话「${deleteConfirm.name}」吗？此操作不可撤销。`
+                : `确定要删除文件「${deleteConfirm.name}」吗？此操作不可撤销。`}
             </p>
             <div className={styles["admin-modal-actions"]}>
               <button
@@ -455,7 +463,17 @@ export default function AdminPage() {
           />
         )}
         {activeTab === "files" && (
-          <FilesTab stats={stats} onRefresh={refreshStats} />
+          <FilesTab
+            stats={stats}
+            onDelete={(file) =>
+              setDeleteConfirm({
+                type: "file",
+                id: file.id,
+                name: file.originalName,
+              })
+            }
+            onRefresh={refreshStats}
+          />
         )}
       </div>
     </div>
@@ -468,7 +486,7 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
     { label: "注册用户", value: stats?.users },
     { label: "对话总数", value: stats?.conversations },
     { label: "消息总数", value: stats?.messages },
-    { label: "上传文件", value: stats?.files },
+    { label: "文件记录", value: stats?.files },
     { label: "数据库", value: stats?.dbSize },
     { label: "数据", value: stats?.dataSize },
   ];
@@ -655,15 +673,17 @@ function UsersTab({
 // 文件管理标签页
 function FilesTab({
   stats,
+  onDelete,
   onRefresh,
 }: {
   stats: Stats | null;
+  onDelete: (file: FileItem) => void;
   onRefresh: () => void;
 }) {
   return (
     <div className={styles["admin-card"]}>
       <div className={styles["admin-card-header"]}>
-        <h3 className={styles["admin-card-title"]}>上传文件</h3>
+        <h3 className={styles["admin-card-title"]}>文件记录</h3>
         <button onClick={onRefresh} className={styles["admin-btn-sm"]}>
           刷新
         </button>
@@ -681,15 +701,34 @@ function FilesTab({
                 <span>{file.mimeType}</span>
                 <span>{formatDate(file.createdAt)}</span>
               </div>
-              <div className={styles["admin-file-content"]}>
-                原始文件保存在 UploadedFile.data
-                字段，聊天消息中的文件解析内容保存在 Message.fileContent 字段。
+              <div className={styles["admin-file-actions"]}>
+                <a
+                  href={`/api/files/${file.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles["admin-link-btn"]}
+                >
+                  打开
+                </a>
+                <a
+                  href={`/api/files/${file.id}`}
+                  download={file.originalName}
+                  className={styles["admin-link-btn"]}
+                >
+                  下载
+                </a>
+                <button
+                  onClick={() => onDelete(file)}
+                  className={styles["admin-delete-btn"]}
+                >
+                  删除
+                </button>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className={styles["admin-empty"]}>暂无上传文件</p>
+        <p className={styles["admin-empty"]}>暂无文件记录</p>
       )}
     </div>
   );

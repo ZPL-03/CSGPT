@@ -3,6 +3,7 @@
 // GET  /api/admin/stats?id=xxx — 查看指定对话的消息列表
 // DELETE /api/admin/stats?type=user&id=xxx — 删除用户
 // DELETE /api/admin/stats?type=conversation&id=xxx — 删除对话
+// DELETE /api/admin/stats?type=file&id=xxx — 删除文件
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
@@ -42,6 +43,59 @@ async function requireAdmin(req: NextRequest): Promise<boolean> {
   return isAdmin(username);
 }
 
+function jsonNoStore(data: any, init?: ResponseInit) {
+  const response = NextResponse.json(data, init);
+  response.headers.set(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate",
+  );
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  return response;
+}
+
+function collectFileIdsFromMessageContent(content: string) {
+  const ids = new Set<string>();
+  const collectFromValue = (value: any) => {
+    if (!value) return;
+    if (typeof value === "string") {
+      const matches = value.matchAll(/\/api\/files\/([A-Za-z0-9_-]+)/g);
+      for (const match of matches) ids.add(match[1]);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(collectFromValue);
+      return;
+    }
+    if (typeof value === "object") {
+      Object.values(value).forEach(collectFromValue);
+    }
+  };
+
+  try {
+    collectFromValue(JSON.parse(content));
+  } catch {
+    collectFromValue(content);
+  }
+  return Array.from(ids);
+}
+
+async function deleteFilesReferencedByConversation(conversationId: string) {
+  const messages = await prisma.message.findMany({
+    where: { conversationId },
+    select: { content: true },
+  });
+  const fileIds = Array.from(
+    new Set(
+      messages.flatMap((message) =>
+        collectFileIdsFromMessageContent(message.content),
+      ),
+    ),
+  );
+  if (fileIds.length === 0) return;
+  await prisma.uploadedFile.deleteMany({ where: { id: { in: fileIds } } });
+}
+
 export async function GET(req: NextRequest) {
   if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "未授权访问" }, { status: 401 });
@@ -79,7 +133,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "对话不存在" }, { status: 404 });
       }
 
-      return NextResponse.json({
+      return jsonNoStore({
         id: conversation.id,
         topic: conversation.topic,
         userId: conversation.userId,
@@ -158,7 +212,7 @@ export async function GET(req: NextRequest) {
       `SELECT pg_size_pretty(pg_database_size('neondb')) as db_size, pg_size_pretty(pg_total_relation_size('"User"') + pg_total_relation_size('"Conversation"') + pg_total_relation_size('"Message"') + pg_total_relation_size('"AuthToken"') + pg_total_relation_size('"UploadedFile"')) as data_size`,
     );
 
-    return NextResponse.json({
+    return jsonNoStore({
       users: Number(userCount),
       userList: users.map((u) => ({
         id: u.id,
@@ -239,12 +293,28 @@ export async function DELETE(req: NextRequest) {
       if (!targetId) {
         return NextResponse.json({ error: "缺少对话 ID" }, { status: 400 });
       }
+      await deleteFilesReferencedByConversation(targetId);
       await prisma.conversation.delete({ where: { id: targetId } });
       return NextResponse.json({ success: true, message: "已删除对话" });
     }
 
+    if (type === "file") {
+      if (!targetId) {
+        return NextResponse.json({ error: "缺少文件 ID" }, { status: 400 });
+      }
+      const file = await prisma.uploadedFile.findUnique({
+        where: { id: targetId },
+        select: { id: true },
+      });
+      if (!file) {
+        return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+      }
+      await prisma.uploadedFile.delete({ where: { id: targetId } });
+      return NextResponse.json({ success: true, message: "已删除文件" });
+    }
+
     return NextResponse.json(
-      { error: "无效的删除类型，支持 user 或 conversation" },
+      { error: "无效的删除类型，支持 user、conversation 或 file" },
       { status: 400 },
     );
   } catch (error: any) {

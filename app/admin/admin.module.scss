@@ -401,16 +401,25 @@
   opacity: 1;
 }
 
-.admin-file-content {
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 8px;
-  border-radius: 6px;
+.admin-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-link-btn {
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: var(--border-in-light);
+  font-size: 11px;
+  text-decoration: none;
+  color: var(--black);
   background: var(--second);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
+
+  &:hover {
+    background: var(--white);
+  }
 }
 
 // 删除按钮

@@ -197,9 +197,15 @@ async function getOcrWorker() {
     throw new Error("OCR 需要浏览器环境");
   }
   if (!ocrWorkerPromise) {
-    ocrWorkerPromise = import("tesseract.js").then(({ createWorker }) =>
-      createWorker("chi_sim+eng"),
-    );
+    ocrWorkerPromise = import("tesseract.js").then(async ({ createWorker }) => {
+      const worker = await createWorker("chi_sim+eng");
+      await worker
+        .setParameters({
+          preserve_interword_spaces: "1",
+        })
+        .catch(() => {});
+      return worker;
+    });
   }
   return ocrWorkerPromise;
 }
@@ -217,9 +223,9 @@ async function prepareImageForOcr(dataUrl: string) {
   if (typeof document === "undefined") return dataUrl;
 
   const image = await loadImage(dataUrl);
-  const maxSide = 2200;
+  const maxSide = 2600;
   const scale = Math.min(
-    2,
+    2.5,
     Math.max(1, maxSide / Math.max(image.width, image.height)),
   );
   const canvas = document.createElement("canvas");
@@ -272,7 +278,7 @@ async function recognizeImages(
   return sections;
 }
 
-async function renderPdfPageToImage(page: any, scale = 1.8): Promise<string> {
+async function renderPdfPageToImage(page: any, scale = 2.2): Promise<string> {
   if (typeof document === "undefined") {
     return "";
   }
@@ -287,6 +293,70 @@ async function renderPdfPageToImage(page: any, scale = 1.8): Promise<string> {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
   return canvas.toDataURL("image/jpeg", 0.9);
+}
+
+function extractStructuredPdfText(textContent: any) {
+  const items = (textContent.items || [])
+    .map((item: any) => {
+      const text = String(item.str ?? "").trim();
+      if (!text) return null;
+      const transform = item.transform || [];
+      return {
+        text,
+        x: Number(transform[4] || 0),
+        y: Number(transform[5] || 0),
+        width: Number(item.width || 0),
+      };
+    })
+    .filter(Boolean) as Array<{
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+  }>;
+
+  if (items.length === 0) return "";
+
+  items.sort((a, b) => b.y - a.y || a.x - b.x);
+  const lines: Array<typeof items> = [];
+  const lineTolerance = 3;
+
+  for (const item of items) {
+    const line = lines.find(
+      (current) => Math.abs(current[0].y - item.y) <= lineTolerance,
+    );
+    if (line) {
+      line.push(item);
+    } else {
+      lines.push([item]);
+    }
+  }
+
+  const text = lines
+    .map((line) =>
+      line
+        .sort((a, b) => a.x - b.x)
+        .map((item, index, sorted) => {
+          if (index === 0) return item.text;
+          const previous = sorted[index - 1];
+          const gap = item.x - (previous.x + previous.width);
+          return `${gap > 12 ? "\t" : " "}${item.text}`;
+        })
+        .join(""),
+    )
+    .join("\n");
+
+  return cleanText(text);
+}
+
+function shouldOcrPdfPage(pageText: string) {
+  const text = cleanText(pageText);
+  if (!text) return true;
+  const readableChars = Array.from(text).filter((char) =>
+    /[\p{Script=Han}A-Za-z0-9]/u.test(char),
+  ).length;
+  if (readableChars < 30) return true;
+  return readableChars / Math.max(text.length, 1) < 0.35;
 }
 
 function imageMimeFromPath(path: string) {
@@ -445,13 +515,11 @@ async function extractPdf(
     try {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      pageText = cleanText(
-        textContent.items.map((item: any) => item.str ?? "").join(" "),
-      );
+      pageText = extractStructuredPdfText(textContent);
     } catch {
       pageText = "";
     }
-    if (!pageText) {
+    if (shouldOcrPdfPage(pageText)) {
       pagesNeedingOcr.push(i);
     }
     pages.push(

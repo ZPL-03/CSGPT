@@ -484,6 +484,7 @@ function useScrollToBottom(
 }
 
 type AttachmentStatus = "uploading" | "parsing" | "ready" | "error";
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 
 export interface AttachmentInfo {
   id: string;
@@ -519,6 +520,13 @@ function readFileAsDataUrl(file: File, onProgress: (progress: number) => void) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function getAttachmentProcessError(error: unknown) {
+  if (error instanceof Error && /50\s*MB/i.test(error.message)) {
+    return "附件超过 50MB";
+  }
+  return "解析结果处理失败";
 }
 
 export function ChatActions(props: {
@@ -1063,20 +1071,26 @@ function _Chat() {
       const previewUrl = file.type.startsWith("image/")
         ? URL.createObjectURL(file)
         : undefined;
+      const overSizeLimit = file.size > MAX_ATTACHMENT_SIZE;
       const initialAttachment: AttachmentInfo = {
         id,
         url: "",
         name: file.name || "upload.bin",
         size: file.size,
         type: file.type || "application/octet-stream",
-        status: "parsing",
-        progress: 0,
-        stage: "读取文件",
+        status: overSizeLimit ? "error" : "parsing",
+        progress: overSizeLimit ? 100 : 0,
+        stage: overSizeLimit ? "解析失败" : "读取文件",
+        error: overSizeLimit ? "附件超过 50MB" : undefined,
         file,
         previewUrl,
       };
 
       setAttachments((current) => current.concat(initialAttachment));
+      if (overSizeLimit) {
+        showToast("附件超过 50MB");
+        return;
+      }
 
       try {
         const dataUrl = await readFileAsDataUrl(file, (progress) => {
@@ -1228,7 +1242,7 @@ function _Chat() {
           updateAttachment(att.id, {
             status: "uploading",
             progress: 0,
-            stage: "保存原始文件",
+            stage: "解析结果处理中",
           });
           const fileUrl = await uploadFileRemote(
             att.file,
@@ -1236,7 +1250,7 @@ function _Chat() {
             (progress) => {
               updateAttachment(att.id, {
                 progress,
-                stage: "保存原始文件",
+                stage: "解析结果处理中",
               });
             },
           );
@@ -1248,7 +1262,7 @@ function _Chat() {
             file: undefined,
             status: "ready",
             progress: 100,
-            stage: "保存完成",
+            stage: "解析完成",
           });
         }
 
@@ -1275,6 +1289,7 @@ function _Chat() {
             }),
           ),
         );
+        const errorMessage = getAttachmentProcessError(error);
         setAttachments((current) =>
           current.map((att) =>
             att.status === "uploading"
@@ -1282,14 +1297,13 @@ function _Chat() {
                   ...att,
                   status: "error",
                   progress: 100,
-                  stage: "文件保存失败",
-                  error:
-                    error instanceof Error ? error.message : "文件保存失败",
+                  stage: "解析失败",
+                  error: errorMessage,
                 }
               : att,
           ),
         );
-        showToast(error instanceof Error ? error.message : "文件保存失败");
+        showToast(errorMessage);
       }
     })();
   };
