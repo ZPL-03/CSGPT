@@ -5,8 +5,7 @@ import styles from "./home.module.scss";
 import { IconButton } from "./button";
 import SettingsIcon from "../icons/settings.svg";
 import GithubIcon from "../icons/github.svg";
-// CSGPT 使用自定义 Logo
-import ChatGptIcon from "../icons/logo.svg";
+import { BrandLogo } from "./brand-logo";
 import AddIcon from "../icons/add.svg";
 import DeleteIcon from "../icons/delete.svg";
 import MaskIcon from "../icons/mask.svg";
@@ -239,7 +238,6 @@ export function SideBar(props: { className?: string }) {
     const checkMcpStatus = async () => {
       const enabled = await isMcpEnabled();
       setMcpEnabled(enabled);
-      console.log("[SideBar] MCP enabled:", enabled);
     };
     checkMcpStatus();
   }, []);
@@ -253,7 +251,7 @@ export function SideBar(props: { className?: string }) {
       <SideBarHeader
         title="CSGPT"
         subTitle={Locale.Auth.SubTitle}
-        logo={<ChatGptIcon />}
+        logo={<BrandLogo size={44} />}
         shouldNarrow={shouldNarrow}
       >
         <div className={styles["sidebar-header-bar"]}>

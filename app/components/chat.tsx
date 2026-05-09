@@ -1318,7 +1318,6 @@ function _Chat() {
 
       // auto sync mask config from global config
       if (session.mask.syncGlobalConfig) {
-        console.log("[Mask] syncing from global, name = ", session.mask.name);
         session.mask.modelConfig = { ...config.modelConfig };
       }
     });
@@ -1545,7 +1544,6 @@ function _Chat() {
     },
     code: (text) => {
       if (accessStore.disableFastLink) return;
-      console.log("[Command] got code from url: ", text);
       showConfirm(Locale.URLCommand.Code + `code = ${text}`).then((res) => {
         if (res) {
           accessStore.update((access) => (access.accessCode = text));
@@ -1560,8 +1558,6 @@ function _Chat() {
           key?: string;
           url?: string;
         };
-
-        console.log("[Command] got settings from url: ", payload);
 
         if (payload.key || payload.url) {
           showConfirm(
@@ -2113,12 +2109,6 @@ function _Chat() {
                             </div>
                           )}
                         </div>
-                        {message?.audio_url && (
-                          <div className={styles["chat-message-audio"]}>
-                            <audio src={message.audio_url} controls />
-                          </div>
-                        )}
-
                         <div className={styles["chat-message-action-date"]}>
                           {isContext
                             ? Locale.Chat.IsContext

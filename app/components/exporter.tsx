@@ -21,10 +21,10 @@ import {
 
 import CopyIcon from "../icons/copy.svg";
 import LoadingIcon from "../icons/three-dots.svg";
-import ChatGptIcon from "../icons/bot.svg";
 import ShareIcon from "../icons/share.svg";
 
 import DownloadIcon from "../icons/download.svg";
+import { BrandLogo } from "./brand-logo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSelector, useMessageSelector } from "./message-selector";
 import { Avatar } from "./emoji";
@@ -495,7 +495,8 @@ export function ImagePreviewer(props: {
   const refreshPreview = () => {
     const dom = previewRef.current;
     if (dom) {
-      dom.innerHTML = dom.innerHTML; // Refresh the content of the preview by resetting its HTML for fix a bug glitching
+      // 重新写入 HTML，确保导出预览按当前内容渲染。
+      dom.innerHTML = dom.innerHTML;
     }
   };
 
@@ -513,7 +514,7 @@ export function ImagePreviewer(props: {
       >
         <div className={styles["chat-info"]}>
           <div className={clsx(styles["logo"], "no-dark")}>
-            <ChatGptIcon width={50} height={50} />
+            <BrandLogo size={50} />
           </div>
 
           <div>

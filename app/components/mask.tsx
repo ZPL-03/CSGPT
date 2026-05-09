@@ -443,7 +443,7 @@ export function MaskPage() {
   const [searchText, setSearchText] = useState("");
   const masks = searchText.length > 0 ? searchMasks : allMasks;
 
-  // refactored already, now it accurate
+  // 按模板名称过滤当前列表。
   const onSearch = (text: string) => {
     setSearchText(text);
     if (text.length > 0) {

@@ -70,7 +70,6 @@ export type ChatMessage = RequestMessage & {
   id: string;
   model?: ModelType;
   tools?: ChatMessageTool[];
-  audio_url?: string;
   isMcpResponse?: boolean;
   /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
   fileContent?: string;
@@ -707,12 +706,6 @@ export const useChatStore = createPersistStore(
           ];
         }
 
-        if (shouldInjectSystemPrompts || mcpEnabled) {
-          console.log(
-            "[Global System Prompt] ",
-            systemPrompts.at(0)?.content ?? "empty",
-          );
-        }
         const memoryPrompt = get().getMemoryPrompt();
         // long term memory
         const shouldSendLongTermMemory =
@@ -875,13 +868,6 @@ export const useChatStore = createPersistStore(
 
         const lastSummarizeIndex = session.messages.length;
 
-        console.log(
-          "[Chat History] ",
-          toBeSummarizedMsgs,
-          historyMsgLength,
-          modelConfig.compressMessageLengthThreshold,
-        );
-
         if (
           historyMsgLength > modelConfig.compressMessageLengthThreshold &&
           modelConfig.sendMemory
@@ -909,7 +895,6 @@ export const useChatStore = createPersistStore(
             },
             onFinish(message, responseRes) {
               if (responseRes?.status === 200) {
-                console.log("[Memory] ", message);
                 get().updateTargetSession(session, (session) => {
                   session.lastSummarizeIndex = lastSummarizeIndex;
                   session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
@@ -958,11 +943,8 @@ export const useChatStore = createPersistStore(
           try {
             const mcpRequest = extractMcpJson(content);
             if (mcpRequest) {
-              console.debug("[MCP Request]", mcpRequest);
-
               executeMcpAction(mcpRequest.clientId, mcpRequest.mcp)
                 .then((result) => {
-                  console.log("[MCP Response]", result);
                   const mcpResponse =
                     typeof result === "object"
                       ? JSON.stringify(result)

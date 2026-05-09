@@ -131,8 +131,6 @@ async function handle(req: NextRequest, { params }: { params: RouteParams }) {
   const { provider, path: pathSegments } = params;
   const rawPath = pathSegments.join("/");
 
-  console.log(`[${provider} Route]`, rawPath);
-
   const config = getServerSideConfig();
 
   // 根据 Provider 获取对应的后端配置
@@ -582,8 +580,6 @@ async function handleChatCompletions(
   }
 
   const apiUrl = joinUrl(backend.baseUrl, "chat/completions");
-
-  console.log(`[${provider} API] 转发请求到:`, apiUrl);
 
   const authHeader = getAuthorizationHeader(req, backend.apiKey);
   const proxyHeaders: Record<string, string> = {

@@ -8,7 +8,7 @@ import clsx from "clsx";
 import { useUserStore } from "../store/user";
 import { useChatStore } from "../store";
 import Locale from "../locales";
-import BotPng from "../icons/bot.svg";
+import { BrandLogo } from "./brand-logo";
 
 export function AuthPage() {
   const userStore = useUserStore();
@@ -69,7 +69,7 @@ export function AuthPage() {
   return (
     <div className={styles["auth-page"]}>
       <div className={clsx("no-dark", styles["auth-logo"])}>
-        <BotPng width={56} height={56} />
+        <BrandLogo size={56} />
       </div>
 
       <div className={styles["auth-title"]}>

@@ -6,7 +6,6 @@ import {
   DEFAULT_MODELS,
   OpenaiPath,
   Azure,
-  REQUEST_TIMEOUT_MS,
   ServiceProvider,
   CSGPT_BASE_URL,
 } from "@/app/constant";
@@ -33,7 +32,6 @@ import {
   LLMModel,
   LLMUsage,
   MultimodalContent,
-  SpeechOptions,
 } from "../api";
 import Locale from "../../locales";
 import { getClientConfig } from "@/app/config/client";
@@ -216,42 +214,6 @@ export class ChatGPTApi implements LLMApi {
     // 推理模型可能仅返回 reasoning_content 而无 content（如 DeepSeek）
     const message = res.choices?.at(0)?.message;
     return message?.content || message?.reasoning_content || res;
-  }
-
-  async speech(options: SpeechOptions): Promise<ArrayBuffer> {
-    const requestPayload = {
-      model: options.model,
-      input: options.input,
-      voice: options.voice,
-      response_format: options.response_format,
-      speed: options.speed,
-    };
-
-    const controller = new AbortController();
-    options.onController?.(controller);
-
-    try {
-      const speechPath = this.path(OpenaiPath.SpeechPath);
-      const speechPayload = {
-        method: "POST",
-        body: JSON.stringify(requestPayload),
-        signal: controller.signal,
-        headers: getHeaders(),
-      };
-
-      // make a fetch request
-      const requestTimeoutId = setTimeout(
-        () => controller.abort(),
-        REQUEST_TIMEOUT_MS,
-      );
-
-      const res = await fetch(speechPath, speechPayload);
-      clearTimeout(requestTimeoutId);
-      return await res.arrayBuffer();
-    } catch (e) {
-      console.error("[Request] failed to make a speech request", e);
-      throw e;
-    }
   }
 
   async chat(options: ChatOptions) {

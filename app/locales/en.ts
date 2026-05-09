@@ -11,7 +11,7 @@ const en: LocaleType = {
       ? `😆 Oops, there's an issue. No worries:
      \\ 1️⃣ Check API configuration. [Click here](/#/settings) to change settings ⚙️
      \\ 2️⃣ Verify model service is available`
-      : `😆 Oops, there's an issue. Let's fix it:
+      : `😆 Oops, there's an issue. Check the following:
      \ 1️⃣ Using a private setup? [Click here](/#/auth) to enter your key 🔑
      \ 2️⃣ Check API configuration. [Click here](/#/settings) to change settings ⚙️
      \ 3️⃣ Verify model service is available
@@ -606,60 +606,6 @@ const en: LocaleType = {
       Title: "Frequency Penalty",
       SubTitle:
         "A larger value decreasing the likelihood to repeat the same line",
-    },
-    TTS: {
-      Enable: {
-        Title: "Enable TTS",
-        SubTitle: "Enable text-to-speech service",
-      },
-      Autoplay: {
-        Title: "Enable Autoplay",
-        SubTitle:
-          "Automatically generate speech and play, you need to enable the text-to-speech switch first",
-      },
-      Model: "Model",
-      Voice: {
-        Title: "Voice",
-        SubTitle: "The voice to use when generating the audio",
-      },
-      Speed: {
-        Title: "Speed",
-        SubTitle: "The speed of the generated audio",
-      },
-      Engine: "TTS Engine",
-    },
-    Realtime: {
-      Enable: {
-        Title: "Realtime Chat",
-        SubTitle: "Enable realtime chat feature",
-      },
-      Provider: {
-        Title: "Model Provider",
-        SubTitle: "Switch between different providers",
-      },
-      Model: {
-        Title: "Model",
-        SubTitle: "Select a model",
-      },
-      ApiKey: {
-        Title: "API Key",
-        SubTitle: "API Key",
-        Placeholder: "API Key",
-      },
-      Azure: {
-        Endpoint: {
-          Title: "Endpoint",
-          SubTitle: "Endpoint",
-        },
-        Deployment: {
-          Title: "Deployment Name",
-          SubTitle: "Deployment Name",
-        },
-      },
-      Temperature: {
-        Title: "Randomness (temperature)",
-        SubTitle: "Higher values result in more random responses",
-      },
     },
   },
   Store: {

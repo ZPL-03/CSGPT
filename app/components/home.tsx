@@ -5,8 +5,8 @@ require("../polyfill");
 import { useEffect, useRef, useState } from "react";
 import styles from "./home.module.scss";
 
-import BotIcon from "../icons/bot.svg";
 import LoadingIcon from "../icons/three-dots.svg";
+import { BrandLogo } from "./brand-logo";
 
 import { getCSSVar, useMobileScreen } from "../utils";
 
@@ -35,7 +35,7 @@ import { initializeMcpSystem, isMcpEnabled } from "../mcp/actions";
 export function Loading(props: { noLogo?: boolean }) {
   return (
     <div className={clsx("no-dark", styles["loading-content"])}>
-      {!props.noLogo && <BotIcon />}
+      {!props.noLogo && <BrandLogo size={54} />}
       <LoadingIcon />
     </div>
   );
@@ -270,16 +270,13 @@ export function Home() {
   useHtmlLang();
 
   useEffect(() => {
-    console.log("[Config] got config from build time", getClientConfig());
     useAccessStore.getState().fetch();
 
     const initMcp = async () => {
       try {
         const enabled = await isMcpEnabled();
         if (enabled) {
-          console.log("[MCP] initializing...");
           await initializeMcpSystem();
-          console.log("[MCP] initialized");
         }
       } catch (err) {
         console.error("[MCP] failed to initialize:", err);

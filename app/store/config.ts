@@ -6,23 +6,13 @@ import {
   CSGPT_DEFAULT_MODEL,
   DEFAULT_MODELS,
   DEFAULT_SIDEBAR_WIDTH,
-  DEFAULT_TTS_ENGINE,
-  DEFAULT_TTS_ENGINES,
-  DEFAULT_TTS_MODEL,
-  DEFAULT_TTS_MODELS,
-  DEFAULT_TTS_VOICE,
-  DEFAULT_TTS_VOICES,
   StoreKey,
   ServiceProvider,
 } from "../constant";
 import { createPersistStore } from "../utils/store";
 import { normalizeCSGPTModelConfig } from "../utils/model";
-import type { Voice } from "rt-client";
 
 export type ModelType = (typeof DEFAULT_MODELS)[number]["name"];
-export type TTSModelType = (typeof DEFAULT_TTS_MODELS)[number];
-export type TTSVoiceType = (typeof DEFAULT_TTS_VOICES)[number];
-export type TTSEngineType = (typeof DEFAULT_TTS_ENGINES)[number];
 
 export enum SubmitKey {
   Enter = "Enter",
@@ -51,8 +41,6 @@ export const DEFAULT_CONFIG = {
   tightBorder: !!config?.isApp,
   enableAutoGenerateTitle: true,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
-
-  enableArtifacts: true, // show artifacts config
 
   enableCodeFold: true, // code fold config
 
@@ -83,35 +71,11 @@ export const DEFAULT_CONFIG = {
     quality: "standard" as DalleQuality,
     style: "vivid" as DalleStyle,
   },
-
-  ttsConfig: {
-    enable: false,
-    autoplay: false,
-    engine: DEFAULT_TTS_ENGINE,
-    model: DEFAULT_TTS_MODEL,
-    voice: DEFAULT_TTS_VOICE,
-    speed: 1.0,
-  },
-
-  realtimeConfig: {
-    enable: false,
-    provider: "OpenAI" as ServiceProvider,
-    model: "gpt-4o-realtime-preview-2024-10-01",
-    apiKey: "",
-    azure: {
-      endpoint: "",
-      deployment: "",
-    },
-    temperature: 0.9,
-    voice: "alloy" as Voice,
-  },
 };
 
 export type ChatConfig = typeof DEFAULT_CONFIG;
 
 export type ModelConfig = ChatConfig["modelConfig"];
-export type TTSConfig = ChatConfig["ttsConfig"];
-export type RealtimeConfig = ChatConfig["realtimeConfig"];
 
 export function limitNumber(
   x: number,
@@ -125,21 +89,6 @@ export function limitNumber(
 
   return Math.min(max, Math.max(min, x));
 }
-
-export const TTSConfigValidator = {
-  engine(x: string) {
-    return x as TTSEngineType;
-  },
-  model(x: string) {
-    return x as TTSModelType;
-  },
-  voice(x: string) {
-    return x as TTSVoiceType;
-  },
-  speed(x: number) {
-    return limitNumber(x, 0.25, 4.0, 1.0);
-  },
-};
 
 export const ModalConfigValidator = {
   model(x: string) {

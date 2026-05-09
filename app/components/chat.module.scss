@@ -588,25 +588,6 @@
   transition: all ease 0.3s;
 }
 
-.chat-message-audio {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: 10px;
-  background-color: rgba(0, 0, 0, 0.05);
-  border: var(--border-in-light);
-  position: relative;
-  transition: all ease 0.3s;
-  margin-top: 10px;
-  font-size: 14px;
-  user-select: text;
-  word-break: break-word;
-  box-sizing: border-box;
-  audio {
-    height: 30px; /* 调整高度 */
-  }
-}
-
 .chat-message-item-image {
   width: 100%;
   margin-top: 10px;

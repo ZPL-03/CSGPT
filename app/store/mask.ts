@@ -18,8 +18,6 @@ export type Mask = {
   modelConfig: ModelConfig;
   lang: Lang;
   builtin: boolean;
-  plugin?: string[];
-  enableArtifacts?: boolean;
   enableCodeFold?: boolean;
 };
 
