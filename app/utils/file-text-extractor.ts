@@ -93,6 +93,14 @@ export interface FileExtractionOptions {
   onProgress?: (progress: number, stage: string) => void;
 }
 
+type FileExtractionInput = string | Blob | ArrayBuffer | Uint8Array;
+
+interface ResolvedFileSource {
+  bytes: Uint8Array;
+  mimeType: string;
+  dataUrl?: string;
+}
+
 let ocrWorkerPromise: Promise<any> | null = null;
 
 function getExtension(filename: string): string {
@@ -121,6 +129,23 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   return bytes;
 }
 
+function bytesToDataUrl(bytes: Uint8Array, mimeType: string): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
+function toExactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+}
+
 function decodeBytesAsText(bytes: Uint8Array): string {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -133,31 +158,60 @@ function decodeBytesAsText(bytes: Uint8Array): string {
   }
 }
 
-function dataUrlToText(dataUrl: string): string {
-  return decodeBytesAsText(dataUrlToUint8Array(dataUrl));
-}
+async function resolveToFileSource(
+  input: FileExtractionInput,
+): Promise<ResolvedFileSource> {
+  if (typeof input === "string") {
+    if (input.startsWith("data:")) {
+      return {
+        bytes: dataUrlToUint8Array(input),
+        mimeType: dataUrlMimeType(input),
+        dataUrl: input,
+      };
+    }
+    const response = await fetch(input, {
+      mode: "cors",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw new Error(`文件读取异常：${response.status}`);
+    }
+    const blob = await response.blob();
+    return resolveToFileSource(blob);
+  }
 
-async function resolveToDataUrl(url: string): Promise<string> {
-  if (url.startsWith("data:")) {
-    return url;
+  if (input instanceof Uint8Array) {
+    return {
+      bytes: input,
+      mimeType: "application/octet-stream",
+    };
   }
-  const response = await fetch(url, { mode: "cors", credentials: "include" });
-  if (!response.ok) {
-    throw new Error(`文件读取异常：${response.status}`);
+
+  if (input instanceof ArrayBuffer) {
+    return {
+      bytes: new Uint8Array(input),
+      mimeType: "application/octet-stream",
+    };
   }
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+
+  const bytes = new Uint8Array(await input.arrayBuffer());
+  return {
+    bytes,
+    mimeType: input.type || "application/octet-stream",
+  };
 }
 
 function cleanText(text: string): string {
   return text
+    .replace(/\u00ad/g, "")
+    .replace(/ﬀ/g, "ff")
+    .replace(/ﬁ/g, "fi")
+    .replace(/ﬂ/g, "fl")
+    .replace(/ﬃ/g, "ffi")
+    .replace(/ﬄ/g, "ffl")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
+    .replace(/([A-Za-z])-\n([A-Za-z])/g, "$1$2")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -309,12 +363,23 @@ async function recognizeImages(
   return sections;
 }
 
+function getPdfRenderScale(page: any, preferredScale = 2.2) {
+  const viewport = page.getViewport({ scale: 1 });
+  const maxPixels = 3_200_000;
+  const maxSide = 2200;
+  const scaleByPixels = Math.sqrt(
+    maxPixels / Math.max(viewport.width * viewport.height, 1),
+  );
+  const scaleBySide = maxSide / Math.max(viewport.width, viewport.height, 1);
+  return Math.max(0.8, Math.min(preferredScale, scaleByPixels, scaleBySide));
+}
+
 async function renderPdfPageToImage(page: any, scale = 2.2): Promise<string> {
   if (typeof document === "undefined") {
     return "";
   }
 
-  const viewport = page.getViewport({ scale });
+  const viewport = page.getViewport({ scale: getPdfRenderScale(page, scale) });
   const canvas = document.createElement("canvas");
   canvas.width = viewport.width;
   canvas.height = viewport.height;
@@ -510,16 +575,16 @@ async function extractDocxXmlText(zip: any) {
   return extractDocxXmlTextWithDom(xml) || extractDocxXmlTextWithRegex(xml);
 }
 
-async function extractTextDocument(dataUrl: string, fileName: string) {
+async function extractTextDocument(bytes: Uint8Array, fileName: string) {
   return {
-    text: dataUrlToText(dataUrl),
+    text: decodeBytesAsText(bytes),
     images: [] as string[],
     metadata: { parser: "text", fileName },
   };
 }
 
 async function extractSpreadsheet(
-  dataUrl: string,
+  bytes: Uint8Array,
   fileName: string,
   options?: Required<FileExtractionOptions>,
 ) {
@@ -527,9 +592,9 @@ async function extractSpreadsheet(
   const XLSX = await import("xlsx");
   const ext = getExtension(fileName);
   const isDelimitedText = ext === "csv" || ext === "tsv";
-  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+  const arrayBuffer = toExactArrayBuffer(bytes);
   const workbook = XLSX.read(
-    isDelimitedText ? dataUrlToText(dataUrl) : arrayBuffer,
+    isDelimitedText ? decodeBytesAsText(bytes) : arrayBuffer,
     {
       type: isDelimitedText ? "string" : "array",
       cellDates: true,
@@ -614,13 +679,13 @@ async function extractSpreadsheet(
 }
 
 async function extractDocx(
-  dataUrl: string,
+  bytes: Uint8Array,
   fileName: string,
   options: Required<FileExtractionOptions>,
 ) {
   options.onProgress(10, "读取 DOCX");
   const JSZip = (await import("jszip")).default;
-  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
+  const arrayBuffer = toExactArrayBuffer(bytes);
   const zip = await JSZip.loadAsync(arrayBuffer);
 
   options.onProgress(20, "解析 DOCX 文本");
@@ -684,33 +749,34 @@ async function extractDocx(
 }
 
 async function extractPdf(
-  dataUrl: string,
+  bytes: Uint8Array,
   fileName: string,
   options: Required<FileExtractionOptions>,
 ) {
   options.onProgress(10, "读取 PDF");
   const pdfjsLib = await import("pdfjs-dist");
-  if (
-    typeof window !== "undefined" &&
-    !pdfjsLib.GlobalWorkerOptions.workerSrc
-  ) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
-  }
 
-  const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(bytes),
+    disableWorker: true,
+    stopAtErrors: false,
+    useSystemFonts: true,
+    isEvalSupported: false,
+  } as any);
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
   const pagesNeedingOcr: number[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
+    let page: any = null;
     let pageText = "";
     try {
-      const page = await pdf.getPage(i);
+      page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
       pageText = extractStructuredPdfText(textContent);
     } catch {
       pageText = "";
+    } finally {
+      page?.cleanup?.();
     }
     if (shouldOcrPdfPage(pageText)) {
       pagesNeedingOcr.push(i);
@@ -727,12 +793,15 @@ async function extractPdf(
   const renderedImages: string[] = [];
   if (options.includeImages) {
     for (let i = 1; i <= pdf.numPages; i++) {
+      let page: any = null;
       try {
-        const page = await pdf.getPage(i);
+        page = await pdf.getPage(i);
         const image = await renderPdfPageToImage(page);
         if (image) renderedImages[i - 1] = image;
       } catch {
         renderedImages[i - 1] = "";
+      } finally {
+        page?.cleanup?.();
       }
       options.onProgress(
         35 + Math.round((i / pdf.numPages) * 25),
@@ -747,8 +816,9 @@ async function extractPdf(
     const ocrSections: string[] = [];
     for (let i = 0; i < pagesNeedingOcr.length; i++) {
       const pageNumber = pagesNeedingOcr[i];
+      let page: any = null;
       try {
-        const page = await pdf.getPage(pageNumber);
+        page = await pdf.getPage(pageNumber);
         const image =
           renderedImages[pageNumber - 1] || (await renderPdfPageToImage(page));
         const text = image ? await recognizeImage(image) : "";
@@ -759,6 +829,8 @@ async function extractPdf(
         );
       } catch {
         ocrSections.push(`## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`);
+      } finally {
+        page?.cleanup?.();
       }
       ocrPageCount += 1;
       options.onProgress(
@@ -769,6 +841,8 @@ async function extractPdf(
     textSections.push(...ocrSections);
   }
   options.onProgress(100, "PDF 解析完成");
+  pdf.cleanup?.();
+  pdf.destroy?.();
 
   return {
     text:
@@ -786,13 +860,13 @@ async function extractPdf(
 }
 
 async function extractPresentation(
-  dataUrl: string,
+  bytes: Uint8Array,
   fileName: string,
   options: Required<FileExtractionOptions>,
 ) {
   options.onProgress(10, "读取 PPTX");
   const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(dataUrlToUint8Array(dataUrl).buffer);
+  const zip = await JSZip.loadAsync(toExactArrayBuffer(bytes));
 
   const slideFiles = Object.keys(zip.files)
     .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
@@ -882,7 +956,7 @@ async function extractImage(
 }
 
 export async function extractTextFromFile(
-  fileUrl: string,
+  fileInput: FileExtractionInput,
   fileName: string,
   options: FileExtractionOptions = {},
 ): Promise<FileExtractionResult> {
@@ -893,12 +967,16 @@ export async function extractTextFromFile(
   };
   const ext = getExtension(fileName);
   normalizedOptions.onProgress(0, "读取文件");
-  const dataUrl = await resolveToDataUrl(fileUrl);
-  const mimeType = dataUrlMimeType(dataUrl);
+  const source = await resolveToFileSource(fileInput);
+  const mimeType = source.mimeType;
   normalizedOptions.onProgress(5, "识别文件类型");
 
+  if (SPREADSHEET_EXTENSIONS.has(ext)) {
+    return extractSpreadsheet(source.bytes, fileName, normalizedOptions);
+  }
+
   if (TEXT_EXTENSIONS.has(ext) || mimeType.startsWith("text/")) {
-    const result = await extractTextDocument(dataUrl, fileName);
+    const result = await extractTextDocument(source.bytes, fileName);
     normalizedOptions.onProgress(100, "文本解析完成");
     return {
       ...result,
@@ -907,23 +985,23 @@ export async function extractTextFromFile(
   }
 
   if (IMAGE_EXTENSIONS.has(ext) || mimeType.startsWith("image/")) {
-    return extractImage(dataUrl, fileName, normalizedOptions);
-  }
-
-  if (SPREADSHEET_EXTENSIONS.has(ext)) {
-    return extractSpreadsheet(dataUrl, fileName, normalizedOptions);
+    return extractImage(
+      source.dataUrl || bytesToDataUrl(source.bytes, mimeType),
+      fileName,
+      normalizedOptions,
+    );
   }
 
   if (ext === "docx") {
-    return extractDocx(dataUrl, fileName, normalizedOptions);
+    return extractDocx(source.bytes, fileName, normalizedOptions);
   }
 
   if (ext === "pdf" || mimeType === "application/pdf") {
-    return extractPdf(dataUrl, fileName, normalizedOptions);
+    return extractPdf(source.bytes, fileName, normalizedOptions);
   }
 
   if (PRESENTATION_EXTENSIONS.has(ext)) {
-    return extractPresentation(dataUrl, fileName, normalizedOptions);
+    return extractPresentation(source.bytes, fileName, normalizedOptions);
   }
 
   return {

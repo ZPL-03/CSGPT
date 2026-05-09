@@ -508,20 +508,6 @@ function createAttachmentId() {
   );
 }
 
-function readFileAsDataUrl(file: File, onProgress: (progress: number) => void) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 async function deleteAttachmentRemote(url?: string) {
   if (!url || !url.startsWith("/api/files/")) return;
   const token = useUserStore.getState().token;
@@ -1121,31 +1107,22 @@ function _Chat() {
       }
 
       try {
-        const dataUrl = await readFileAsDataUrl(file, (progress) => {
-          if (cancelledAttachmentIdsRef.current.has(id)) return;
-          updateAttachment(id, {
-            progress: Math.min(20, Math.round(progress * 0.2)),
-            stage: "读取文件",
-          });
-        });
-        if (cancelledAttachmentIdsRef.current.has(id)) return;
-
         updateAttachment(id, {
           status: "parsing",
-          progress: 20,
+          progress: 10,
           stage: "解析中",
         });
 
         const { extractTextFromFile } = await import(
           "../utils/file-text-extractor"
         );
-        const extraction = await extractTextFromFile(dataUrl, file.name, {
+        const extraction = await extractTextFromFile(file, file.name, {
           includeImages: false,
           ocrImages: true,
           onProgress(progress, stage) {
             if (cancelledAttachmentIdsRef.current.has(id)) return;
             updateAttachment(id, {
-              progress: Math.min(85, 20 + Math.round(progress * 0.65)),
+              progress: Math.min(85, 10 + Math.round(progress * 0.75)),
               stage,
             });
           },
