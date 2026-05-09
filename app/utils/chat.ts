@@ -165,7 +165,7 @@ export function base64Image2Blob(base64Data: string, contentType: string) {
   return new Blob([byteArray], { type: contentType });
 }
 
-// 将文件上传到服务端，由数据库保存原始文件数据。
+// 将文件发送到服务端附件接口。
 export async function uploadFile(
   file: Blob,
   filename?: string,

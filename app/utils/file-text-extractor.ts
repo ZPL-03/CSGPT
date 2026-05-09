@@ -226,16 +226,18 @@ async function prepareImageForOcr(dataUrl: string) {
   const maxSide = 2600;
   const scale = Math.min(
     2.5,
-    Math.max(1, maxSide / Math.max(image.width, image.height)),
+    Math.max(0.25, maxSide / Math.max(image.width, image.height)),
   );
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(image.width * scale);
-  canvas.height = Math.round(image.height * scale);
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return dataUrl;
 
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -256,8 +258,26 @@ async function prepareImageForOcr(dataUrl: string) {
 
 async function recognizeImage(dataUrl: string): Promise<string> {
   const worker = await getOcrWorker();
-  const result = await worker.recognize(await prepareImageForOcr(dataUrl));
-  return cleanText(result?.data?.text || "");
+  const preparedImage = await prepareImageForOcr(dataUrl);
+  const preparedResult = await worker.recognize(preparedImage);
+  const preparedText = cleanText(preparedResult?.data?.text || "");
+  if (preparedText.length >= 8 || preparedImage === dataUrl) {
+    return preparedText;
+  }
+
+  if (dataUrl.length > 3_000_000) {
+    return preparedText;
+  }
+
+  try {
+    const originalResult = await worker.recognize(dataUrl);
+    const originalText = cleanText(originalResult?.data?.text || "");
+    return originalText.length > preparedText.length
+      ? originalText
+      : preparedText;
+  } catch {
+    return preparedText;
+  }
 }
 
 async function recognizeImages(
@@ -267,7 +287,12 @@ async function recognizeImages(
 ) {
   const sections: string[] = [];
   for (let i = 0; i < images.length; i++) {
-    const text = await recognizeImage(images[i]);
+    let text = "";
+    try {
+      text = await recognizeImage(images[i]);
+    } catch {
+      text = "";
+    }
     sections.push(
       text
         ? `## ${label} ${i + 1} OCR\n${text}`
@@ -296,7 +321,14 @@ async function renderPdfPageToImage(page: any, scale = 2.2): Promise<string> {
 }
 
 function extractStructuredPdfText(textContent: any) {
-  const items = (textContent.items || [])
+  type PdfTextItem = {
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+  };
+
+  const items: PdfTextItem[] = ((textContent.items || []) as any[])
     .map((item: any) => {
       const text = String(item.str ?? "").trim();
       if (!text) return null;
@@ -308,12 +340,7 @@ function extractStructuredPdfText(textContent: any) {
         width: Number(item.width || 0),
       };
     })
-    .filter(Boolean) as Array<{
-    text: string;
-    x: number;
-    y: number;
-    width: number;
-  }>;
+    .filter((item: PdfTextItem | null): item is PdfTextItem => Boolean(item));
 
   if (items.length === 0) return "";
 
@@ -374,6 +401,109 @@ function imageMimeFromPath(path: string) {
   return mimeTypes[ext] || "application/octet-stream";
 }
 
+function uniqueStrings(values: string[]) {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+async function extractZipImages(zip: any, prefix: string) {
+  const images: string[] = [];
+  const paths = Object.keys(zip.files).filter(
+    (path) =>
+      path.toLowerCase().startsWith(prefix.toLowerCase()) &&
+      IMAGE_EXTENSIONS.has(getExtension(path)),
+  );
+
+  for (const path of paths) {
+    const media = zip.file(path);
+    if (!media) continue;
+    const base64 = await media.async("base64");
+    images.push(`data:${imageMimeFromPath(path)};base64,${base64}`);
+  }
+
+  return images;
+}
+
+function nodeLocalName(node: Node) {
+  return (node as Element).localName || node.nodeName.split(":").pop() || "";
+}
+
+function collectXmlText(node: Element) {
+  const textNodes = Array.from(node.getElementsByTagNameNS("*", "t"));
+  if (textNodes.length > 0) {
+    return cleanText(textNodes.map((item) => item.textContent || "").join(""));
+  }
+
+  return cleanText(
+    Array.from(node.getElementsByTagName("*"))
+      .filter((item) => nodeLocalName(item) === "t")
+      .map((item) => item.textContent || "")
+      .join(""),
+  );
+}
+
+function extractDocxXmlTextWithDom(xml: string) {
+  if (typeof DOMParser === "undefined") return "";
+
+  const parser = new DOMParser();
+  const documentXml = parser.parseFromString(xml, "application/xml");
+  const body =
+    documentXml.getElementsByTagNameNS("*", "body")[0] ||
+    Array.from(documentXml.getElementsByTagName("*")).find(
+      (item) => nodeLocalName(item) === "body",
+    );
+  if (!body) return "";
+
+  const sections: string[] = [];
+  for (const child of Array.from(body.childNodes)) {
+    if (child.nodeType !== 1) continue;
+    const element = child as Element;
+    const localName = nodeLocalName(element);
+    if (localName === "p") {
+      const text = collectXmlText(element);
+      if (text) sections.push(text);
+    } else if (localName === "tbl") {
+      const rows = Array.from(element.getElementsByTagNameNS("*", "tr"));
+      const tableRows = rows.map((row) =>
+        Array.from(row.getElementsByTagNameNS("*", "tc"))
+          .map((cell) => collectXmlText(cell))
+          .filter(Boolean)
+          .join("\t"),
+      );
+      const tableText = cleanText(tableRows.filter(Boolean).join("\n"));
+      if (tableText) sections.push(tableText);
+    }
+  }
+
+  return cleanText(sections.join("\n"));
+}
+
+function extractDocxXmlTextWithRegex(xml: string) {
+  const paragraphs = xml.split(/<\/w:p>|<\/p>/i).map((segment) =>
+    cleanText(
+      Array.from(
+        segment.matchAll(/<[^:>]*:?t\b[^>]*>([\s\S]*?)<\/[^:>]*:?t>/gi),
+      )
+        .map((match) => decodeXmlEntities(match[1]))
+        .join(""),
+    ),
+  );
+  return cleanText(paragraphs.filter(Boolean).join("\n"));
+}
+
+async function extractDocxXmlText(zip: any) {
+  const documentFile = zip.file("word/document.xml");
+  if (!documentFile) return "";
+  const xml = await documentFile.async("string");
+  return extractDocxXmlTextWithDom(xml) || extractDocxXmlTextWithRegex(xml);
+}
+
 async function extractTextDocument(dataUrl: string, fileName: string) {
   return {
     text: dataUrlToText(dataUrl),
@@ -382,7 +512,12 @@ async function extractTextDocument(dataUrl: string, fileName: string) {
   };
 }
 
-async function extractSpreadsheet(dataUrl: string, fileName: string) {
+async function extractSpreadsheet(
+  dataUrl: string,
+  fileName: string,
+  options?: Required<FileExtractionOptions>,
+) {
+  options?.onProgress(20, "解析表格");
   const XLSX = await import("xlsx");
   const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
   const workbook = XLSX.read(arrayBuffer, {
@@ -429,15 +564,39 @@ async function extractSpreadsheet(dataUrl: string, fileName: string) {
     }
   }
 
-  const text = cleanText([...sheetSections, ...formulaSections].join("\n\n"));
+  let images: string[] = [];
+  try {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    images = await extractZipImages(zip, "xl/media/");
+  } catch {
+    images = [];
+  }
+
+  const textSections = [...sheetSections, ...formulaSections];
+  if (options?.ocrImages && images.length > 0) {
+    textSections.push(
+      ...(await recognizeImages(images, "表格图片", (completed, total) => {
+        options.onProgress(
+          55 + Math.round((completed / total) * 40),
+          `识别表格图片 ${completed}/${total}`,
+        );
+      })),
+    );
+  }
+
+  const text = cleanText(textSections.join("\n\n"));
+  options?.onProgress(100, "表格解析完成");
   return {
     text: text || `[文件: ${fileName}，未提取到可读文本]`,
-    images: [] as string[],
+    images: options?.includeImages ? images : [],
     metadata: {
       parser: "spreadsheet",
       fileName,
       sheetCount: workbook.SheetNames.length,
       sheets: workbook.SheetNames,
+      imageCount: images.length,
+      ocrImageCount: options?.ocrImages ? images.length : 0,
     },
   };
 }
@@ -447,28 +606,49 @@ async function extractDocx(
   fileName: string,
   options: Required<FileExtractionOptions>,
 ) {
-  options.onProgress(15, "解析 DOCX 文本");
-  const mammoth = await import("mammoth");
+  options.onProgress(10, "读取 DOCX");
+  const JSZip = (await import("jszip")).default;
   const arrayBuffer = dataUrlToUint8Array(dataUrl).buffer;
-  const result = await mammoth.convertToHtml(
-    { arrayBuffer },
-    { convertImage: mammoth.images.dataUri },
-  );
+  const zip = await JSZip.loadAsync(arrayBuffer);
 
-  const html = result.value || "";
-  const images: string[] = [];
+  options.onProgress(20, "解析 DOCX 文本");
+  let html = "";
+  try {
+    const mammoth = await import("mammoth");
+    const result = await mammoth.convertToHtml(
+      { arrayBuffer },
+      { convertImage: mammoth.images.dataUri },
+    );
+    html = result.value || "";
+  } catch {
+    html = "";
+  }
+
+  let xmlText = "";
+  try {
+    xmlText = await extractDocxXmlText(zip);
+  } catch {
+    xmlText = "";
+  }
+
+  const htmlImages: string[] = [];
   const imgRegex = /<img\s+[^>]*src="(data:[^"]+)"/gi;
   let match;
   while ((match = imgRegex.exec(html)) !== null) {
-    images.push(match[1]);
+    htmlImages.push(match[1]);
   }
+  const zipImages = await extractZipImages(zip, "word/media/");
+  const images = uniqueStrings([...htmlImages, ...zipImages]);
 
-  const textSections = [buildSection("文档文本", htmlToStructuredText(html))];
+  const htmlText = htmlToStructuredText(html);
+  const documentText =
+    htmlText.length >= Math.round(xmlText.length * 0.7) ? htmlText : xmlText;
+  const textSections = [buildSection("文档文本", documentText)];
   if (options.ocrImages && images.length > 0) {
     textSections.push(
       ...(await recognizeImages(images, "文档图片", (completed, total) => {
         options.onProgress(
-          25 + Math.round((completed / total) * 70),
+          35 + Math.round((completed / total) * 60),
           `识别文档图片 ${completed}/${total}`,
         );
       })),
@@ -486,6 +666,7 @@ async function extractDocx(
       fileName,
       imageCount: images.length,
       ocrImageCount: options.ocrImages ? images.length : 0,
+      textSource: documentText === htmlText ? "html" : "xml",
     },
   };
 }
@@ -624,17 +805,7 @@ async function extractPresentation(
     );
   }
 
-  const mediaPaths = Object.keys(zip.files).filter((path) =>
-    /^ppt\/media\//i.test(path),
-  );
-  const images: string[] = [];
-  for (const mediaPath of mediaPaths) {
-    if (!IMAGE_EXTENSIONS.has(getExtension(mediaPath))) continue;
-    const media = zip.file(mediaPath);
-    if (!media) continue;
-    const base64 = await media.async("base64");
-    images.push(`data:${imageMimeFromPath(mediaPath)};base64,${base64}`);
-  }
+  const images = await extractZipImages(zip, "ppt/media/");
 
   const textSections = slideSections;
   if (options.ocrImages && images.length > 0) {
@@ -672,7 +843,12 @@ async function extractImage(
   const sections: string[] = [];
   if (options.ocrImages) {
     options.onProgress(20, "识别图片");
-    const text = await recognizeImage(dataUrl);
+    let text = "";
+    try {
+      text = await recognizeImage(dataUrl);
+    } catch {
+      text = "";
+    }
     sections.push(
       text ? buildSection("图片 OCR", text) : "## 图片 OCR\n未提取到可读文本",
     );
@@ -723,10 +899,7 @@ export async function extractTextFromFile(
   }
 
   if (SPREADSHEET_EXTENSIONS.has(ext)) {
-    normalizedOptions.onProgress(20, "解析表格");
-    const result = await extractSpreadsheet(dataUrl, fileName);
-    normalizedOptions.onProgress(100, "表格解析完成");
-    return result;
+    return extractSpreadsheet(dataUrl, fileName, normalizedOptions);
   }
 
   if (ext === "docx") {

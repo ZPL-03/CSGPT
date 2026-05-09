@@ -1,5 +1,5 @@
-// 文件上传 API：POST /api/files
-// 将用户上传的原始文件数据写入数据库。
+// 附件 API：POST /api/files
+// 接收当前用户的附件二进制数据。
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-// POST：保存用户上传文件
+// POST：写入当前用户的附件
 export async function POST(request: NextRequest) {
   try {
     const userId = await getUserFromRequest(request);

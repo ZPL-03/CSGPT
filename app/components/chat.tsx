@@ -483,7 +483,7 @@ function useScrollToBottom(
   };
 }
 
-type AttachmentStatus = "uploading" | "parsing" | "ready" | "error";
+type AttachmentStatus = "parsing" | "ready" | "error";
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 
 export interface AttachmentInfo {
@@ -522,11 +522,13 @@ function readFileAsDataUrl(file: File, onProgress: (progress: number) => void) {
   });
 }
 
-function getAttachmentProcessError(error: unknown) {
-  if (error instanceof Error && /50\s*MB/i.test(error.message)) {
-    return "附件超过 50MB";
-  }
-  return "解析结果处理失败";
+async function deleteAttachmentRemote(url?: string) {
+  if (!url || !url.startsWith("/api/files/")) return;
+  const token = useUserStore.getState().token;
+  await fetch(url, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  }).catch(() => {});
 }
 
 export function ChatActions(props: {
@@ -1051,16 +1053,38 @@ function _Chat() {
   const isMobileScreen = useMobileScreen();
   const navigate = useNavigate();
   const [attachments, setAttachments] = useState<AttachmentInfo[]>([]);
+  const attachmentsRef = useRef<AttachmentInfo[]>([]);
+  const cancelledAttachmentIdsRef = useRef(new Set<string>());
   const attachmentProcessing = attachments.some(
-    (att) => att.status === "uploading" || att.status === "parsing",
+    (att) => att.status === "parsing",
   );
   const attachmentHasError = attachments.some((att) => att.status === "error");
 
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+
+  useEffect(() => {
+    const cancelledAttachmentIds = cancelledAttachmentIdsRef.current;
+    return () => {
+      attachmentsRef.current.forEach((att) => {
+        cancelledAttachmentIds.add(att.id);
+        if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+        deleteAttachmentRemote(att.url);
+      });
+      attachmentsRef.current = [];
+    };
+  }, []);
+
   const updateAttachment = useCallback(
     (id: string, patch: Partial<AttachmentInfo>) => {
-      setAttachments((current) =>
-        current.map((att) => (att.id === id ? { ...att, ...patch } : att)),
-      );
+      setAttachments((current) => {
+        const next = current.map((att) =>
+          att.id === id ? { ...att, ...patch } : att,
+        );
+        attachmentsRef.current = next;
+        return next;
+      });
     },
     [],
   );
@@ -1086,7 +1110,11 @@ function _Chat() {
         previewUrl,
       };
 
-      setAttachments((current) => current.concat(initialAttachment));
+      setAttachments((current) => {
+        const next = current.concat(initialAttachment);
+        attachmentsRef.current = next;
+        return next;
+      });
       if (overSizeLimit) {
         showToast("附件超过 50MB");
         return;
@@ -1094,11 +1122,13 @@ function _Chat() {
 
       try {
         const dataUrl = await readFileAsDataUrl(file, (progress) => {
+          if (cancelledAttachmentIdsRef.current.has(id)) return;
           updateAttachment(id, {
             progress: Math.min(20, Math.round(progress * 0.2)),
             stage: "读取文件",
           });
         });
+        if (cancelledAttachmentIdsRef.current.has(id)) return;
 
         updateAttachment(id, {
           status: "parsing",
@@ -1113,27 +1143,50 @@ function _Chat() {
           includeImages: false,
           ocrImages: true,
           onProgress(progress, stage) {
+            if (cancelledAttachmentIdsRef.current.has(id)) return;
             updateAttachment(id, {
-              progress: Math.min(99, 20 + Math.round(progress * 0.79)),
+              progress: Math.min(85, 20 + Math.round(progress * 0.65)),
               stage,
             });
           },
         });
+        if (cancelledAttachmentIdsRef.current.has(id)) return;
+
+        updateAttachment(id, {
+          status: "parsing",
+          progress: 88,
+          stage: "解析中",
+        });
+        const fileUrl = await uploadFileRemote(file, file.name, (progress) => {
+          if (cancelledAttachmentIdsRef.current.has(id)) return;
+          updateAttachment(id, {
+            status: "parsing",
+            progress: Math.min(99, 88 + Math.round(progress * 0.11)),
+            stage: "解析中",
+          });
+        });
+        if (cancelledAttachmentIdsRef.current.has(id)) {
+          await deleteAttachmentRemote(fileUrl);
+          return;
+        }
 
         updateAttachment(id, {
           status: "ready",
           progress: 100,
           stage: "解析完成",
+          url: fileUrl,
+          file: undefined,
           extractedText: extraction.text,
         });
       } catch (error) {
+        if (cancelledAttachmentIdsRef.current.has(id)) return;
         updateAttachment(id, {
           status: "error",
           progress: 100,
           stage: "解析失败",
-          error: error instanceof Error ? error.message : "文件处理失败",
+          error: error instanceof Error ? error.message : "解析失败",
         });
-        showToast(error instanceof Error ? error.message : "文件处理失败");
+        showToast(error instanceof Error ? error.message : "解析失败");
       }
     },
     [updateAttachment],
@@ -1229,83 +1282,20 @@ function _Chat() {
       matchCommand.invoke();
       return;
     }
-    (async () => {
-      const uploadedFileUrls: string[] = [];
-      try {
-        const uploadedAttachments: AttachmentInfo[] = [];
-        for (const att of attachments) {
-          if (!att.file || att.url) {
-            uploadedAttachments.push(att);
-            continue;
-          }
-
-          updateAttachment(att.id, {
-            status: "uploading",
-            progress: 0,
-            stage: "解析结果处理中",
-          });
-          const fileUrl = await uploadFileRemote(
-            att.file,
-            att.name,
-            (progress) => {
-              updateAttachment(att.id, {
-                progress,
-                stage: "解析结果处理中",
-              });
-            },
-          );
-          uploadedFileUrls.push(fileUrl);
-
-          uploadedAttachments.push({
-            ...att,
-            url: fileUrl,
-            file: undefined,
-            status: "ready",
-            progress: 100,
-            stage: "解析完成",
-          });
-        }
-
-        const modelAttachments = uploadedAttachments.map(
-          ({ file, previewUrl, ...att }) => att,
-        );
-        chatStore.onUserInput(userInput, modelAttachments);
-        uploadedAttachments.forEach((att) => {
-          if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
-        });
-        setAttachments([]);
-        chatStore.setLastInput(userInput);
-        setUserInput("");
-        setPromptHints([]);
-        if (!isMobileScreen) inputRef.current?.focus();
-        setAutoScroll(true);
-      } catch (error) {
-        const token = useUserStore.getState().token;
-        await Promise.allSettled(
-          uploadedFileUrls.map((url) =>
-            fetch(url, {
-              method: "DELETE",
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            }),
-          ),
-        );
-        const errorMessage = getAttachmentProcessError(error);
-        setAttachments((current) =>
-          current.map((att) =>
-            att.status === "uploading"
-              ? {
-                  ...att,
-                  status: "error",
-                  progress: 100,
-                  stage: "解析失败",
-                  error: errorMessage,
-                }
-              : att,
-          ),
-        );
-        showToast(errorMessage);
-      }
-    })();
+    const modelAttachments = attachments.map(
+      ({ file, previewUrl, ...att }) => att,
+    );
+    chatStore.onUserInput(userInput, modelAttachments);
+    attachments.forEach((att) => {
+      if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+    });
+    attachmentsRef.current = [];
+    setAttachments([]);
+    chatStore.setLastInput(userInput);
+    setUserInput("");
+    setPromptHints([]);
+    if (!isMobileScreen) inputRef.current?.focus();
+    setAutoScroll(true);
   };
 
   const onPromptSelect = (prompt: RenderPrompt) => {
@@ -2229,7 +2219,6 @@ function _Chat() {
                           key={att.id}
                           className={clsx(styles["attachment"], {
                             [styles["attachment-processing"]]:
-                              att.status === "uploading" ||
                               att.status === "parsing",
                             [styles["attachment-error"]]:
                               att.status === "error",
@@ -2281,12 +2270,16 @@ function _Chat() {
                           <div className={styles["attachment-mask"]} />
                           <DeleteAttachmentButton
                             deleteAttachment={() => {
+                              cancelledAttachmentIdsRef.current.add(att.id);
                               if (att.previewUrl) {
                                 URL.revokeObjectURL(att.previewUrl);
                               }
-                              setAttachments(
-                                attachments.filter((_, i) => i !== index),
+                              deleteAttachmentRemote(att.url);
+                              const nextAttachments = attachments.filter(
+                                (_, i) => i !== index,
                               );
+                              attachmentsRef.current = nextAttachments;
+                              setAttachments(nextAttachments);
                             }}
                           />
                         </div>
