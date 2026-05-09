@@ -76,6 +76,11 @@ function formatSize(size: number): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function noStoreUrl(path: string) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}_=${Date.now()}`;
+}
+
 // 管理后台登录表单
 function AdminLogin({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [username, setUsername] = useState("");
@@ -180,7 +185,7 @@ export default function AdminPage() {
     setPhase("verifying");
     setErrorMsg("");
     try {
-      const res = await fetch("/api/admin/stats", {
+      const res = await fetch(noStoreUrl("/api/admin/stats"), {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -223,7 +228,7 @@ export default function AdminPage() {
     if (!token) return;
     setErrorMsg("");
     try {
-      const res = await fetch("/api/admin/stats", {
+      const res = await fetch(noStoreUrl("/api/admin/stats"), {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -233,6 +238,18 @@ export default function AdminPage() {
         return;
       }
       setStats(data);
+      if (expandedConvId) {
+        const expandedConversationExists = data.conversationList?.some(
+          (conversation: ConversationItem) =>
+            conversation.id === expandedConvId,
+        );
+        if (expandedConversationExists) {
+          await fetchConvMessages(expandedConvId);
+        } else {
+          setExpandedConvId(null);
+          setConvMessages([]);
+        }
+      }
     } catch {
       setErrorMsg("网络错误");
     }
@@ -240,9 +257,11 @@ export default function AdminPage() {
 
   async function fetchConvMessages(convId: string) {
     const token = useUserStore.getState().token;
+    if (!token) return;
+    setErrorMsg("");
     setLoadingMessages(true);
     try {
-      const res = await fetch(`/api/admin/stats?id=${convId}`, {
+      const res = await fetch(noStoreUrl(`/api/admin/stats?id=${convId}`), {
         cache: "no-store",
         headers: { Authorization: `Bearer ${token}` },
       });

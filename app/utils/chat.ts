@@ -1,4 +1,8 @@
-import { FILES_URL_PREFIX, REQUEST_TIMEOUT_MS } from "@/app/constant";
+import {
+  FILES_URL_PREFIX,
+  FILE_UPLOAD_CHUNK_SIZE,
+  REQUEST_TIMEOUT_MS,
+} from "@/app/constant";
 import { MultimodalContent, RequestMessage } from "@/app/client/api";
 import Locale from "@/app/locales";
 import { useUserStore } from "@/app/store/user";
@@ -165,7 +169,27 @@ export function base64Image2Blob(base64Data: string, contentType: string) {
   return new Blob([byteArray], { type: contentType });
 }
 
-// 将文件发送到服务端附件接口。
+async function parseFileUploadResponse(response: Response) {
+  const text = await response.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    const detail = text.replace(/\s+/g, " ").slice(0, 160);
+    throw new Error(
+      `文件上传失败：服务端返回 ${response.status}${
+        detail ? `，${detail}` : ""
+      }`,
+    );
+  }
+
+  if (!response.ok || data?.code !== 0) {
+    throw new Error(data?.error || data?.message || "文件上传失败");
+  }
+  return data;
+}
+
+// 将文件分片发送到服务端附件接口，避免线上函数请求体限制。
 export async function uploadFile(
   file: Blob,
   filename?: string,
@@ -176,38 +200,74 @@ export async function uploadFile(
     throw new Error("用户未登录");
   }
 
-  const formData = new FormData();
   const uploadName =
     filename ||
     ((file as File).name && (file as File).name.trim()) ||
     "upload.bin";
-  formData.append("file", file, uploadName);
+  const headers = {
+    Authorization: `Bearer ${token}`,
+  };
+  let fileUrl = "";
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/files");
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && onProgress) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      try {
-        const data = JSON.parse(xhr.responseText || "{}");
-        if (xhr.status < 200 || xhr.status >= 300 || data?.code !== 0) {
-          reject(new Error(data?.error || data?.message || "文件上传失败"));
-          return;
-        }
-        onProgress?.(100);
-        resolve(data.data);
-      } catch {
-        reject(new Error("文件上传响应异常"));
-      }
-    };
-    xhr.onerror = () => reject(new Error("文件上传网络异常"));
-    xhr.send(formData);
-  });
+  try {
+    const initResponse = await fetch("/api/files", {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: uploadName,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+      }),
+    });
+    const initData = await parseFileUploadResponse(initResponse);
+    fileUrl = initData.data;
+    const chunkSize =
+      Number(initData.chunkSize) > 0
+        ? Number(initData.chunkSize)
+        : FILE_UPLOAD_CHUNK_SIZE;
+
+    if (file.size === 0) {
+      onProgress?.(100);
+    }
+
+    for (let offset = 0; offset < file.size; offset += chunkSize) {
+      const end = Math.min(offset + chunkSize, file.size);
+      const chunk = file.slice(offset, end);
+      const chunkResponse = await fetch(`${fileUrl}?offset=${offset}`, {
+        method: "PATCH",
+        headers: {
+          ...headers,
+          "Content-Type": "application/octet-stream",
+        },
+        body: chunk,
+      });
+      await parseFileUploadResponse(chunkResponse);
+      onProgress?.(Math.round((end / Math.max(file.size, 1)) * 98));
+    }
+
+    const completeResponse = await fetch(fileUrl, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action: "complete" }),
+    });
+    await parseFileUploadResponse(completeResponse);
+    onProgress?.(100);
+    return fileUrl;
+  } catch (error) {
+    if (fileUrl) {
+      await fetch(fileUrl, {
+        method: "DELETE",
+        headers,
+      }).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 export function streamWithThink(

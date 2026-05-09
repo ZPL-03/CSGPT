@@ -194,7 +194,9 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.uploadedFile.aggregate({ _sum: { size: true } }),
+      prisma.$queryRawUnsafe<{ file_bytes: bigint | number | null }[]>(
+        `SELECT COALESCE(SUM(octet_length("data")), 0) AS file_bytes FROM "UploadedFile"`,
+      ),
       prisma.$queryRawUnsafe<{ message_bytes: bigint | number | null }[]>(
         `SELECT COALESCE(SUM(octet_length("content") + octet_length(COALESCE("fileContent", ''))), 0) AS message_bytes FROM "Message"`,
       ),
@@ -222,7 +224,7 @@ export async function GET(req: NextRequest) {
       FROM app_tables`,
     );
     const currentDataBytes =
-      Number(fileSizeResult._sum.size || 0) +
+      Number(fileSizeResult[0]?.file_bytes || 0) +
       Number(messageSizeResult[0]?.message_bytes || 0);
 
     return jsonNoStore({

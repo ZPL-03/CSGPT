@@ -94,6 +94,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import {
   CHAT_PAGE_SIZE,
+  MAX_FILE_UPLOAD_SIZE,
   Path,
   REQUEST_TIMEOUT_MS,
   ServiceProvider,
@@ -484,8 +485,6 @@ function useScrollToBottom(
 }
 
 type AttachmentStatus = "parsing" | "ready" | "error";
-const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
-
 export interface AttachmentInfo {
   id: string;
   url: string;
@@ -1081,7 +1080,7 @@ function _Chat() {
       const previewUrl = file.type.startsWith("image/")
         ? URL.createObjectURL(file)
         : undefined;
-      const overSizeLimit = file.size > MAX_ATTACHMENT_SIZE;
+      const overSizeLimit = file.size > MAX_FILE_UPLOAD_SIZE;
       const initialAttachment: AttachmentInfo = {
         id,
         url: "",

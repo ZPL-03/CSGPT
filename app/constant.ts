@@ -107,6 +107,8 @@ export const UNFINISHED_INPUT = (id: string) => "unfinished-input-" + id;
 
 export const REQUEST_TIMEOUT_MS = 60000;
 export const REQUEST_TIMEOUT_MS_FOR_THINKING = REQUEST_TIMEOUT_MS * 5;
+export const MAX_FILE_UPLOAD_SIZE = 50 * 1024 * 1024;
+export const FILE_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024;
 
 export const EXPORT_MESSAGE_CLASS_NAME = "export-markdown";
 

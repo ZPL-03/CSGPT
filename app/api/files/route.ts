@@ -1,17 +1,16 @@
 // 附件 API：POST /api/files
-// 接收当前用户的附件二进制数据。
+// 创建当前用户的附件记录，真实二进制数据由分片接口写入。
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
+import { FILE_UPLOAD_CHUNK_SIZE, MAX_FILE_UPLOAD_SIZE } from "@/app/constant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
-
-// POST：写入当前用户的附件
+// POST：初始化附件记录
 export async function POST(request: NextRequest) {
   try {
     const userId = await getUserFromRequest(request);
@@ -19,27 +18,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "未提供文件" }, { status: 400 });
+    const body = await request.json().catch(() => null);
+    const originalName =
+      typeof body?.name === "string" && body.name.trim()
+        ? body.name.trim()
+        : "upload.bin";
+    const mimeType =
+      typeof body?.mimeType === "string" && body.mimeType.trim()
+        ? body.mimeType.trim()
+        : "application/octet-stream";
+    const size = Number(body?.size);
+
+    if (!Number.isFinite(size) || size < 0) {
+      return NextResponse.json({ error: "文件大小无效" }, { status: 400 });
     }
 
-    if (file.size > MAX_FILE_SIZE) {
+    if (size > MAX_FILE_UPLOAD_SIZE) {
       return NextResponse.json(
         { error: "文件大小不能超过 50MB" },
         { status: 413 },
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const savedFile = await prisma.uploadedFile.create({
       data: {
         userId,
-        originalName: file.name || "upload.bin",
-        mimeType: file.type || "application/octet-stream",
-        size: buffer.length,
-        data: buffer,
+        originalName,
+        mimeType,
+        size,
+        data: Buffer.alloc(0),
       },
       select: {
         id: true,
@@ -53,11 +60,12 @@ export async function POST(request: NextRequest) {
       code: 0,
       data: `/api/files/${savedFile.id}`,
       file: savedFile,
+      chunkSize: FILE_UPLOAD_CHUNK_SIZE,
     });
   } catch (error: any) {
-    console.error("[Files] Upload error:", error);
+    console.error("[Files] Init error:", error);
     return NextResponse.json(
-      { error: "上传失败", message: error.message },
+      { error: "创建文件记录失败", message: error.message },
       { status: 500 },
     );
   }
