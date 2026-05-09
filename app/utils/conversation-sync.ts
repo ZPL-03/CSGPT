@@ -3,16 +3,26 @@
 
 import { useUserStore } from "../store/user";
 
-// 防抖定时器
-let syncTimer: ReturnType<typeof setTimeout> | null = null;
+function isEmptyStreamingAssistant(message: any) {
+  return (
+    message?.role === "assistant" &&
+    message?.streaming &&
+    !message?.content &&
+    !message?.tools?.length
+  );
+}
+
+function getPersistableMessages(session: any) {
+  return (session.messages || [])
+    .filter((message: any) => !isEmptyStreamingAssistant(message))
+    .map((message: any) => {
+      const { streaming, ...persistableMessage } = message;
+      return persistableMessage;
+    });
+}
 
 // 同步单个对话到数据库
 export async function syncConversationToDB(session: any) {
-  if (syncTimer) {
-    clearTimeout(syncTimer);
-    syncTimer = null;
-  }
-
   const userStore = useUserStore.getState();
   if (!userStore.isLoggedIn || !userStore.token) return false;
 
@@ -27,7 +37,7 @@ export async function syncConversationToDB(session: any) {
       body: JSON.stringify({
         id: session.id,
         topic: session.topic,
-        messages: session.messages,
+        messages: getPersistableMessages(session),
         mask: session.mask,
         memoryPrompt: session.memoryPrompt,
         lastUpdate: session.lastUpdate,
@@ -35,28 +45,23 @@ export async function syncConversationToDB(session: any) {
         clearContextIndex: session.clearContextIndex,
       }),
     });
-    return response.ok;
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.error("[Sync] Conversation sync rejected:", {
+        status: response.status,
+        detail,
+      });
+      return false;
+    }
+    return true;
   } catch (error) {
     console.error("[Sync] Failed to sync conversation:", error);
     return false;
   }
 }
 
-// 防抖同步当前对话
-export function debouncedSyncCurrentSession(session: any) {
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    syncConversationToDB(session);
-  }, 2000); // 2 秒防抖
-}
-
 // 删除数据库中的对话
 export async function deleteConversationFromDB(sessionId: string) {
-  if (syncTimer) {
-    clearTimeout(syncTimer);
-    syncTimer = null;
-  }
-
   const userStore = useUserStore.getState();
   if (!userStore.isLoggedIn || !userStore.token) return;
 

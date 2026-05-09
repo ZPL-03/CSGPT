@@ -5,7 +5,6 @@ import {
   trimTopic,
 } from "../utils";
 import {
-  debouncedSyncCurrentSession,
   syncConversationToDB,
   deleteConversationFromDB,
   loadAllConversationsFromDB,
@@ -459,7 +458,7 @@ export const useChatStore = createPersistStore(
         get().summarizeSession(false, targetSession);
 
         // 同步到数据库
-        debouncedSyncCurrentSession(targetSession);
+        syncConversationToDB(targetSession);
       },
 
       async onUserInput(
@@ -549,6 +548,7 @@ export const useChatStore = createPersistStore(
           session.messages = session.messages.concat([userMessage, botMessage]);
           session.lastUpdate = Date.now();
         });
+        await syncConversationToDB(session);
 
         try {
           const recentMessages =
@@ -574,6 +574,12 @@ export const useChatStore = createPersistStore(
                 botMessage.content = message;
                 botMessage.date = new Date().toLocaleString();
                 get().onNewMessage(botMessage, session);
+              } else {
+                get().updateTargetSession(session, (session) => {
+                  session.messages = session.messages.concat();
+                  session.lastUpdate = Date.now();
+                });
+                await syncConversationToDB(session);
               }
               ChatControllerPool.remove(session.id, botMessage.id);
             },
@@ -606,7 +612,9 @@ export const useChatStore = createPersistStore(
               botMessage.isError = !isAborted;
               get().updateTargetSession(session, (session) => {
                 session.messages = session.messages.concat();
+                session.lastUpdate = Date.now();
               });
+              syncConversationToDB(session);
               ChatControllerPool.remove(
                 session.id,
                 botMessage.id ?? messageIndex,
@@ -639,7 +647,7 @@ export const useChatStore = createPersistStore(
             session.messages = session.messages.concat();
             session.lastUpdate = Date.now();
           });
-          debouncedSyncCurrentSession(session);
+          syncConversationToDB(session);
           ChatControllerPool.remove(session.id, botMessage.id ?? messageIndex);
           console.error("[Chat] 请求异常", error);
         }
