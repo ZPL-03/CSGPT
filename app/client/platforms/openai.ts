@@ -43,6 +43,7 @@ import {
   getTimeoutMSByModel,
 } from "@/app/utils";
 import { fetch } from "@/app/utils/stream";
+import { prettyObject } from "@/app/utils/format";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -397,6 +398,15 @@ export class ChatGPTApi implements LLMApi {
           // parseSSE
           (text: string, runTools: ChatMessageTool[]) => {
             const json = JSON.parse(text);
+            if (json.error) {
+              return {
+                isThinking: false,
+                content: prettyObject({
+                  error: true,
+                  message: json.error.message || String(json.error),
+                }),
+              };
+            }
             const choices = json.choices as Array<{
               delta: {
                 content: string;

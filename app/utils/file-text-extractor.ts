@@ -755,14 +755,21 @@ async function extractPdf(
 ) {
   options.onProgress(10, "读取 PDF");
   const pdfjsLib = await import("pdfjs-dist");
-
-  const loadingTask = pdfjsLib.getDocument({
+  const loadingOptions: any = {
     data: new Uint8Array(bytes),
-    disableWorker: true,
     stopAtErrors: false,
     useSystemFonts: true,
     isEvalSupported: false,
-  } as any);
+  };
+
+  if (typeof window === "undefined") {
+    loadingOptions.disableWorker = true;
+  } else if (pdfjsLib.GlobalWorkerOptions) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
+  }
+
+  const loadingTask = pdfjsLib.getDocument(loadingOptions);
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
   const pagesNeedingOcr: number[] = [];

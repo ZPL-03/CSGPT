@@ -9,6 +9,7 @@ import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
+const CS3_MAX_COMPLETION_TOKENS = 2048;
 
 interface RouteParams {
   provider: string;
@@ -105,6 +106,25 @@ function normalizeMessagesToText(messages: any[]) {
     ...message,
     content: normalizeContentToText(message.content),
   }));
+}
+
+function normalizeCS3GenerationOptions(rest: any) {
+  const normalized = { ...rest };
+  const maxTokenKeys = ["max_tokens", "max_completion_tokens"];
+  let hasTokenLimit = false;
+
+  for (const key of maxTokenKeys) {
+    if (typeof normalized[key] === "number" && normalized[key] > 0) {
+      normalized[key] = Math.min(normalized[key], CS3_MAX_COMPLETION_TOKENS);
+      hasTokenLimit = true;
+    }
+  }
+
+  if (!hasTokenLimit) {
+    normalized.max_tokens = CS3_MAX_COMPLETION_TOKENS;
+  }
+
+  return normalized;
 }
 
 async function handle(req: NextRequest, { params }: { params: RouteParams }) {
@@ -420,6 +440,7 @@ async function handleCS3ChatCompletions(
   bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
 ) {
   const { messages, stream, model, rest } = bodyData;
+  const generationOptions = normalizeCS3GenerationOptions(rest);
   const baseUrl = config.csgptCs3BaseUrl;
   if (!baseUrl) {
     return NextResponse.json(
@@ -461,7 +482,7 @@ async function handleCS3ChatCompletions(
         model: upstreamModel,
         messages: upstreamMessages,
         stream,
-        ...rest,
+        ...generationOptions,
       }),
     });
   } catch (fetchError: any) {
