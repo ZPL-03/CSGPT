@@ -9,6 +9,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getServerSideConfig } from "@/app/config/server";
 import { verifyToken } from "@/app/lib/auth";
+import {
+  collectFileIdsFromMessageContent,
+  deleteUnreferencedFiles,
+} from "../../conversations/file-refs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,33 +68,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-function collectFileIdsFromMessageContent(content: string) {
-  const ids = new Set<string>();
-  const collectFromValue = (value: any) => {
-    if (!value) return;
-    if (typeof value === "string") {
-      const matches = value.matchAll(/\/api\/files\/([A-Za-z0-9_-]+)/g);
-      for (const match of matches) ids.add(match[1]);
-      return;
-    }
-    if (Array.isArray(value)) {
-      value.forEach(collectFromValue);
-      return;
-    }
-    if (typeof value === "object") {
-      Object.values(value).forEach(collectFromValue);
-    }
-  };
-
-  try {
-    collectFromValue(JSON.parse(content));
-  } catch {
-    collectFromValue(content);
-  }
-  return Array.from(ids);
-}
-
-async function deleteFilesReferencedByConversation(
+async function collectFilesReferencedByConversation(
   tx: any,
   conversationId: string,
 ) {
@@ -98,15 +76,13 @@ async function deleteFilesReferencedByConversation(
     where: { conversationId },
     select: { content: true },
   });
-  const fileIds = Array.from(
+  return Array.from(
     new Set(
       messages.flatMap((message) =>
         collectFileIdsFromMessageContent(message.content),
       ),
     ),
   );
-  if (fileIds.length === 0) return;
-  await tx.uploadedFile.deleteMany({ where: { id: { in: fileIds } } });
 }
 
 export async function GET(req: NextRequest) {
@@ -334,15 +310,19 @@ export async function DELETE(req: NextRequest) {
       }
       const conversation = await prisma.conversation.findUnique({
         where: { id: targetId },
-        select: { id: true },
+        select: { id: true, userId: true },
       });
       if (!conversation) {
         return NextResponse.json({ error: "对话不存在" }, { status: 404 });
       }
 
       await prisma.$transaction(async (tx) => {
-        await deleteFilesReferencedByConversation(tx, targetId);
+        const fileIds = await collectFilesReferencedByConversation(
+          tx,
+          targetId,
+        );
         await tx.conversation.delete({ where: { id: targetId } });
+        await deleteUnreferencedFiles(tx, fileIds, conversation.userId);
       });
       return NextResponse.json({ success: true, message: "已删除对话" });
     }

@@ -7,6 +7,7 @@ import { getUserFromRequest } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function isValidFileId(fileId: string) {
   return (

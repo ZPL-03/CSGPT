@@ -74,6 +74,8 @@ const SPREADSHEET_EXTENSIONS = new Set([
   "ods",
 ]);
 const PRESENTATION_EXTENSIONS = new Set(["pptx"]);
+const IMAGE_OCR_MAX_SIDE = 2200;
+const PDFJS_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
 
 export interface FileExtractionResult {
   /** 模型可读取的解析文本 */
@@ -252,6 +254,11 @@ function buildSection(title: string, content: string) {
   return text ? `## ${title}\n${text}` : "";
 }
 
+async function yieldToBrowser() {
+  if (typeof window === "undefined") return;
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 async function getOcrWorker() {
   if (typeof window === "undefined") {
     throw new Error("OCR 需要浏览器环境");
@@ -283,10 +290,9 @@ async function prepareImageForOcr(dataUrl: string) {
   if (typeof document === "undefined") return dataUrl;
 
   const image = await loadImage(dataUrl);
-  const maxSide = 2600;
   const scale = Math.min(
-    2.5,
-    Math.max(0.25, maxSide / Math.max(image.width, image.height)),
+    2.2,
+    Math.max(0.25, IMAGE_OCR_MAX_SIDE / Math.max(image.width, image.height)),
   );
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(image.width * scale));
@@ -316,7 +322,10 @@ async function prepareImageForOcr(dataUrl: string) {
   return canvas.toDataURL("image/png");
 }
 
-async function recognizeImage(dataUrl: string): Promise<string> {
+async function recognizeImage(
+  dataUrl: string,
+  options: { retryOriginal?: boolean } = {},
+): Promise<string> {
   const worker = await getOcrWorker();
   const preparedImage = await prepareImageForOcr(dataUrl);
   const preparedResult = await worker.recognize(preparedImage);
@@ -325,7 +334,7 @@ async function recognizeImage(dataUrl: string): Promise<string> {
     return preparedText;
   }
 
-  if (dataUrl.length > 3_000_000) {
+  if (!options.retryOriginal || dataUrl.length > 3_000_000) {
     return preparedText;
   }
 
@@ -344,12 +353,15 @@ async function recognizeImages(
   images: string[],
   label: string,
   onProgress?: (completed: number, total: number) => void,
+  options: { retryOriginal?: boolean } = {},
 ) {
   const sections: string[] = [];
   for (let i = 0; i < images.length; i++) {
     let text = "";
     try {
-      text = await recognizeImage(images[i]);
+      text = await recognizeImage(images[i], {
+        retryOriginal: options.retryOriginal ?? true,
+      });
     } catch {
       text = "";
     }
@@ -359,6 +371,7 @@ async function recognizeImages(
         : `## ${label} ${i + 1} OCR\n未提取到可读文本`,
     );
     onProgress?.(i + 1, images.length);
+    await yieldToBrowser();
   }
   return sections;
 }
@@ -453,8 +466,7 @@ function shouldOcrPdfPage(pageText: string) {
   const readableChars = Array.from(text).filter((char) =>
     /[\p{Script=Han}A-Za-z0-9]/u.test(char),
   ).length;
-  if (readableChars < 30) return true;
-  return readableChars / Math.max(text.length, 1) < 0.35;
+  return readableChars < 30;
 }
 
 function imageMimeFromPath(path: string) {
@@ -496,6 +508,7 @@ async function extractZipImages(zip: any, prefix: string) {
     if (!media) continue;
     const base64 = await media.async("base64");
     images.push(`data:${imageMimeFromPath(path)};base64,${base64}`);
+    await yieldToBrowser();
   }
 
   return images;
@@ -639,6 +652,7 @@ async function extractSpreadsheet(
         buildSection(`工作表公式：${sheetName}`, formulaRows.join("\n")),
       );
     }
+    await yieldToBrowser();
   }
 
   let images: string[] = [];
@@ -765,8 +779,10 @@ async function extractPdf(
   if (typeof window === "undefined") {
     loadingOptions.disableWorker = true;
   } else if (pdfjsLib.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN_BASE}/pdf.worker.min.mjs`;
+    loadingOptions.cMapUrl = `${PDFJS_CDN_BASE}/cmaps/`;
+    loadingOptions.cMapPacked = true;
+    loadingOptions.standardFontDataUrl = `${PDFJS_CDN_BASE}/standard_fonts/`;
   }
 
   const loadingTask = pdfjsLib.getDocument(loadingOptions);
@@ -795,6 +811,7 @@ async function extractPdf(
       10 + Math.round((i / pdf.numPages) * 25),
       `提取 PDF 文本 ${i}/${pdf.numPages}`,
     );
+    await yieldToBrowser();
   }
 
   const renderedImages: string[] = [];
@@ -814,6 +831,7 @@ async function extractPdf(
         35 + Math.round((i / pdf.numPages) * 25),
         `渲染 PDF 页面 ${i}/${pdf.numPages}`,
       );
+      await yieldToBrowser();
     }
   }
 
@@ -828,7 +846,9 @@ async function extractPdf(
         page = await pdf.getPage(pageNumber);
         const image =
           renderedImages[pageNumber - 1] || (await renderPdfPageToImage(page));
-        const text = image ? await recognizeImage(image) : "";
+        const text = image
+          ? await recognizeImage(image, { retryOriginal: false })
+          : "";
         ocrSections.push(
           text
             ? `## PDF 页面 ${pageNumber} OCR\n${text}`
@@ -844,6 +864,7 @@ async function extractPdf(
         60 + Math.round(((i + 1) / pagesNeedingOcr.length) * 35),
         `识别 PDF 页面 ${i + 1}/${pagesNeedingOcr.length}`,
       );
+      await yieldToBrowser();
     }
     textSections.push(...ocrSections);
   }
@@ -896,6 +917,7 @@ async function extractPresentation(
       10 + Math.round(((i + 1) / slideFiles.length) * 30),
       `提取幻灯片文本 ${i + 1}/${slideFiles.length}`,
     );
+    await yieldToBrowser();
   }
 
   const images = await extractZipImages(zip, "ppt/media/");
@@ -938,7 +960,7 @@ async function extractImage(
     options.onProgress(20, "识别图片");
     let text = "";
     try {
-      text = await recognizeImage(dataUrl);
+      text = await recognizeImage(dataUrl, { retryOriginal: true });
     } catch {
       text = "";
     }
