@@ -12,9 +12,7 @@ import { fetch as tauriStreamFetch } from "./utils/stream";
 import { ModelSize } from "./typing";
 
 export function trimTopic(topic: string) {
-  // Fix an issue where double quotes still show in the Indonesian language
-  // This will remove the specified punctuation from the end of the string
-  // and also trim quotes from both the start and end if they exist.
+  // 去除末尾标点符号和两端引号
   return (
     topic
       // Gemini 返回主题时可能带有引号。
@@ -257,7 +255,7 @@ export function getMessageTextContentWithoutThinking(message: RequestMessage) {
     }
   }
 
-  // Filter out thinking lines (starting with "> ")
+  // 过滤思考行（以 "> " 开头）
   return content
     .split("\n")
     .filter((line) => !line.startsWith("> ") && line.trim() !== "")
@@ -453,7 +451,7 @@ export function getOperationId(operation: {
   method: string;
   path: string;
 }) {
-  // pattern '^[a-zA-Z0-9_-]+$'
+  // 模式：'^[a-zA-Z0-9_-]+$'
   return (
     operation?.operationId ||
     `${operation.method.toUpperCase()}${operation.path.replaceAll("/", "_")}`
@@ -461,7 +459,7 @@ export function getOperationId(operation: {
 }
 
 export function clientUpdate() {
-  // this a wild for updating client app
+  // 客户端应用更新通配符
   return window.__TAURI__?.updater
     .checkUpdate()
     .then((updateResult) => {

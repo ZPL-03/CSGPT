@@ -1,5 +1,5 @@
 "use client";
-// azure and openai, using same models. so using same LLMApi.
+// Azure 与 OpenAI 使用相同的模型协议，共用同一个 LLMApi 实现。
 import {
   ApiPath,
   OPENAI_BASE_URL,
@@ -192,7 +192,7 @@ export class ChatGPTApi implements LLMApi {
     if (res.error) {
       return "```\n" + JSON.stringify(res, null, 4) + "\n```";
     }
-    // dalle3 model return url, using url create image message
+    // dall-e-3 模型返回 URL，使用 URL 创建图片消息
     if (res.data) {
       let url = res.data?.at(0)?.url ?? "";
       const b64_json = res.data?.at(0)?.b64_json ?? "";
@@ -241,8 +241,7 @@ export class ChatGPTApi implements LLMApi {
       requestPayload = {
         model: options.config.model,
         prompt,
-        // URLs are only valid for 60 minutes after the image has been generated.
-        // 使用 b64_json 后写入服务端文件表，保证生成图片可持久访问。
+        // dall-e-3 生成的图片 URL 仅 60 分钟内有效，使用 b64_json 写入服务端文件表保证持久访问。
         response_format: "b64_json",
         n: 1,
         size: options.config?.size ?? "1024x1024",
@@ -277,7 +276,7 @@ export class ChatGPTApi implements LLMApi {
           messages.push({ role: v.role, content });
       }
 
-      // O1 not support image, tools (plugin in ChatGPTNextWeb) and system, stream, logprobs, temperature, top_p, n, presence_penalty, frequency_penalty yet.
+      // O1 系列模型不支持图片、工具调用、system 角色、流式、temperature 等参数。
       requestPayload = {
         messages,
         stream: options.config.stream,
@@ -290,20 +289,18 @@ export class ChatGPTApi implements LLMApi {
       };
 
       if (isGpt5) {
-        // Remove max_tokens if present
+        // GPT-5 使用 max_completion_tokens 替代 max_tokens
         delete requestPayload.max_tokens;
-        // Add max_completion_tokens (or max_completion_tokens if that's what you meant)
         requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       } else if (isO1OrO3) {
-        // by default the o1/o3 models will not attempt to produce output that includes markdown formatting
-        // manually add "Formatting re-enabled" developer message to encourage markdown inclusion in model responses
-        // (https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning?tabs=python-secure#markdown-output)
+        // o1/o3 默认不输出 markdown，手动添加 developer 消息启用格式化
+        // 参见: https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
         requestPayload["messages"].unshift({
           role: "developer",
           content: "Formatting re-enabled",
         });
 
-        // o1/o3 uses max_completion_tokens to control the number of tokens (https://platform.openai.com/docs/guides/reasoning#controlling-costs)
+        // o1/o3 使用 max_completion_tokens 控制输出 token 数
         requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       }
     }
@@ -315,7 +312,7 @@ export class ChatGPTApi implements LLMApi {
     try {
       let chatPath = "";
       if (modelConfig.providerName === ServiceProvider.Azure) {
-        // find model, and get displayName as deployName
+        // 查找模型，获取 displayName 作为 Azure 部署名
         const { models: configModels, customModels: configCustomModels } =
           useAppConfig.getState();
         const {
@@ -402,7 +399,7 @@ export class ChatGPTApi implements LLMApi {
             const reasoning = choices[0]?.delta?.reasoning_content;
             const content = choices[0]?.delta?.content;
 
-            // Skip if both content and reasoning_content are empty or null
+            // 跳过 content 和 reasoning_content 均为空的情况
             if (
               (!reasoning || reasoning.length === 0) &&
               (!content || content.length === 0)
@@ -430,13 +427,13 @@ export class ChatGPTApi implements LLMApi {
               content: "",
             };
           },
-          // processToolMessage, include tool_calls message and tool call results
+          // 处理工具消息：将 tool_calls 消息和工具调用结果合并到请求中
           (
             requestPayload: RequestPayload,
             toolCallMessage: any,
             toolCallResult: any[],
           ) => {
-            // reset index value
+            // 重置工具调用索引
             index = -1;
             // @ts-ignore
             requestPayload?.messages?.splice(
@@ -457,7 +454,7 @@ export class ChatGPTApi implements LLMApi {
           headers: getHeaders(false, modelConfig.providerName),
         };
 
-        // make a fetch request
+        // 非流式请求
         const requestTimeoutId = setTimeout(
           () => controller.abort(),
           getTimeoutMSByModel(options.config.model),

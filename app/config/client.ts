@@ -2,12 +2,12 @@ import { BuildConfig, getBuildConfig } from "./build";
 
 export function getClientConfig() {
   if (typeof document !== "undefined") {
-    // client side
+    // 客户端侧
     return JSON.parse(queryMeta("config") || "{}") as BuildConfig;
   }
 
   if (typeof process !== "undefined") {
-    // server side
+    // 服务端侧
     return getBuildConfig();
   }
 }

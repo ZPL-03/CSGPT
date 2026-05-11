@@ -94,8 +94,7 @@ export abstract class LLMApi {
 export class ClientApi {
   public llm: LLMApi;
 
-  // Chat requests share the OpenAI-compatible client; provider-specific
-  // endpoint, key, and model are resolved from each request config.
+  // 聊天请求共用 OpenAI 兼容客户端，provider 对应的端点、密钥和模型从各请求配置解析。
   constructor(_provider: ServiceProvider = ServiceProvider.CSGPT) {
     this.llm = new ChatGPTApi();
   }

@@ -17,83 +17,83 @@ declare global {
 
       VERCEL?: string;
       BUILD_MODE?: "standalone" | "export";
-      BUILD_APP?: string; // is building desktop app
+      BUILD_APP?: string; // 是否构建桌面应用
 
-      HIDE_USER_API_KEY?: string; // disable user's api key input
-      DISABLE_GPT4?: string; // allow user to use gpt-4 or not
-      ENABLE_BALANCE_QUERY?: string; // allow user to query balance or not
-      DISABLE_FAST_LINK?: string; // disallow parse settings from url or not
-      CUSTOM_MODELS?: string; // to control custom models
-      DEFAULT_MODEL?: string; // to control default model in every new chat window
-      // stability only
+      HIDE_USER_API_KEY?: string; // 禁用用户 API Key 输入
+      DISABLE_GPT4?: string; // 禁止用户使用 GPT-4
+      ENABLE_BALANCE_QUERY?: string; // 允许用户查询余额
+      DISABLE_FAST_LINK?: string; // 禁止从 URL 解析设置
+      CUSTOM_MODELS?: string; // 控制自定义模型
+      DEFAULT_MODEL?: string; // 设置每个新聊天窗口的默认模型
+      // Stability AI
       STABILITY_URL?: string;
       STABILITY_API_KEY?: string;
 
-      // azure only
-      AZURE_URL?: string; // https://{azure-url}/openai/deployments/{deploy-name}
+      // Azure OpenAI
+      AZURE_URL?: string; // 格式：https://{azure-url}/openai/deployments/{deploy-name}
       AZURE_API_KEY?: string;
       AZURE_API_VERSION?: string;
 
-      // google only
+      // Google AI
       GOOGLE_API_KEY?: string;
       GOOGLE_URL?: string;
 
-      // google tag manager
+      // Google Tag Manager
       GTM_ID?: string;
 
-      // anthropic only
+      // Anthropic
       ANTHROPIC_URL?: string;
       ANTHROPIC_API_KEY?: string;
 
-      // baidu only
+      // 百度
       BAIDU_URL?: string;
       BAIDU_API_KEY?: string;
       BAIDU_SECRET_KEY?: string;
 
-      // bytedance only
+      // 字节跳动
       BYTEDANCE_URL?: string;
       BYTEDANCE_API_KEY?: string;
 
-      // alibaba only
+      // 阿里巴巴
       ALIBABA_URL?: string;
       ALIBABA_API_KEY?: string;
 
-      // tencent only
+      // 腾讯
       TENCENT_URL?: string;
       TENCENT_SECRET_KEY?: string;
       TENCENT_SECRET_ID?: string;
 
-      // moonshot only
+      // 月之暗面
       MOONSHOT_URL?: string;
       MOONSHOT_API_KEY?: string;
 
-      // iflytek only
+      // 科大讯飞
       IFLYTEK_URL?: string;
       IFLYTEK_API_KEY?: string;
 
       DEEPSEEK_URL?: string;
       DEEPSEEK_API_KEY?: string;
 
-      // xai only
+      // xAI
       XAI_URL?: string;
       XAI_API_KEY?: string;
 
-      // chatglm only
+      // 智谱 ChatGLM
       CHATGLM_URL?: string;
       CHATGLM_API_KEY?: string;
 
-      // siliconflow only
+      // 硅基流动
       SILICONFLOW_URL?: string;
       SILICONFLOW_API_KEY?: string;
 
-      // 302.AI only
+      // 302.AI
       AI302_URL?: string;
       AI302_API_KEY?: string;
 
-      // custom template for preprocessing user input
+      // 自定义用户输入预处理模板
       DEFAULT_INPUT_TEMPLATE?: string;
 
-      ENABLE_MCP?: string; // enable mcp functionality
+      ENABLE_MCP?: string; // 启用 MCP 功能
 
       // CSGPT 专用配置
       CSGPT_CS1_BASE_URL?: string; // CS1 上游服务地址

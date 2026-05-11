@@ -31,7 +31,7 @@ export enum Theme {
 const config = getClientConfig();
 
 export const DEFAULT_CONFIG = {
-  lastUpdate: Date.now(), // timestamp, to merge state
+  lastUpdate: Date.now(), // 时间戳，用于状态合并
 
   submitKey: SubmitKey.Enter,
   avatar: "1f603",
@@ -42,12 +42,12 @@ export const DEFAULT_CONFIG = {
   enableAutoGenerateTitle: true,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
 
-  enableCodeFold: true, // code fold config
+  enableCodeFold: true, // 代码折叠配置
 
   disablePromptHint: false,
 
-  dontShowMaskSplashScreen: false, // dont show splash screen when create chat
-  hideBuiltinMasks: false, // dont add builtin masks
+  dontShowMaskSplashScreen: false, // 新建聊天时不显示面具启动屏
+  hideBuiltinMasks: false, // 不添加内置面具
 
   customModels: "",
   models: DEFAULT_MODELS as any as LLMModel[],

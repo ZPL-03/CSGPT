@@ -263,7 +263,7 @@ export const AI302 = {
   ListModelPath: "v1/models?llm=1",
 };
 
-export const DEFAULT_INPUT_TEMPLATE = `{{input}}`; // input / time / model / lang
+export const DEFAULT_INPUT_TEMPLATE = `{{input}}`; // 可用变量：input / time / model / lang
 export const DEFAULT_SYSTEM_TEMPLATE = `
 You are CSGPT, a large language model trained by {{ServiceProvider}}.
 Knowledge cutoff: {{cutoff}}
@@ -444,8 +444,7 @@ export const KnowledgeCutOffDate: Record<string, string> = {
   o1: "2023-10",
   "o3-mini-2025-01-31": "2023-10",
   "o3-mini": "2023-10",
-  // After improvements,
-  // it's now easier to add "KnowledgeCutOffDate" instead of stupid hardcoding it, as was done previously.
+  // 模型知识截止日期配置
   "gemini-pro": "2023-12",
   "gemini-pro-vision": "2023-12",
   "deepseek-chat": "2024-07",
@@ -453,8 +452,7 @@ export const KnowledgeCutOffDate: Record<string, string> = {
 };
 
 const openaiModels = [
-  // As of July 2024, gpt-4o-mini should be used in place of gpt-3.5-turbo,
-  // as it is cheaper, more capable, multimodal, and just as fast. gpt-3.5-turbo is still available for use in the API.
+  // gpt-4o-mini 已替代 gpt-3.5-turbo，更便宜、功能更强、支持多模态且速度相当。
   "gpt-3.5-turbo",
   "gpt-3.5-turbo-1106",
   "gpt-3.5-turbo-0125",
@@ -645,10 +643,10 @@ const chatglmModels = [
   "glm-4-flash",
   "glm-4v-plus",
   "glm-4v",
-  "glm-4v-flash", // free
+  "glm-4v-flash", // 免费
   "cogview-3-plus",
   "cogview-3",
-  "cogview-3-flash", // free
+  "cogview-3-flash", // 免费
   // 目前无法适配轮询任务
   //   "cogvideox",
   //   "cogvideox-flash", // free
@@ -737,7 +735,7 @@ export const DEFAULT_MODELS = [
   ...openaiModels.map((name) => ({
     name,
     available: true,
-    sorted: seq++, // Global sequence sort(index)
+    sorted: seq++, // 全局排序序号
     provider: {
       id: "openai",
       providerName: "OpenAI",

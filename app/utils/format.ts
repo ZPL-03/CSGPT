@@ -17,12 +17,12 @@ export function* chunks(s: string, maxBytes = 1000 * 1000) {
   let buf = new TextEncoder().encode(s);
   while (buf.length) {
     let i = buf.lastIndexOf(32, maxBytes + 1);
-    // If no space found, try forward search
+    // 找不到空格时向前搜索
     if (i < 0) i = buf.indexOf(32, maxBytes);
-    // If there's no space at all, take all
+    // 仍无空格则取全部
     if (i < 0) i = buf.length;
-    // This is a safe cut-off point; never half-way a multi-byte
+    // 安全截断点，避免截断多字节字符
     yield decoder.decode(buf.slice(0, i));
-    buf = buf.slice(i + 1); // Skip space (if any)
+    buf = buf.slice(i + 1); // 跳过空格
   }
 }

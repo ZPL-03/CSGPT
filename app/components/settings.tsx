@@ -342,8 +342,8 @@ export function Settings() {
     </ListItem>
   );
 
-  const useCustomConfigComponent = // Conditionally render the following ListItem based on clientConfig.isApp
-    !clientConfig?.isApp && ( // only show if isApp is false
+  const useCustomConfigComponent = // 根据 clientConfig.isApp 条件渲染
+    !clientConfig?.isApp && ( // 仅在非 App 模式下显示
       <ListItem
         title={Locale.Settings.Access.CustomEndpoint.Title}
         subTitle={Locale.Settings.Access.CustomEndpoint.SubTitle}

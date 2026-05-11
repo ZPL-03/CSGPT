@@ -40,7 +40,7 @@ export function SearchChatPage() {
           if (!content.toLowerCase || content === "") return;
           const lowerCaseContent = content.toLowerCase();
 
-          // full text search
+          // 全文搜索
           let pos = lowerCaseContent.indexOf(lowerCaseText);
           while (pos !== -1) {
             const start = Math.max(0, pos - 35);
@@ -60,12 +60,12 @@ export function SearchChatPage() {
           results.push({
             id: index,
             name: session.topic,
-            content: fullTextContents.join("... "), // concat content with...
+            content: fullTextContents.join("... "), // 拼接完整内容
           });
         }
       });
 
-      // sort by length of matching content
+      // 按匹配内容长度排序
       results.sort((a, b) => b.content.length - a.content.length);
 
       return results;

@@ -124,7 +124,7 @@ export const usePromptStore = createPersistStore(
 
     search(text: string) {
       if (text.length === 0) {
-        // return all rompts
+        // 返回全部提示词
         return this.getUserPrompts().concat(SearchService.builtinPrompts);
       }
       return SearchService.search(text) as Prompt[];
@@ -147,7 +147,7 @@ export const usePromptStore = createPersistStore(
     },
 
     onRehydrateStorage(state) {
-      // Skip store rehydration on server side
+      // 服务端跳过 store 水合
       if (typeof window === "undefined") {
         return;
       }
@@ -159,12 +159,10 @@ export const usePromptStore = createPersistStore(
       fetch(PROMPT_URL)
         .then((res) => res.json())
         .then((res) => {
-          let fetchPrompts = [res.en, res.tw, res.cn];
-          if (getLang() === "cn") {
-            fetchPrompts = fetchPrompts.reverse();
-          }
-          const builtinPrompts = fetchPrompts.map((promptList: PromptList) => {
-            return promptList.map(
+          // 仅加载当前语言的提示词模板
+          const promptList: PromptList = getLang() === "cn" ? res.cn : res.en;
+          const builtinPrompts = [
+            promptList.map(
               ([title, content]) =>
                 ({
                   id: nanoid(),
@@ -172,16 +170,15 @@ export const usePromptStore = createPersistStore(
                   content,
                   createdAt: Date.now(),
                 }) as Prompt,
-            );
-          });
+            ),
+          ];
 
           const userPrompts = usePromptStore.getState().getUserPrompts() ?? [];
 
           const allPromptsForSearch = builtinPrompts
-            .reduce((pre, cur) => pre.concat(cur), [])
-            .filter((v) => !!v.title && !!v.content);
-          SearchService.count.builtin =
-            res.en.length + res.cn.length + res.tw.length;
+            .reduce((pre: Prompt[], cur: Prompt[]) => pre.concat(cur), [])
+            .filter((v: Prompt) => !!v.title && !!v.content);
+          SearchService.count.builtin = promptList.length;
           SearchService.init(allPromptsForSearch, userPrompts);
         });
     },

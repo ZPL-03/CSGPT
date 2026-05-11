@@ -7,7 +7,7 @@ import {
 import { LLMModel } from "../client/api";
 
 const CustomSeq = {
-  val: -1000, //To ensure the custom model located at front, start from -1000, refer to constant.ts
+  val: -1000, // 确保自定义模型排在前面，从 -1000 开始
   cache: new Map<string, number>(),
   next: (id: string) => {
     if (CustomSeq.cache.has(id)) {
@@ -80,21 +80,21 @@ export function collectModelTable(
       name: string;
       displayName: string;
       sorted: number;
-      provider?: LLMModel["provider"]; // Marked as optional
+      provider?: LLMModel["provider"]; // 标记为可选
       isDefault?: boolean;
     }
   > = {};
 
-  // default models
+  // 默认模型列表
   models.forEach((m) => {
-    // using <modelName>@<providerId> as fullName
+    // 使用 <modelName>@<providerId> 格式作为 fullName
     modelTable[`${m.name}@${m?.provider?.id}`] = {
       ...m,
       displayName: m.displayName || m.name, // 'provider' is copied over if it exists
     };
   });
 
-  // server custom models
+  // 服务端自定义模型
   customModels
     .split(",")
     .filter((v) => !!v && v.length > 0)
@@ -104,7 +104,7 @@ export function collectModelTable(
         m.startsWith("+") || m.startsWith("-") ? m.slice(1) : m;
       let [name, displayName] = nameConfig.split("=");
 
-      // enable or disable all models
+      // 启用或禁用所有模型
       if (name === "all") {
         Object.values(modelTable).forEach(
           (model) => (model.available = available),
@@ -122,7 +122,7 @@ export function collectModelTable(
           ) {
             count += 1;
             modelTable[fullName]["available"] = available;
-            // swap name and displayName for bytedance
+            // 字节跳动模型交换 name 和 displayName
             if (modelInfo.provider?.id === "bytedance") {
               [name, displayName] = [displayName, modelName];
               modelTable[fullName]["name"] = name;
@@ -146,7 +146,7 @@ export function collectModelTable(
             name: customModelName,
             displayName: displayName || customModelName,
             available,
-            provider, // Use optional chaining
+            provider, // 使用可选链
             sorted: CustomSeq.next(`${customModelName}@${provider?.id}`),
           };
         }
@@ -270,7 +270,7 @@ export function isModelNotAvailableInServer(
   modelName: string,
   providerNames: string | string[],
 ): boolean {
-  // Check DISABLE_GPT4 environment variable
+  // 检查 DISABLE_GPT4 环境变量
   if (
     process.env.DISABLE_GPT4 === "1" &&
     isGPT4Model(modelName.toLowerCase())
@@ -284,7 +284,7 @@ export function isModelNotAvailableInServer(
     ? providerNames
     : [providerNames];
   for (const providerName of providerNamesArray) {
-    // if model provider is bytedance, use model config name to check if not avaliable
+    // 字节跳动 provider 使用模型配置名称检查可用性
     if (providerName === ServiceProvider.ByteDance) {
       return !Object.values(modelTable).filter((v) => v.name === modelName)?.[0]
         ?.available;

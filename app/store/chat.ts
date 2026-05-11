@@ -134,7 +134,7 @@ function getSummarizeModel(
   currentModel: string,
   providerName: string,
 ): string[] {
-  // if it is using gpt-* models, force to use 4o-mini to summarize
+  // GPT 系列模型强制使用 4o-mini 执行摘要
   if (
     providerName !== ServiceProvider.CSGPT &&
     (currentModel.startsWith("gpt") || currentModel.startsWith("chatgpt"))
@@ -175,7 +175,7 @@ function countMessages(msgs: ChatMessage[]) {
 function fillTemplateWith(input: string, modelConfig: ModelConfig) {
   const cutoff =
     KnowledgeCutOffDate[modelConfig.model] ?? KnowledgeCutOffDate.default;
-  // Find the model in the DEFAULT_MODELS array that matches the modelConfig.model
+  // 从 DEFAULT_MODELS 中查找匹配的模型信息
   const modelInfo = DEFAULT_MODELS.find((m) => m.name === modelConfig.model);
 
   // 优先使用用户配置的 providerName，仅在未配置时从 DEFAULT_MODELS 推断
@@ -195,12 +195,12 @@ function fillTemplateWith(input: string, modelConfig: ModelConfig) {
 
   let output = modelConfig.template ?? DEFAULT_INPUT_TEMPLATE;
 
-  // remove duplicate
+  // 去重：如果输入已以模板开头则清空模板
   if (input.startsWith(output)) {
     output = "";
   }
 
-  // must contains {{input}}
+  // 模板必须包含 {{input}} 占位符
   const inputVar = "{{input}}";
   if (!output.includes(inputVar)) {
     output += "\n" + inputVar;
@@ -208,7 +208,7 @@ function fillTemplateWith(input: string, modelConfig: ModelConfig) {
 
   Object.entries(vars).forEach(([name, value]) => {
     const regex = new RegExp(`{{${name}}}`, "g");
-    output = output.replace(regex, value.toString()); // Ensure value is a string
+    output = output.replace(regex, value.toString()); // 确保值是字符串
   });
 
   return output;
@@ -220,7 +220,7 @@ async function getMcpSystemPrompt(): Promise<string> {
   let toolsStr = "";
 
   tools.forEach((i) => {
-    // error client has no tools
+    // 客户端未注册工具则跳过
     if (!i.tools) return;
 
     toolsStr += MCP_TOOLS_TEMPLATE.replace(
@@ -331,13 +331,13 @@ export const useChatStore = createPersistStore(
         set((state) => {
           const { sessions, currentSessionIndex: oldIndex } = state;
 
-          // move the session
+          // 移动会话
           const newSessions = [...sessions];
           const session = newSessions[from];
           newSessions.splice(from, 1);
           newSessions.splice(to, 0, session);
 
-          // modify current session id
+          // 更新当前会话索引
           let newIndex = oldIndex === from ? to : oldIndex;
           if (oldIndex > from && oldIndex <= to) {
             newIndex -= 1;
@@ -408,7 +408,7 @@ export const useChatStore = createPersistStore(
           sessions.push(createEmptySession());
         }
 
-        // for undo delete action
+        // 保存状态以便撤销删除操作
         const restoreState = {
           currentSessionIndex: get().currentSessionIndex,
           sessions: get().sessions.slice(),
@@ -672,10 +672,10 @@ export const useChatStore = createPersistStore(
         const messages = (sourceMessages ?? session.messages).slice();
         const totalMessageCount = messages.length;
 
-        // in-context prompts
+        // 上下文预置提示词
         const contextPrompts = session.mask.context.slice();
 
-        // system prompts, to get close to OpenAI Web ChatGPT
+        // 系统提示词，用于模拟 ChatGPT Web 体验
         const shouldInjectSystemPrompts =
           modelConfig.enableInjectSystemPrompts &&
           modelConfig.providerName !== ServiceProvider.CSGPT &&
@@ -708,7 +708,7 @@ export const useChatStore = createPersistStore(
         }
 
         const memoryPrompt = get().getMemoryPrompt();
-        // long term memory
+        // 长期记忆
         const shouldSendLongTermMemory =
           modelConfig.sendMemory &&
           session.memoryPrompt &&
@@ -718,26 +718,26 @@ export const useChatStore = createPersistStore(
           shouldSendLongTermMemory && memoryPrompt ? [memoryPrompt] : [];
         const longTermMemoryStartIndex = session.lastSummarizeIndex;
 
-        // short term memory
+        // 短期记忆（最近 N 条消息）
         const shortTermMemoryStartIndex = Math.max(
           0,
           totalMessageCount - modelConfig.historyMessageCount,
         );
 
-        // lets concat send messages, including 4 parts:
-        // 0. system prompt: to get close to OpenAI Web ChatGPT
-        // 1. long term memory: summarized memory messages
-        // 2. pre-defined in-context prompts
-        // 3. short term memory: latest n messages
-        // 4. newest input message
+        // 拼装发送消息，包含以下部分：
+        // 0. 系统提示词
+        // 1. 长期记忆：历史摘要消息
+        // 2. 上下文预置提示词
+        // 3. 短期记忆：最近 N 条消息
+        // 4. 最新用户输入
         const memoryStartIndex = shouldSendLongTermMemory
           ? Math.min(longTermMemoryStartIndex, shortTermMemoryStartIndex)
           : shortTermMemoryStartIndex;
-        // and if user has cleared history messages, we should exclude the memory too.
+        // 如果用户清除了历史消息，同时排除记忆
         const contextStartIndex = Math.max(clearContextIndex, memoryStartIndex);
         const maxTokenThreshold = modelConfig.max_tokens;
 
-        // get recent messages as much as possible
+        // 在 token 限制内尽可能多地获取最近消息
         const reversedRecentMessages = [];
         for (
           let i = totalMessageCount - 1, tokenCount = 0;
@@ -749,7 +749,7 @@ export const useChatStore = createPersistStore(
           tokenCount += estimateTokenLength(getMessageTextContent(msg));
           reversedRecentMessages.push(msg);
         }
-        // concat all messages
+        // 拼接全部消息
         const recentMessages = [
           ...systemPrompts,
           ...longTermMemoryPrompts,
@@ -786,12 +786,12 @@ export const useChatStore = createPersistStore(
         const config = useAppConfig.getState();
         const session = targetSession;
         const modelConfig = session.mask.modelConfig;
-        // skip summarize when using dalle3?
+        // dall-e-3 模型跳过摘要
         if (isDalle3(modelConfig.model)) {
           return;
         }
 
-        // if not config compressModel, then using getSummarizeModel
+        // 未配置压缩模型时使用默认摘要模型
         const [model, providerName] = modelConfig.compressModel
           ? [modelConfig.compressModel, modelConfig.compressProviderName]
           : getSummarizeModel(
@@ -800,10 +800,10 @@ export const useChatStore = createPersistStore(
             );
         const api: ClientApi = getClientApi(providerName as ServiceProvider);
 
-        // remove error messages if any
+        // 移除错误消息
         const messages = session.messages;
 
-        // should summarize topic after chating more than 50 words
+        // 对话超过 50 词后自动生成标题摘要
         const SUMMARIZE_MIN_LEN = 50;
         if (
           (config.enableAutoGenerateTitle &&
@@ -863,7 +863,7 @@ export const useChatStore = createPersistStore(
         }
         const memoryPrompt = get().getMemoryPrompt();
         if (memoryPrompt) {
-          // add memory prompt
+          // 添加记忆提示词
           toBeSummarizedMsgs.unshift(memoryPrompt);
         }
 
@@ -873,9 +873,7 @@ export const useChatStore = createPersistStore(
           historyMsgLength > modelConfig.compressMessageLengthThreshold &&
           modelConfig.sendMemory
         ) {
-          /** Destruct max_tokens while summarizing
-           * this param is just shit
-           **/
+          // 摘要时移除 max_tokens 参数
           const { max_tokens, ...modelcfg } = modelConfig;
           api.llm.chat({
             messages: toBeSummarizedMsgs.concat(
@@ -898,7 +896,7 @@ export const useChatStore = createPersistStore(
               if (responseRes?.status === 200) {
                 get().updateTargetSession(session, (session) => {
                   session.lastSummarizeIndex = lastSummarizeIndex;
-                  session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
+                  session.memoryPrompt = message; // 更新记忆提示词并持久化到本地存储
                 });
               }
             },
@@ -1004,23 +1002,21 @@ export const useChatStore = createPersistStore(
       }
 
       if (version < 3) {
-        // migrate id to nanoid
+        // 迁移旧 ID 到 nanoid
         newState.sessions.forEach((s) => {
           s.id = nanoid();
           s.messages.forEach((m) => (m.id = nanoid()));
         });
       }
 
-      // Enable `enableInjectSystemPrompts` attribute for old sessions.
-      // Resolve issue of old sessions not automatically enabling.
+      // 旧会话迁移：启用 enableInjectSystemPrompts 属性
       if (version < 3.1) {
         newState.sessions.forEach((s) => {
           if (
-            // Exclude those already set by user
+            // 不覆盖用户已自行设置的配置
             !s.mask.modelConfig.hasOwnProperty("enableInjectSystemPrompts")
           ) {
-            // Because users may have changed this configuration,
-            // the user's current configuration is used instead of the default
+            // 用户可能已修改过配置，使用当前配置而不是默认值
             const config = useAppConfig.getState();
             s.mask.modelConfig.enableInjectSystemPrompts =
               config.modelConfig.enableInjectSystemPrompts;
@@ -1028,7 +1024,7 @@ export const useChatStore = createPersistStore(
         });
       }
 
-      // add default summarize model for every session
+      // 为所有会话添加默认摘要模型
       if (version < 3.2) {
         newState.sessions.forEach((s) => {
           const config = useAppConfig.getState();

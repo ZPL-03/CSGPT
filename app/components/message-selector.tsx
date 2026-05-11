@@ -88,7 +88,7 @@ export function MessageSelector(props: {
     () =>
       allMessages.filter(
         (m, i) =>
-          m.id && // message must have id
+          m.id && // 消息必须有 id
           isValid(m) &&
           (i >= allMessages.length - 1 || isValid(allMessages[i + 1])),
       ),
@@ -114,7 +114,7 @@ export function MessageSelector(props: {
     setSearchIds(searchResults);
   };
 
-  // for range selection
+  // 范围选择
   const { startIndex, endIndex, onClickIndex } = useShiftRange();
 
   const selectAll = () => {

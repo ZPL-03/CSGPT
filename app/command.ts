@@ -42,7 +42,7 @@ interface ChatCommands {
   del?: Command;
 }
 
-// Compatible with Chinese colon character "："
+// 兼容中文冒号 "："
 export const ChatCommandPrefix = /^[:：]/;
 
 export function useChatCommand(commands: ChatCommands = {}) {

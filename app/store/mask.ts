@@ -38,7 +38,7 @@ export const createEmptyMask = () =>
     avatar: DEFAULT_MASK_AVATAR,
     name: DEFAULT_TOPIC,
     context: [],
-    syncGlobalConfig: true, // use global config as default
+    syncGlobalConfig: true, // 使用全局配置作为默认值
     modelConfig: { ...useAppConfig.getState().modelConfig },
     lang: getLang(),
     builtin: false,
@@ -119,7 +119,7 @@ export const useMaskStore = createPersistStore(
     migrate(state, version) {
       const newState = JSON.parse(JSON.stringify(state)) as MaskState;
 
-      // migrate mask id to nanoid
+      // 迁移面具 ID 到 nanoid
       if (version < 3) {
         Object.values(newState.masks).forEach((m) => (m.id = nanoid()));
       }

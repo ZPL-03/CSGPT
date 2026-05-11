@@ -62,7 +62,7 @@ export const McpNotificationsSchema: z.ZodType<McpNotifications> = z.object({
 });
 
 ////////////
-// Next Chat
+// NextChat 扩展类型
 ////////////
 export interface ListToolsResponse {
   tools: {

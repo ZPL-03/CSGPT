@@ -444,7 +444,6 @@ function readOleStreams(bytes: Uint8Array): OleStream[] {
   }
 
   const sectorSize = 1 << bytes[30];
-  const dirSectorSize = sectorSize <= 9 ? 512 : 4096;
 
   const fatCount =
     bytes[44] | (bytes[45] << 8) | (bytes[46] << 16) | (bytes[47] << 24);
@@ -463,8 +462,8 @@ function readOleStreams(bytes: Uint8Array): OleStream[] {
       (bytes[offset + 1] << 8) |
       (bytes[offset + 2] << 16) |
       (bytes[offset + 3] << 24);
-    const sectorStart = (fatSector + 1) * dirSectorSize;
-    for (let j = 0; j < dirSectorSize; j += 4) {
+    const sectorStart = (fatSector + 1) * sectorSize;
+    for (let j = 0; j < sectorSize; j += 4) {
       if (sectorStart + j + 4 > bytes.length) break;
       fat.push(
         bytes[sectorStart + j] |
@@ -487,8 +486,8 @@ function readOleStreams(bytes: Uint8Array): OleStream[] {
   ) {
     if (visited.has(sectorIdx)) break;
     visited.add(sectorIdx);
-    const sectorStart = (sectorIdx + 1) * dirSectorSize;
-    for (let j = 0; j < dirSectorSize && sectorStart + j < bytes.length; j++) {
+    const sectorStart = (sectorIdx + 1) * sectorSize;
+    for (let j = 0; j < sectorSize && sectorStart + j < bytes.length; j++) {
       dirData.push(bytes[sectorStart + j]);
     }
     sectorIdx = fat[sectorIdx];
@@ -545,8 +544,8 @@ function readOleStreams(bytes: Uint8Array): OleStream[] {
     ) {
       if (visitedSectors.has(secIdx)) break;
       visitedSectors.add(secIdx);
-      const secStart = (secIdx + 1) * dirSectorSize;
-      const remain = Math.min(dirSectorSize, entry.size - bytesRead);
+      const secStart = (secIdx + 1) * sectorSize;
+      const remain = Math.min(sectorSize, entry.size - bytesRead);
       for (let j = 0; j < remain && secStart + j < bytes.length; j++) {
         streamData.push(bytes[secStart + j]);
       }
@@ -560,26 +559,44 @@ function readOleStreams(bytes: Uint8Array): OleStream[] {
   return streams;
 }
 
-// 从二进制流中提取多编码文本
+// 从二进制 OLE 流中提取多编码文本
 function extractBinaryText(data: Uint8Array): string {
-  const decoders = ["utf-16le", "gb18030", "latin-1"];
   const results: string[] = [];
 
-  for (const encoding of decoders) {
+  for (const encoding of ["utf-16le", "gb18030", "latin-1"]) {
     try {
-      const text = new TextDecoder(encoding).decode(data);
-      const cleaned = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, " ");
-      const matches = cleaned.match(
-        /[一-鿿A-Za-z0-9　-ヿ＀-￯\[\]().,;:!?%\/\+\-=<>_^\s]{12,}/g,
-      );
-      if (matches) results.push(matches.join("\n"));
+      const decoded = new TextDecoder(encoding).decode(data);
+      // 按连续控制字符分割，分离文本运行与二进制格式数据
+      const chunks = decoded.split(/[\x00\x01-\x08\x0b\x0c\x0e-\x1f]{2,}/);
+      const textChunks = chunks
+        .map((c) =>
+          c
+            .replace(/[\x00-\x1f]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim(),
+        )
+        .filter(
+          (c) =>
+            c.length >= 8 &&
+            /[一-鿿A-Za-z]/.test(c) &&
+            // 排除 Word 内部样式定义和字体表条目
+            !/^[A-Za-z][a-z]+\d{1,4}$/.test(c) &&
+            !/^[a-z]+\d{1,6}\s*$/.test(c) &&
+            !/^\d+\s+[A-Z]/.test(c),
+        );
+      if (textChunks.length > 0) {
+        results.push(textChunks.join("\n"));
+      }
     } catch {
       // 忽略解码错误
     }
   }
 
-  results.sort((a, b) => cleanText(b).length - cleanText(a).length);
-  return results.length > 0 ? results[0] : "";
+  if (results.length === 0) return "";
+  // 返回最长文本（cleanText 后再比较）
+  return results.reduce((a, b) =>
+    cleanText(a).length >= cleanText(b).length ? a : b,
+  );
 }
 
 async function extractLegacyDoc(
@@ -589,18 +606,36 @@ async function extractLegacyDoc(
 ): Promise<FileExtractionResult> {
   options.onProgress(10, "读取 DOC 二进制");
   const streams = readOleStreams(bytes);
-  const wordStream = streams.find(
-    (s) =>
-      s.name === "WordDocument" || s.name === "1Table" || s.name === "0Table",
-  );
 
+  // 优先从 WordDocument 流提取文本（与 Python olefile 方案一致）
+  const wordStream = streams.find((s) => s.name === "WordDocument");
   let text = "";
-  if (wordStream) {
+  if (wordStream && wordStream.data.length >= 64) {
     text = extractBinaryText(wordStream.data);
   }
 
+  // 回退：尝试 1Table、0Table 流
+  if (!cleanText(text)) {
+    const fallbackStream = streams.find(
+      (s) => s.name === "1Table" || s.name === "0Table",
+    );
+    if (fallbackStream && fallbackStream.data.length >= 64) {
+      text = extractBinaryText(fallbackStream.data);
+    }
+  }
+
+  // 回退：Data 流（某些 .doc 文件将文本存储在 Data 流中）
+  if (!cleanText(text)) {
+    const dataStream = streams.find((s) => s.name === "Data");
+    if (dataStream && dataStream.data.length >= 64) {
+      text = extractBinaryText(dataStream.data);
+    }
+  }
+
+  // 最后回退：遍历所有足够大的流找文本
   if (!cleanText(text)) {
     for (const stream of streams) {
+      if (stream.data.length < 256) continue;
       const streamText = extractBinaryText(stream.data);
       if (cleanText(streamText).length > cleanText(text).length) {
         text = streamText;
@@ -612,7 +647,12 @@ async function extractLegacyDoc(
   return {
     text: cleanText(text) || `[文件: ${fileName}，未提取到可读文本]`,
     images: [],
-    metadata: { parser: "doc", fileName, streamCount: streams.length },
+    metadata: {
+      parser: "doc",
+      fileName,
+      streamCount: streams.length,
+      streamNames: streams.map((s) => s.name),
+    },
   };
 }
 

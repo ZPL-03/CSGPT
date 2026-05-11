@@ -28,9 +28,7 @@ import BotIconAzure from "../icons/llm-icons/azure.svg";
 import BotIconAI302 from "../icons/llm-icons/ai302.svg";
 
 export function getEmojiUrl(unified: string, style: EmojiStyle) {
-  // Whoever owns this Content Delivery Network (CDN), I am using your CDN to serve emojis
-  // Old CDN broken, so I had to switch to this one
-  // Author: https://github.com/H0llyW00dzZ
+  // 使用 fastly.jsdelivr.net CDN 提供 emoji 图片资源
   return `https://fastly.jsdelivr.net/npm/emoji-datasource-apple/img/${style}/64/${unified}.png`;
 }
 

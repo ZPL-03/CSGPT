@@ -22,7 +22,7 @@ export class ErrorBoundary extends React.Component<any, IErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // Update state with error details
+    // 更新状态为错误详情
     this.setState({ hasError: true, error, info });
   }
 
@@ -32,7 +32,7 @@ export class ErrorBoundary extends React.Component<any, IErrorBoundaryState> {
 
   render() {
     if (this.state.hasError) {
-      // Render error message
+      // 渲染错误信息
       return (
         <div className="error">
           <h2>Oops, something went wrong!</h2>
@@ -63,7 +63,7 @@ export class ErrorBoundary extends React.Component<any, IErrorBoundaryState> {
         </div>
       );
     }
-    // if no error occurred, render children
+    // 无错误时渲染子组件
     return this.props.children;
   }
 }

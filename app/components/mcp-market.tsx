@@ -140,18 +140,18 @@ export function McpMarketPage() {
         const userConfig: Record<string, any> = {};
         Object.entries(preset.argsMapping || {}).forEach(([key, mapping]) => {
           if (mapping.type === "spread") {
-            // For spread types, extract the array from args.
+            // 展开类型：从 args 中提取数组。
             const startPos = mapping.position ?? 0;
             userConfig[key] = currentConfig.args.slice(startPos);
           } else if (mapping.type === "single") {
-            // For single types, get a single value
+            // 单值类型：获取单个值
             userConfig[key] = currentConfig.args[mapping.position ?? 0];
           } else if (
             mapping.type === "env" &&
             mapping.key &&
             currentConfig.env
           ) {
-            // For env types, get values from environment variables
+            // 环境变量类型：从环境变量获取值
             userConfig[key] = currentConfig.env[mapping.key];
           }
         });
@@ -291,7 +291,7 @@ export function McpMarketPage() {
     }
   };
 
-  // Restart server
+  // 重启服务端
   const restartServer = async (id: string) => {
     try {
       updateLoadingState(id, "Starting server...");
@@ -308,7 +308,7 @@ export function McpMarketPage() {
     }
   };
 
-  // Restart all clients
+  // 重启所有客户端
   const handleRestartAll = async () => {
     try {
       updateLoadingState("all", "Restarting all servers...");
@@ -323,7 +323,7 @@ export function McpMarketPage() {
     }
   };
 
-  // Render configuration form
+  // 渲染配置表单
   const renderConfigForm = () => {
     const preset = presetServers.find((s) => s.id === editingServerId);
     if (!preset?.configSchema) return null;
@@ -435,7 +435,7 @@ export function McpMarketPage() {
     return statusMap[status.status];
   };
 
-  // Get the type of operation status
+  // 获取操作状态类型
   const getOperationStatusType = (message: string) => {
     if (message.toLowerCase().includes("stopping")) return "stopping";
     if (message.toLowerCase().includes("starting")) return "starting";
@@ -481,16 +481,16 @@ export function McpMarketPage() {
 
         // 定义状态优先级
         const statusPriority: Record<string, number> = {
-          error: 0, // Highest priority for error status
-          active: 1, // Second for active
-          initializing: 2, // Initializing
-          starting: 3, // Starting
-          stopping: 4, // Stopping
-          paused: 5, // Paused
-          undefined: 6, // Lowest priority for undefined
+          error: 0, // 错误状态最高优先级
+          active: 1, // 活跃状态
+          initializing: 2, // 初始化中
+          starting: 3, // 启动中
+          stopping: 4, // 停止中
+          paused: 5, // 已暂停
+          undefined: 6, // 未定义最低优先级
         };
 
-        // Get actual status (including loading status)
+        // 获取实际状态（含加载状态）
         const getEffectiveStatus = (status: string, loading?: string) => {
           if (loading) {
             const operationType = getOperationStatusType(loading);
@@ -515,7 +515,7 @@ export function McpMarketPage() {
           );
         }
 
-        // Sort by name when statuses are the same
+        // 状态相同时按名称排序
         return a.name.localeCompare(b.name);
       })
       .map((server) => (

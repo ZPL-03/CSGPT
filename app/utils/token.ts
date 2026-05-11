@@ -5,15 +5,15 @@ export function estimateTokenLength(input: string): number {
     const charCode = input.charCodeAt(i);
 
     if (charCode < 128) {
-      // ASCII character
+      // ASCII 字符
       if (charCode <= 122 && charCode >= 65) {
-        // a-Z
+        // 英文字母 a-z A-Z
         tokenLength += 0.25;
       } else {
         tokenLength += 0.5;
       }
     } else {
-      // Unicode character
+      // Unicode 字符（中文等）
       tokenLength += 1.5;
     }
   }

@@ -6,20 +6,20 @@ declare global {
 
 if (!Array.prototype.at) {
   Array.prototype.at = function (index: number) {
-    // Get the length of the array
+    // 获取数组长度
     const length = this.length;
 
-    // Convert negative index to a positive index
+    // 将负索引转换为正索引
     if (index < 0) {
       index = length + index;
     }
 
-    // Return undefined if the index is out of range
+    // 索引越界返回 undefined
     if (index < 0 || index >= length) {
       return undefined;
     }
 
-    // Use Array.prototype.slice method to get value at the specified index
+    // 使用 slice 方法获取指定索引的值
     return Array.prototype.slice.call(this, index, index + 1)[0];
   };
 }

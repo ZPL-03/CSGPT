@@ -1,5 +1,5 @@
-// CSGPT English Mask Presets
-// Composite Material Structural Design Assistant - English Templates
+// CSGPT 英文面具预设
+// 复合材料结构设计助手英文模板
 
 import { BuiltinMask } from "./typing";
 import { CSGPT_DEFAULT_MODEL, ServiceProvider } from "../constant";

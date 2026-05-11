@@ -276,7 +276,7 @@ function useSubmitHandler() {
   }, []);
 
   const shouldSubmit = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Fix Chinese input method "Enter" on Safari
+    // 修复 Safari 上中文输入法回车问题
     if (e.keyCode == 229) return false;
     if (e.key !== "Enter") return false;
     if (e.key === "Enter" && (e.nativeEvent.isComposing || isComposing.current))
@@ -319,7 +319,7 @@ export function PromptHints(props: {
       if (noPrompts || e.metaKey || e.altKey || e.ctrlKey) {
         return;
       }
-      // arrow up / down to select prompt
+      // 上下箭头选择提示词
       const changeIndex = (delta: number) => {
         e.stopPropagation();
         e.preventDefault();
@@ -448,7 +448,7 @@ function useScrollToBottom(
   detach: boolean = false,
   messages: ChatMessage[],
 ) {
-  // for auto-scroll
+  // 自动滚动
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollDomToBottom = useCallback(() => {
     const dom = scrollRef.current;
@@ -460,14 +460,14 @@ function useScrollToBottom(
     }
   }, [scrollRef]);
 
-  // auto scroll
+  // 自动滚动
   useEffect(() => {
     if (autoScroll && !detach) {
       scrollDomToBottom();
     }
   });
 
-  // auto scroll when messages length changes
+  // 消息数量变化时自动滚动
   const lastMessagesLength = useRef(messages.length);
   useEffect(() => {
     if (messages.length > lastMessagesLength.current && !detach) {
@@ -531,7 +531,7 @@ export function ChatActions(props: {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
 
-  // switch themes
+  // 切换主题
   const theme = config.theme;
 
   function nextTheme() {
@@ -542,11 +542,11 @@ export function ChatActions(props: {
     config.update((config) => (config.theme = nextTheme));
   }
 
-  // stop all responses
+  // 停止所有响应
   const couldStop = ChatControllerPool.hasPending();
   const stopAll = () => ChatControllerPool.stopAll();
 
-  // switch model
+  // 切换模型
   const currentModel = session.mask.modelConfig.model;
   const currentProviderName =
     session.mask.modelConfig?.providerName || ServiceProvider.CSGPT;
@@ -597,15 +597,15 @@ export function ChatActions(props: {
     // 所有模型均支持文件上传
     setShowUploadFile(true);
 
-    // if current model is not available
-    // switch to first available model
+    // 当前模型不可用时
+    // 切换到第一个可用模型
     const isUnavailableModel = !models.some(
       (m) =>
         m.name === currentModel &&
         m.provider?.providerName === currentProviderName,
     );
     if (isUnavailableModel && models.length > 0) {
-      // show next model to default model if exist
+      // 优先切换到默认模型，否则切换到第一个可用模型
       let nextModel = models.find((model) => model.isDefault) || models[0];
       chatStore.updateTargetSession(session, (session) => {
         session.mask.modelConfig.model = nextModel.name;
@@ -1001,12 +1001,12 @@ function _Chat() {
     : false;
   const isAttachWithTop = (() => {
     const lastMessage = scrollRef.current?.lastElementChild as HTMLElement;
-    // if scrolllRef is not ready or no message, return false
+    // 滚动容器未就绪或无消息时返回 false
     if (!scrollRef?.current || !lastMessage) return false;
     const topDistance =
       lastMessage!.getBoundingClientRect().top -
       scrollRef.current.getBoundingClientRect().top;
-    // leave some space for user question
+    // 为用户问题留出一些空间
     return topDistance < 100;
   })();
 
@@ -1027,8 +1027,8 @@ function _Chat() {
     [allModels, session.mask.modelConfig.providerName],
   );
 
-  // if user is typing, should auto scroll to bottom
-  // if user is not typing, should auto scroll to bottom only if already at bottom
+  // 用户正在输入时，自动滚动到底部
+  // 用户未输入时，仅在已位于底部才自动滚动到底部
   const { setAutoScroll, scrollDomToBottom } = useScrollToBottom(
     scrollRef,
     (isScrolledToBottom || isAttachWithTop) && !isTyping,
@@ -1168,7 +1168,7 @@ function _Chat() {
     [updateAttachment],
   );
 
-  // prompt hints
+  // 提示词建议
   const promptStore = usePromptStore();
   const [promptHints, setPromptHints] = useState<RenderPrompt[]>([]);
   const onSearch = useDebouncedCallback(
@@ -1180,7 +1180,7 @@ function _Chat() {
     { leading: true, trailing: true },
   );
 
-  // auto grow input
+  // 输入框自适应高度
   const [inputRows, setInputRows] = useState(2);
   const measure = useDebouncedCallback(
     () => {
@@ -1201,7 +1201,7 @@ function _Chat() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(measure, [userInput]);
 
-  // chat commands shortcuts
+  // 聊天命令快捷键
   const chatCommands = useChatCommand({
     new: () => chatStore.newSession(),
     newm: () => navigate(Path.NewChat),
@@ -1221,19 +1221,19 @@ function _Chat() {
     del: () => chatStore.deleteSession(chatStore.currentSessionIndex),
   });
 
-  // only search prompts when user input is short
+  // 仅在用户输入较短时搜索提示词
   const SEARCH_TEXT_LIMIT = 30;
   const onInput = (text: string) => {
     setUserInput(text);
     const n = text.trim().length;
 
-    // clear search results
+    // 清空搜索结果
     if (n === 0) {
       setPromptHints([]);
     } else if (text.match(ChatCommandPrefix)) {
       setPromptHints(chatCommands.search(text));
     } else if (!config.disablePromptHint && n < SEARCH_TEXT_LIMIT) {
-      // check if need to trigger auto completion
+      // 检查是否需要触发自动补全
       if (text.startsWith("/")) {
         let searchText = text.slice(1);
         onSearch(searchText);
@@ -1280,18 +1280,18 @@ function _Chat() {
 
       const matchedChatCommand = chatCommands.match(prompt.content);
       if (matchedChatCommand.matched) {
-        // if user is selecting a chat command, just trigger it
+        // 用户选择的是聊天命令，直接触发
         matchedChatCommand.invoke();
         setUserInput("");
       } else {
-        // or fill the prompt
+        // 否则填充提示词内容
         setUserInput(prompt.content);
       }
       inputRef.current?.focus();
     }, 30);
   };
 
-  // stop response
+  // 停止响应
   const onUserStop = (messageId: string) => {
     ChatControllerPool.stop(session.id, messageId);
   };
@@ -1300,7 +1300,7 @@ function _Chat() {
     chatStore.updateTargetSession(session, (session) => {
       const stopTiming = Date.now() - REQUEST_TIMEOUT_MS;
       session.messages.forEach((m) => {
-        // check if should stop all stale messages
+        // 检查是否需要停止所有过期消息
         if (m.isError || new Date(m.date).getTime() < stopTiming) {
           if (m.streaming) {
             m.streaming = false;
@@ -1316,7 +1316,7 @@ function _Chat() {
         }
       });
 
-      // auto sync mask config from global config
+      // 自动同步 mask 配置到全局配置
       if (session.mask.syncGlobalConfig) {
         session.mask.modelConfig = { ...config.modelConfig };
       }
@@ -1324,9 +1324,9 @@ function _Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
-  // check if should send message
+  // 检查是否应该发送消息
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // if ArrowUp and no userInput, fill with last input
+    // 按上箭头且无输入内容时，填充上次输入
     if (
       e.key === "ArrowUp" &&
       userInput.length <= 0 &&
@@ -1342,7 +1342,7 @@ function _Chat() {
     }
   };
   const onRightClick = (e: any, message: ChatMessage) => {
-    // copy to clipboard
+    // 复制到剪贴板
     if (selectOrCopy(e.currentTarget, getMessageTextContent(message))) {
       if (userInput.length === 0) {
         setUserInput(getMessageTextContent(message));
@@ -1365,11 +1365,11 @@ function _Chat() {
   };
 
   const onResend = (message: ChatMessage) => {
-    // when it is resending a message
-    // 1. for a user's message, find the next bot response
-    // 2. for a bot's message, find the last user's input
-    // 3. delete original user input and bot's message
-    // 4. resend the user's input
+    // 重新发送消息时
+    // 1. 用户消息：找到下一条机器人回复
+    // 2. 机器人消息：找到上一条用户输入
+    // 3. 删除原始的用户输入和机器人回复
+    // 4. 重新发送用户输入
 
     const resendingIndex = session.messages.findIndex(
       (m) => m.id === message.id,
@@ -1384,7 +1384,7 @@ function _Chat() {
     let botMessage: ChatMessage | undefined;
 
     if (message.role === "assistant") {
-      // if it is resending a bot's message, find the user input for it
+      // 重新发送机器人消息时，找到对应的用户输入
       botMessage = message;
       for (let i = resendingIndex; i >= 0; i -= 1) {
         if (session.messages[i].role === "user") {
@@ -1393,7 +1393,7 @@ function _Chat() {
         }
       }
     } else if (message.role === "user") {
-      // if it is resending a user's input, find the bot's response
+      // 重新发送用户输入时，找到对应的机器人回复
       userMessage = message;
       for (let i = resendingIndex; i < session.messages.length; i += 1) {
         if (session.messages[i].role === "assistant") {
@@ -1408,11 +1408,11 @@ function _Chat() {
       return;
     }
 
-    // delete the original messages
+    // 删除原始消息
     deleteMessage(userMessage.id);
     deleteMessage(botMessage?.id);
 
-    // resend the message
+    // 重新发送消息
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
     const files = getMessageFiles(userMessage);
@@ -1524,7 +1524,7 @@ function _Chat() {
     scrollDomToBottom();
   }
 
-  // clear context index = context length + index in messages
+  // 清除上下文索引 = 上下文长度 + 消息索引
   const clearContextIndex =
     (session.clearContextIndex ?? -1) >= 0
       ? session.clearContextIndex! + context.length - msgRenderIndex
@@ -1534,7 +1534,7 @@ function _Chat() {
 
   const clientConfig = useMemo(() => getClientConfig(), []);
 
-  const autoFocus = !isMobileScreen; // wont auto focus on mobile screen
+  const autoFocus = !isMobileScreen; // 移动端不自动聚焦
   const showMaxIcon = !isMobileScreen && !clientConfig?.isApp;
 
   useCommand({
@@ -1582,12 +1582,12 @@ function _Chat() {
     },
   });
 
-  // edit / insert message modal
+  // 编辑/插入消息弹窗
   const [isEditingMessage, setIsEditingMessage] = useState(false);
 
-  // remember unfinished input
+  // 记住未完成的输入
   useEffect(() => {
-    // try to load from local storage
+    // 尝试从本地存储加载
     const key = UNFINISHED_INPUT(session.id);
     const mayBeUnfinishedInput = localStorage.getItem(key);
     if (mayBeUnfinishedInput && userInput.length === 0) {
@@ -1719,7 +1719,7 @@ function _Chat() {
             session.clearContextIndex = undefined;
           } else {
             session.clearContextIndex = session.messages.length;
-            session.memoryPrompt = ""; // will clear memory
+            session.memoryPrompt = ""; // 清空记忆
           }
         });
       }
@@ -2138,7 +2138,7 @@ function _Chat() {
                 hitBottom={hitBottom}
                 uploading={attachmentProcessing}
                 showPromptHints={() => {
-                  // Click again to close
+                  // 再次点击关闭
                   if (promptHints.length > 0) {
                     setPromptHints([]);
                     return;

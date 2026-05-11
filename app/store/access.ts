@@ -76,66 +76,66 @@ const DEFAULT_ACCESS_STATE = {
   csgptUrl: DEFAULT_CSGPT_URL,
   csgptApiKey: "",
 
-  // openai
+  // OpenAI
   openaiUrl: DEFAULT_OPENAI_URL,
   openaiApiKey: "",
 
-  // azure
+  // Azure
   azureUrl: "",
   azureApiKey: "",
   azureApiVersion: "2023-08-01-preview",
 
-  // google ai studio
+  // Google AI Studio
   googleUrl: DEFAULT_GOOGLE_URL,
   googleApiKey: "",
 
-  // anthropic
+  // Anthropic
   anthropicUrl: DEFAULT_ANTHROPIC_URL,
   anthropicApiKey: "",
 
-  // baidu
+  // 百度
   baiduUrl: DEFAULT_BAIDU_URL,
   baiduApiKey: "",
   baiduSecretKey: "",
 
-  // bytedance
+  // 字节跳动
   bytedanceUrl: DEFAULT_BYTEDANCE_URL,
   bytedanceApiKey: "",
 
-  // alibaba
+  // 阿里巴巴
   alibabaUrl: DEFAULT_ALIBABA_URL,
   alibabaApiKey: "",
 
-  // moonshot
+  // 月之暗面
   moonshotUrl: DEFAULT_MOONSHOT_URL,
   moonshotApiKey: "",
 
-  //stability
+  // Stability AI
   stabilityUrl: DEFAULT_STABILITY_URL,
   stabilityApiKey: "",
 
-  // tencent
+  // 腾讯
   tencentUrl: DEFAULT_TENCENT_URL,
   tencentSecretKey: "",
   tencentSecretId: "",
 
-  // iflytek
+  // 科大讯飞
   iflytekUrl: DEFAULT_IFLYTEK_URL,
   iflytekApiKey: "",
 
-  // deepseek
+  // DeepSeek
   deepseekUrl: DEFAULT_DEEPSEEK_URL,
   deepseekApiKey: "",
 
-  // xai
+  // xAI
   xaiUrl: DEFAULT_XAI_URL,
   xaiApiKey: "",
 
-  // chatglm
+  // 智谱 ChatGLM
   chatglmUrl: DEFAULT_CHATGLM_URL,
   chatglmApiKey: "",
 
-  // siliconflow
+  // 硅基流动
   siliconflowUrl: DEFAULT_SILICONFLOW_URL,
   siliconflowApiKey: "",
 
@@ -143,7 +143,7 @@ const DEFAULT_ACCESS_STATE = {
   ai302Url: DEFAULT_AI302_URL,
   ai302ApiKey: "",
 
-  // server config
+  // 服务端配置
   needCode: true,
   hideUserApiKey: false,
   hideBalanceQuery: false,

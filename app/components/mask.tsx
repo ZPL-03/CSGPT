@@ -57,7 +57,7 @@ import {
 import { getMessageTextContent } from "../utils";
 import clsx from "clsx";
 
-// drag and drop helper function
+// 拖拽排序辅助函数
 function reorder<T>(list: T[], startIndex: number, endIndex: number): T[] {
   const result = [...list];
   const [removed] = result.splice(startIndex, 1);
@@ -93,7 +93,7 @@ export function MaskConfig(props: {
     updater(config);
     props.updateMask((mask) => {
       mask.modelConfig = config;
-      // if user changed current session mask, it will disable auto sync
+      // 用户更改当前会话面具时禁用自动同步
       mask.syncGlobalConfig = false;
     });
   };
@@ -287,7 +287,7 @@ function ContextPromptItem(props: {
         onBlur={() => {
           setFocusingInput(false);
           // If the selection is not removed when the user loses focus, some
-          // extensions like "Translate" will always display a floating bar
+          // 某些扩展（如翻译插件）会始终显示浮动栏
           window?.getSelection()?.removeAllRanges();
         }}
         onInput={(e) =>

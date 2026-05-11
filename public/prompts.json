@@ -1,44 +1,126 @@
 {
   "cn": [
-    ["复合材料铺层设计", "请设计一种复合材料层合板的铺层方案，包含材料体系选择、铺层角度、铺层顺序，并说明设计依据。"],
-    ["层合板强度校核", "请对以下复合材料层合板进行强度校核，计算各层的应力分布，并评估是否满足强度准则：\n层数：\n铺层角度：\n材料参数：\n载荷条件："],
-    ["复合材料失效分析", "请分析以下复合材料结构的失效模式，判断是纤维断裂、基体开裂、分层还是界面脱粘，并给出改进建议：\n失效现象：\n工况条件："],
-    ["材料选型推荐", "请根据以下工程需求推荐合适的复合材料体系（纤维类型、基体类型），并说明选型理由：\n使用温度：\n载荷类型：\n环境条件：\n成本约束："],
-    ["复合材料标准查询", "请查询与以下需求相关的复合材料设计标准或试验标准（ASTM、ISO、GB等），并简述标准适用范围：\n关键词："],
-    ["力学性能预测", "请基于以下参数预测单向复合材料的弹性常数（E1, E2, G12, ν12）和强度参数（Xt, Xc, Yt, Yc, S12）：\n纤维参数：\n基体参数：\n纤维体积分数："],
-    ["Abaqus 复合材料建模", "请提供在 Abaqus 中建立复合材料层合板有限元模型的步骤，包括材料定义、铺层设置、边界条件和后处理方法。"],
-    ["Nastran 复合材料分析", "请说明在 Nastran 中进行复合材料结构分析的 PCOMP/PCOMPG 卡片定义方法，以及常用的求解序列。"],
-    ["损伤容限设计", "请解释复合材料结构的损伤容限设计方法，包括损伤类型分类、检测门槛值和剩余强度评估流程。"],
-    ["湿热环境影响", "请分析湿热环境（高温高湿、低温干燥等）对复合材料力学性能的影响机理，以及设计中应采取的补偿措施。"],
-    ["夹层结构设计", "请设计一种复合材料夹层结构（面板+芯材），包含面板材料、芯材类型、厚度配比，并校核其抗弯刚度和剪切稳定性。"],
-    ["连接设计", "请对复合材料结构中常见的机械连接（螺栓连接、铆接）和胶接接头进行强度分析和设计建议。"],
-    ["疲劳寿命评估", "请评估以下复合材料结构在循环载荷下的疲劳寿命，考虑S-N曲线、剩余强度退化和损伤累积规律：\n载荷谱：\n应力比：\n循环次数："],
-    ["固化工艺优化", "请对以下复合材料制造工艺的固化制度进行优化建议（温度曲线、压力制度），以减少残余应力并提高成型质量：\n预浸料体系：\n构件厚度：\n固化方式："],
-    ["无损检测方案", "请为以下复合材料结构制定无损检测方案，包括适用的检测方法（超声、红外热成像、X射线CT等）和检测频率建议：\n结构形式：\n关键区域：\n使用环境："]
+    [
+      "复合材料铺层设计",
+      "请设计一种复合材料层合板的铺层方案，包含材料体系选择、铺层角度、铺层顺序，并说明设计依据。"
+    ],
+    [
+      "层合板强度校核",
+      "请对以下复合材料层合板进行强度校核，计算各层的应力分布，并评估是否满足强度准则：\n层数：\n铺层角度：\n材料参数：\n载荷条件："
+    ],
+    [
+      "复合材料失效分析",
+      "请分析以下复合材料结构的失效模式，判断是纤维断裂、基体开裂、分层还是界面脱粘，并给出改进建议：\n失效现象：\n工况条件："
+    ],
+    [
+      "材料选型推荐",
+      "请根据以下工程需求推荐合适的复合材料体系（纤维类型、基体类型），并说明选型理由：\n使用温度：\n载荷类型：\n环境条件：\n成本约束："
+    ],
+    [
+      "复合材料标准查询",
+      "请查询与以下需求相关的复合材料设计标准或试验标准（ASTM、ISO、GB等），并简述标准适用范围：\n关键词："
+    ],
+    [
+      "力学性能预测",
+      "请基于以下参数预测单向复合材料的弹性常数（E1, E2, G12, ν12）和强度参数（Xt, Xc, Yt, Yc, S12）：\n纤维参数：\n基体参数：\n纤维体积分数："
+    ],
+    [
+      "Abaqus 复合材料建模",
+      "请提供在 Abaqus 中建立复合材料层合板有限元模型的步骤，包括材料定义、铺层设置、边界条件和后处理方法。"
+    ],
+    [
+      "Nastran 复合材料分析",
+      "请说明在 Nastran 中进行复合材料结构分析的 PCOMP/PCOMPG 卡片定义方法，以及常用的求解序列。"
+    ],
+    [
+      "损伤容限设计",
+      "请解释复合材料结构的损伤容限设计方法，包括损伤类型分类、检测门槛值和剩余强度评估流程。"
+    ],
+    [
+      "湿热环境影响",
+      "请分析湿热环境（高温高湿、低温干燥等）对复合材料力学性能的影响机理，以及设计中应采取的补偿措施。"
+    ],
+    [
+      "夹层结构设计",
+      "请设计一种复合材料夹层结构（面板+芯材），包含面板材料、芯材类型、厚度配比，并校核其抗弯刚度和剪切稳定性。"
+    ],
+    [
+      "连接设计",
+      "请对复合材料结构中常见的机械连接（螺栓连接、铆接）和胶接接头进行强度分析和设计建议。"
+    ],
+    [
+      "疲劳寿命评估",
+      "请评估以下复合材料结构在循环载荷下的疲劳寿命，考虑S-N曲线、剩余强度退化和损伤累积规律：\n载荷谱：\n应力比：\n循环次数："
+    ],
+    [
+      "固化工艺优化",
+      "请对以下复合材料制造工艺的固化制度进行优化建议（温度曲线、压力制度），以减少残余应力并提高成型质量：\n预浸料体系：\n构件厚度：\n固化方式："
+    ],
+    [
+      "无损检测方案",
+      "请为以下复合材料结构制定无损检测方案，包括适用的检测方法（超声、红外热成像、X射线CT等）和检测频率建议：\n结构形式：\n关键区域：\n使用环境："
+    ]
   ],
   "en": [
-    ["Composite Laminate Design", "Design a composite laminate layup scheme, including material system selection, ply angles, stacking sequence, and design justification."],
-    ["Laminate Strength Analysis", "Perform strength analysis for the following composite laminate, calculate stress distribution in each ply, and evaluate against strength criteria."],
-    ["Composite Failure Analysis", "Analyze the failure mode of the following composite structure: fiber fracture, matrix cracking, delamination, or interfacial debonding. Provide improvement recommendations."],
-    ["Material Selection", "Recommend suitable composite material systems (fiber type, matrix type) based on the following engineering requirements, with justification."],
-    ["Composite Standards", "Search for composite design or testing standards (ASTM, ISO, GB, etc.) related to the query. Summarize the scope of each standard."],
-    ["Mechanical Property Prediction", "Predict the elastic constants (E1, E2, G12, ν12) and strength parameters (Xt, Xc, Yt, Yc, S12) of a unidirectional composite based on constituent properties and fiber volume fraction."],
-    ["Abaqus Composite Modeling", "Provide the steps for building a composite laminate finite element model in Abaqus, including material definition, layup setup, boundary conditions, and post-processing."],
-    ["Nastran Composite Analysis", "Explain the PCOMP/PCOMPG card definitions and recommended solution sequences for composite structural analysis in Nastran."],
-    ["Damage Tolerance Design", "Explain the damage tolerance design methodology for composite structures, including damage classification, detection thresholds, and residual strength assessment."],
-    ["Hygrothermal Effects", "Analyze the effects of hygrothermal environments (hot-wet, cold-dry) on composite mechanical properties and recommend compensation measures in design."],
-    ["Sandwich Structure Design", "Design a composite sandwich structure (facesheet + core), including material selection, thickness ratio, and verify bending stiffness and shear stability."],
-    ["Joint Design", "Perform strength analysis and provide design recommendations for mechanical joints (bolted, riveted) and adhesive bonds in composite structures."],
-    ["Fatigue Life Assessment", "Evaluate the fatigue life of the composite structure under cyclic loading, considering S-N curves, residual strength degradation, and damage accumulation."],
-    ["Cure Cycle Optimization", "Provide recommendations for optimizing the cure cycle of the composite manufacturing process (temperature profile, pressure schedule) to reduce residual stress and improve quality."],
-    ["NDI Plan", "Develop a non-destructive inspection plan for the composite structure, including applicable methods (ultrasonic, infrared thermography, X-ray CT) and inspection intervals."]
-  ],
-  "tw": [
-    ["複合材料鋪層設計", "請設計一種複合材料層合板的鋪層方案，包含材料體系選擇、鋪層角度、鋪層順序，並說明設計依據。"],
-    ["層合板強度校核", "請對以下複合材料層合板進行強度校核，計算各層的應力分佈，並評估是否滿足強度準則。"],
-    ["複合材料失效分析", "請分析以下複合材料結構的失效模式，判斷是纖維斷裂、基體開裂、分層還是界面脫粘，並給出改進建議。"],
-    ["材料選型推薦", "請根據以下工程需求推薦合適的複合材料體系（纖維類型、基體類型），並說明選型理由。"],
-    ["複合材料標準查詢", "請查詢與以下需求相關的複合材料設計標準或試驗標準（ASTM、ISO、GB等），並簡述標準適用範圍。"],
-    ["力學性能預測", "請基於以下參數預測單向複合材料的彈性常數和強度參數。"]
+    [
+      "Composite Laminate Design",
+      "Design a composite laminate layup scheme, including material system selection, ply angles, stacking sequence, and design justification."
+    ],
+    [
+      "Laminate Strength Analysis",
+      "Perform strength analysis for the following composite laminate, calculate stress distribution in each ply, and evaluate against strength criteria."
+    ],
+    [
+      "Composite Failure Analysis",
+      "Analyze the failure mode of the following composite structure: fiber fracture, matrix cracking, delamination, or interfacial debonding. Provide improvement recommendations."
+    ],
+    [
+      "Material Selection",
+      "Recommend suitable composite material systems (fiber type, matrix type) based on the following engineering requirements, with justification."
+    ],
+    [
+      "Composite Standards",
+      "Search for composite design or testing standards (ASTM, ISO, GB, etc.) related to the query. Summarize the scope of each standard."
+    ],
+    [
+      "Mechanical Property Prediction",
+      "Predict the elastic constants (E1, E2, G12, ν12) and strength parameters (Xt, Xc, Yt, Yc, S12) of a unidirectional composite based on constituent properties and fiber volume fraction."
+    ],
+    [
+      "Abaqus Composite Modeling",
+      "Provide the steps for building a composite laminate finite element model in Abaqus, including material definition, layup setup, boundary conditions, and post-processing."
+    ],
+    [
+      "Nastran Composite Analysis",
+      "Explain the PCOMP/PCOMPG card definitions and recommended solution sequences for composite structural analysis in Nastran."
+    ],
+    [
+      "Damage Tolerance Design",
+      "Explain the damage tolerance design methodology for composite structures, including damage classification, detection thresholds, and residual strength assessment."
+    ],
+    [
+      "Hygrothermal Effects",
+      "Analyze the effects of hygrothermal environments (hot-wet, cold-dry) on composite mechanical properties and recommend compensation measures in design."
+    ],
+    [
+      "Sandwich Structure Design",
+      "Design a composite sandwich structure (facesheet + core), including material selection, thickness ratio, and verify bending stiffness and shear stability."
+    ],
+    [
+      "Joint Design",
+      "Perform strength analysis and provide design recommendations for mechanical joints (bolted, riveted) and adhesive bonds in composite structures."
+    ],
+    [
+      "Fatigue Life Assessment",
+      "Evaluate the fatigue life of the composite structure under cyclic loading, considering S-N curves, residual strength degradation, and damage accumulation."
+    ],
+    [
+      "Cure Cycle Optimization",
+      "Provide recommendations for optimizing the cure cycle of the composite manufacturing process (temperature profile, pressure schedule) to reduce residual stress and improve quality."
+    ],
+    [
+      "NDI Plan",
+      "Develop a non-destructive inspection plan for the composite structure, including applicable methods (ultrasonic, infrared thermography, X-ray CT) and inspection intervals."
+    ]
   ]
 }

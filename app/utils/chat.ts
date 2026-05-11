@@ -332,9 +332,9 @@ export function streamWithThink(
   let responseRes: Response;
   let isInThinkingMode = false;
   let lastIsThinking = false;
-  let lastIsThinkingTagged = false; //between <think> and </think> tags
+  let lastIsThinkingTagged = false; // 是否在 <think> 标签内
 
-  // animate response to make it looks smooth
+  // 逐帧动画渲染响应文本
   function animateResponseText() {
     if (finished || controller.signal.aborted) {
       responseText += remainText;
@@ -355,7 +355,7 @@ export function streamWithThink(
     requestAnimationFrame(animateResponseText);
   }
 
-  // start animaion
+  // 启动动画渲染
   animateResponseText();
 
   const finish = () => {
@@ -366,7 +366,7 @@ export function streamWithThink(
           tool_calls: [...runTools],
         };
         running = true;
-        runTools.splice(0, runTools.length); // empty runTools
+        runTools.splice(0, runTools.length); // 清空工具调用队列
         return Promise.all(
           toolCallMessage.tool_calls.map((tool) => {
             options?.onBeforeTool?.(tool);
@@ -416,7 +416,7 @@ export function streamWithThink(
         ).then((toolCallResult) => {
           processToolMessage(requestPayload, toolCallMessage, toolCallResult);
           setTimeout(() => {
-            // call again
+            // 工具调用完成后继续请求
             running = false;
             chatApi(chatPath, headers, requestPayload, tools);
           }, 60);
@@ -497,18 +497,18 @@ export function streamWithThink(
           return finish();
         }
         const text = msg.data;
-        // Skip empty messages
+        // 跳过空消息
         if (!text || text.trim().length === 0) {
           return;
         }
         try {
           const chunk = parseSSE(text, runTools);
-          // Skip if content is empty
+          // 跳过空内容
           if (!chunk?.content || chunk.content.length === 0) {
             return;
           }
 
-          // deal with <think> and </think> tags start
+          // 处理 <think> 和 </think> 标签
           if (!chunk.isThinking) {
             if (chunk.content.startsWith("<think>")) {
               chunk.isThinking = true;
@@ -522,23 +522,21 @@ export function streamWithThink(
               chunk.isThinking = true;
             }
           }
-          // deal with <think> and </think> tags start
 
-          // Check if thinking mode changed
+          // 检测思考模式切换
           const isThinkingChanged = lastIsThinking !== chunk.isThinking;
           lastIsThinking = chunk.isThinking;
 
           if (chunk.isThinking) {
-            // If in thinking mode
+            // 思考模式
             if (!isInThinkingMode || isThinkingChanged) {
-              // 新思考块或模式变化时添加引用前缀。
               isInThinkingMode = true;
               if (remainText.length > 0) {
                 remainText += "\n";
               }
               remainText += "> " + chunk.content;
             } else {
-              // Handle newlines in thinking content
+              // 处理思考内容中的换行
               if (chunk.content.includes("\n\n")) {
                 const lines = chunk.content.split("\n\n");
                 remainText += lines.join("\n\n> ");
@@ -547,9 +545,8 @@ export function streamWithThink(
               }
             }
           } else {
-            // If in normal mode
+            // 普通模式
             if (isInThinkingMode || isThinkingChanged) {
-              // If switching from thinking mode to normal mode
               isInThinkingMode = false;
               remainText += "\n\n" + chunk.content;
             } else {
@@ -558,7 +555,7 @@ export function streamWithThink(
           }
         } catch (e) {
           console.error("[Request] parse error", text, msg, e);
-          // Don't throw error for parse failures, just log them
+          // 解析失败仅记录日志，不抛出异常
         }
       },
       onclose() {

@@ -78,7 +78,7 @@ export function PreCode(props: { children: any }) {
     }
   }, 600);
 
-  //Wrap the paragraph for plain-text
+  // 为纯文本段落包裹标签
   useEffect(() => {
     if (ref.current) {
       const codeElements = ref.current.querySelectorAll(
@@ -201,8 +201,7 @@ function escapeBrackets(text: string) {
 }
 
 function tryWrapHtmlCode(text: string) {
-  // wrap embedded HTML content in proper tags when not inside a code block
-  // ignore embed codeblock
+  // 在非代码块中包裹嵌入的 HTML 内容
   if (text.includes("```")) {
     return text;
   }
