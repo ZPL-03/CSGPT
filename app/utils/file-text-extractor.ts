@@ -71,9 +71,10 @@ const SPREADSHEET_EXTENSIONS = new Set([
   "xlsx",
   "xls",
   "xlsm",
+  "xlsb",
   "ods",
 ]);
-const PRESENTATION_EXTENSIONS = new Set(["pptx"]);
+const PRESENTATION_EXTENSIONS = new Set(["pptx", "pptm"]);
 const IMAGE_OCR_MAX_SIDE = 2200;
 const PDFJS_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
 
@@ -234,8 +235,8 @@ function cleanText(text: string): string {
       // 换行符统一
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
-      // 跨行断词修复（含拉丁扩展字符）
-      .replace(/([A-Za-zÀ-ɏ])-\s*\n\s*([A-Za-zÀ-ɏ])/g, "$1$2")
+      // 跨行断词修复（含拉丁扩展字符和希腊字母）
+      .replace(/([A-Za-zÀ-ɏα-ωΑ-Ω])-\s*\n\s*([A-Za-zÀ-ɏα-ωΑ-Ω])/g, "$1$2")
       // 行尾空白清理
       .replace(/[ \t]+\n/g, "\n")
       // 多余空行压缩
@@ -312,7 +313,6 @@ export function filterNoiseLines(text: string): string {
 const DISPLAY_FORMULA_PATTERN = /\$\$(.+?)\$\$|\\\[(.+?)\\\]/gs;
 const INLINE_FORMULA_PATTERN =
   /(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)|\\\((.+?)\\\)/gs;
-const MATH_SIGNAL_PATTERN = /[\\{}()\[\]_^]|\\[a-zA-Z]+|[α-ωΑ-Ω∀-⋿←-⇿]/;
 
 // 复合材料公式术语映射
 const FORMULA_TERM_MAP: Record<string, string> = {
@@ -349,8 +349,9 @@ function validateLatexFormula(formula: string): boolean {
     const ch = formula[i];
     if (ch === "\\" && i + 1 < formula.length) {
       const rest = formula.slice(i);
-      if (rest.startsWith("\\left")) leftCount++;
-      if (rest.startsWith("\\right")) rightCount++;
+      // 只匹配 \left / \right 分隔符，排除 \leftarrow / \Rightarrow 等长命令
+      if (/^\\left(?![a-zA-Z])/.test(rest)) leftCount++;
+      if (/^\\right(?![a-zA-Z])/.test(rest)) rightCount++;
     }
     if ("{([".includes(ch)) stack.push(ch);
     if ("})]".includes(ch)) {
@@ -365,30 +366,13 @@ function validateLatexFormula(formula: string): boolean {
 function formulaSearchDescription(formula: string): string {
   const terms: string[] = [];
   for (const [symbol, name] of Object.entries(FORMULA_TERM_MAP)) {
-    if (formula.includes(symbol) || formula.includes(`\\${symbol}`)) {
+    const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`(?<![a-zA-Z0-9_])${escaped}(?![a-zA-Z0-9_])`);
+    if (pattern.test(formula)) {
       terms.push(`${symbol}（${name}）`);
     }
   }
   return terms.length > 0 ? `公式检索说明：${terms.join("；")}。` : "";
-}
-
-function enrichTextWithFormulas(text: string): string {
-  let result = text;
-
-  result = result.replace(DISPLAY_FORMULA_PATTERN, (match, d1, d2) => {
-    const formula = (d1 || d2 || "").trim();
-    const desc = formulaSearchDescription(formula);
-    return desc ? `$$ ${formula} $$ ${desc}` : match;
-  });
-
-  result = result.replace(INLINE_FORMULA_PATTERN, (match, i1, i2) => {
-    const formula = (i1 || i2 || "").trim();
-    if (!validateLatexFormula(formula) || !MATH_SIGNAL_PATTERN.test(formula))
-      return match;
-    return `$ ${formula} $`;
-  });
-
-  return result;
 }
 
 interface FormulaRecord {
@@ -422,7 +406,6 @@ export function extractFormulaRecords(text: string): FormulaRecord[] {
 }
 
 // OLE 复合文档读取器（最小化实现，用于 .doc/.ppt 文本提取）
-const OLE_SECTOR_SIZE = 512;
 const OLE_DIR_ENTRY_SIZE = 128;
 
 interface OleStream {
@@ -690,11 +673,15 @@ function decodeXmlEntities(text: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'");
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
+      String.fromCodePoint(parseInt(hex, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
 }
 
 function htmlToStructuredText(html: string): string {
-  return cleanText(
+  return decodeXmlEntities(
     html
       .replace(/<img[^>]*>/gi, "[图片]")
       .replace(/<br\s*\/?>/gi, "\n")
@@ -705,11 +692,7 @@ function htmlToStructuredText(html: string): string {
       .replace(/<\/tr>/gi, "\n")
       .replace(/<\/t[dh]>/gi, " | ")
       .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"'),
+      .replace(/&nbsp;/g, " "),
   );
 }
 
@@ -1485,7 +1468,7 @@ export async function extractTextFromFile(
     );
   }
 
-  if (ext === "docx") {
+  if (ext === "docx" || ext === "docm") {
     return extractDocx(source.bytes, fileName, normalizedOptions);
   }
 
@@ -1493,15 +1476,20 @@ export async function extractTextFromFile(
     return extractPdf(source.bytes, fileName, normalizedOptions);
   }
 
-  if (ext === "pptx") {
+  if (
+    PRESENTATION_EXTENSIONS.has(ext) ||
+    mimeType.startsWith(
+      "application/vnd.openxmlformats-officedocument.presentationml",
+    )
+  ) {
     return extractPresentation(source.bytes, fileName, normalizedOptions);
   }
 
-  if (ext === "doc") {
+  if (ext === "doc" || mimeType === "application/msword") {
     return extractLegacyDoc(source.bytes, fileName, normalizedOptions);
   }
 
-  if (ext === "ppt") {
+  if (ext === "ppt" || mimeType === "application/vnd.ms-powerpoint") {
     return extractLegacyPpt(source.bytes, fileName, normalizedOptions);
   }
 

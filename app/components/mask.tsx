@@ -33,7 +33,7 @@ import {
   showConfirm,
 } from "./ui-lib";
 import { Avatar, AvatarPicker } from "./emoji";
-import Locale, { AllLangs, ALL_LANG_OPTIONS, Lang } from "../locales";
+import Locale, { ALL_LANG_OPTIONS, getLang, Lang } from "../locales";
 import { useNavigate } from "react-router-dom";
 
 import chatStyle from "./chat.module.scss";
@@ -432,7 +432,7 @@ export function MaskPage() {
   const maskStore = useMaskStore();
   const chatStore = useChatStore();
 
-  const filterLang = maskStore.language;
+  const filterLang = maskStore.language ?? getLang();
 
   const allMasks = maskStore
     .getAll()
@@ -533,28 +533,6 @@ export function MaskPage() {
               autoFocus
               onInput={(e) => onSearch(e.currentTarget.value)}
             />
-            <Select
-              className={styles["mask-filter-lang"]}
-              value={filterLang ?? Locale.Settings.Lang.All}
-              onChange={(e) => {
-                const value = e.currentTarget.value;
-                if (value === Locale.Settings.Lang.All) {
-                  maskStore.setLanguage(undefined);
-                } else {
-                  maskStore.setLanguage(value as Lang);
-                }
-              }}
-            >
-              <option key="all" value={Locale.Settings.Lang.All}>
-                {Locale.Settings.Lang.All}
-              </option>
-              {AllLangs.map((lang) => (
-                <option value={lang} key={lang}>
-                  {ALL_LANG_OPTIONS[lang]}
-                </option>
-              ))}
-            </Select>
-
             <IconButton
               className={styles["mask-create"]}
               icon={<AddIcon />}
