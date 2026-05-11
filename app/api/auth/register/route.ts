@@ -56,13 +56,21 @@ export async function POST(request: NextRequest) {
     // 生成令牌
     const token = generateToken(user.id);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       token,
       user: {
         id: user.id,
         username: user.username,
       },
     });
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+    });
+    return response;
   } catch (error) {
     console.error("[Register] Error:", error);
     return NextResponse.json(

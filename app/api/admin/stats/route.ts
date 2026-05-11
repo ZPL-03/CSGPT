@@ -122,20 +122,44 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "对话不存在" }, { status: 404 });
       }
 
+      // 收集消息中引用的文件 ID，从 UploadedFile 取回解析文本
+      const allFileIds = new Set<string>();
+      for (const msg of conversation.messages) {
+        const ids = collectFileIdsFromMessageContent(msg.content);
+        for (const fid of ids) allFileIds.add(fid);
+      }
+      const fileRecords =
+        allFileIds.size > 0
+          ? await prisma.uploadedFile.findMany({
+              where: { id: { in: Array.from(allFileIds) } },
+              select: { id: true, extractedText: true },
+            })
+          : [];
+      const extractedTextMap = new Map(
+        fileRecords.map((f) => [f.id, f.extractedText]),
+      );
+
       return jsonNoStore({
         id: conversation.id,
         topic: conversation.topic,
         userId: conversation.userId,
         username: conversation.user.username,
-        messages: conversation.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          date: m.date,
-          isError: m.isError,
-          model: m.model,
-          fileContent: m.fileContent,
-        })),
+        messages: conversation.messages.map((m) => {
+          const msgFileIds = collectFileIdsFromMessageContent(m.content);
+          const reconstitutedFileContent = msgFileIds
+            .map((fid: string) => extractedTextMap.get(fid))
+            .filter(Boolean)
+            .join("\n\n");
+          return {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            date: m.date,
+            isError: m.isError,
+            model: m.model,
+            fileContent: reconstitutedFileContent || m.fileContent,
+          };
+        }),
       });
     } catch (error: any) {
       return NextResponse.json(

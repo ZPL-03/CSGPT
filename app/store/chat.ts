@@ -936,7 +936,18 @@ export const useChatStore = createPersistStore(
           }
         }
         await indexedDBStorage.clear();
+        // 只清理对话数据，保留登录令牌和配置
+        const preservedKeys = [StoreKey.User, StoreKey.Access, StoreKey.Config];
+        const preserved: Record<string, string | null> = {};
+        for (const key of preservedKeys) {
+          preserved[key] = localStorage.getItem(key);
+        }
         localStorage.clear();
+        for (const key of preservedKeys) {
+          if (preserved[key]) {
+            localStorage.setItem(key, preserved[key]!);
+          }
+        }
         location.reload();
       },
       setLastInput(lastInput: string) {

@@ -37,18 +37,27 @@ export function verifyToken(token: string): { userId: string } | null {
   }
 }
 
-// 从请求头中提取用户 ID
+// 从请求中提取 JWT 令牌：优先 Authorization header，回退到 cookie
+function extractToken(request: Request): string | null {
+  const authHeader = request.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const match = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
+  return match?.[1] ?? null;
+}
+
+// 从请求中提取用户 ID（支持 Authorization header 和 cookie 两种方式）
 export async function getUserFromRequest(
   request: Request,
 ): Promise<string | null> {
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = extractToken(request);
+  if (!token) return null;
 
-  const token = authHeader.slice(7);
   const decoded = verifyToken(token);
   if (!decoded) return null;
 
-  // 验证用户是否存在
   const user = await prisma.user.findUnique({
     where: { id: decoded.userId },
     select: { id: true },

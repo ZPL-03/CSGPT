@@ -8,12 +8,21 @@ import { verifyPassword, generateToken } from "@/app/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function setAuthCookie(response: NextResponse, token: string) {
+  response.cookies.set("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60,
+    path: "/",
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { username, password } = body;
 
-    // 参数验证
     if (!username || !password) {
       return NextResponse.json(
         { error: "用户名和密码不能为空" },
@@ -21,7 +30,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 查找用户
     const user = await prisma.user.findUnique({
       where: { username },
     });
@@ -30,22 +38,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });
     }
 
-    // 验证密码
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
       return NextResponse.json({ error: "用户名或密码错误" }, { status: 401 });
     }
 
-    // 生成令牌
     const token = generateToken(user.id);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       token,
       user: {
         id: user.id,
         username: user.username,
       },
     });
+    setAuthCookie(response, token);
+    return response;
   } catch (error) {
     console.error("[Login] Error:", error);
     return NextResponse.json(
