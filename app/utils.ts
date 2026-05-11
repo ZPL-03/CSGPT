@@ -5,7 +5,6 @@ import { RequestMessage } from "./client/api";
 import {
   REQUEST_TIMEOUT_MS,
   REQUEST_TIMEOUT_MS_FOR_THINKING,
-  ServiceProvider,
 } from "./constant";
 import { fetch as tauriStreamFetch } from "./utils/stream";
 import { ModelSize } from "./typing";
@@ -240,28 +239,6 @@ export function getMessageTextContent(message: RequestMessage) {
   return "";
 }
 
-export function getMessageTextContentWithoutThinking(message: RequestMessage) {
-  let content = "";
-
-  if (typeof message.content === "string") {
-    content = message.content;
-  } else {
-    for (const c of message.content) {
-      if (c.type === "text") {
-        content = c.text ?? "";
-        break;
-      }
-    }
-  }
-
-  // 过滤思考行（以 "> " 开头）
-  return content
-    .split("\n")
-    .filter((line) => !line.startsWith("> ") && line.trim() !== "")
-    .join("\n")
-    .trim();
-}
-
 export function getMessageImages(message: RequestMessage): string[] {
   if (typeof message.content === "string") {
     return [];
@@ -358,24 +335,6 @@ export function supportsCustomSize(model: string): boolean {
   return getModelSizes(model).length > 0;
 }
 
-export function showPlugins(provider: ServiceProvider, model: string) {
-  if (
-    provider == ServiceProvider.OpenAI ||
-    provider == ServiceProvider.Azure ||
-    provider == ServiceProvider.Moonshot ||
-    provider == ServiceProvider.ChatGLM
-  ) {
-    return true;
-  }
-  if (provider == ServiceProvider.Anthropic && !model.includes("claude-2")) {
-    return true;
-  }
-  if (provider == ServiceProvider.Google && !model.includes("vision")) {
-    return true;
-  }
-  return false;
-}
-
 export function fetch(
   url: string,
   options?: Record<string, unknown>,
@@ -384,20 +343,6 @@ export function fetch(
     return tauriStreamFetch(url, options);
   }
   return window.fetch(url, options);
-}
-
-export function adapter(config: Record<string, unknown>) {
-  const { baseURL, url, params, data: body, ...rest } = config;
-  const path = baseURL ? `${baseURL}${url}` : url;
-  const fetchUrl = params
-    ? `${path}?${new URLSearchParams(params as any).toString()}`
-    : path;
-  return fetch(fetchUrl as string, { ...rest, body }).then((res) => {
-    const { status, headers, statusText } = res;
-    return res
-      .text()
-      .then((data: string) => ({ status, statusText, headers, data }));
-  });
 }
 
 export function safeLocalStorage(): {
@@ -443,49 +388,4 @@ export function safeLocalStorage(): {
       }
     },
   };
-}
-
-export function getOperationId(operation: {
-  operationId?: string;
-  method: string;
-  path: string;
-}) {
-  // 模式：'^[a-zA-Z0-9_-]+$'
-  return (
-    operation?.operationId ||
-    `${operation.method.toUpperCase()}${operation.path.replaceAll("/", "_")}`
-  );
-}
-
-export function clientUpdate() {
-  // 客户端应用更新通配符
-  return window.__TAURI__?.updater
-    .checkUpdate()
-    .then((updateResult) => {
-      if (updateResult.shouldUpdate) {
-        window.__TAURI__?.updater
-          .installUpdate()
-          .then((result) => {
-            showToast(Locale.Settings.Update.Success);
-          })
-          .catch((e) => {
-            console.error("[Install Update Error]", e);
-            showToast(Locale.Settings.Update.Failed);
-          });
-      }
-    })
-    .catch((e) => {
-      console.error("[Check Update Error]", e);
-      showToast(Locale.Settings.Update.Failed);
-    });
-}
-
-export function semverCompare(a: string, b: string) {
-  if (a.startsWith(b + "-")) return -1;
-  if (b.startsWith(a + "-")) return 1;
-  return a.localeCompare(b, undefined, {
-    numeric: true,
-    sensitivity: "case",
-    caseFirst: "upper",
-  });
 }

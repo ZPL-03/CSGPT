@@ -43,11 +43,7 @@ function isSameProvider(
   );
 }
 
-/**
- * Sorts an array of models based on specified rules.
- *
- * First, sorted by provider; if the same, sorted by model
- */
+// 模型排序：先按 provider，相同时按 model
 const sortModelTable = (models: ReturnType<typeof collectModels>) =>
   models.sort((a, b) => {
     if (a.provider && b.provider) {
@@ -58,12 +54,8 @@ const sortModelTable = (models: ReturnType<typeof collectModels>) =>
     }
   });
 
-/**
- * get model name and provider from a formatted string,
- * e.g. `gpt-4@OpenAi` or `claude-3-5-sonnet@20240620@Google`
- * @param modelWithProvider model name with provider separated by last `@` char,
- * @returns [model, provider] tuple, if no `@` char found, provider is undefined
- */
+// 从格式化字符串中解析模型名和 provider，如 gpt-4@OpenAI
+// 返回 [model, provider] 元组，无 @ 时 provider 为 undefined
 export function getModelProvider(modelWithProvider: string): [string, string?] {
   const [model, provider] = modelWithProvider.split(/@(?!.*@)/);
   return [model, provider];
@@ -180,13 +172,8 @@ export function collectModelTableWithDefaultModel(
   return modelTable;
 }
 
-/**
- * Generate full model table.
- */
-export function collectModels(
-  models: readonly LLMModel[],
-  customModels: string,
-) {
+// 生成完整模型列表
+function collectModels(models: readonly LLMModel[], customModels: string) {
   const modelTable = collectModelTable(models, customModels);
   let allModels = Object.values(modelTable);
 
@@ -226,12 +213,7 @@ export function isModelAvailableInServer(
   );
 }
 
-/**
- * Check if the model name is a GPT-4 related model
- *
- * @param modelName The name of the model to check
- * @returns True if the model is a GPT-4 related model (excluding gpt-4o-mini)
- */
+// 判断是否为 GPT-4 系列模型（不含 gpt-4o-mini）
 export function isGPT4Model(modelName: string): boolean {
   return (
     (modelName.startsWith("gpt-4") ||
@@ -256,15 +238,7 @@ export function normalizeCSGPTModelConfig(modelConfig: {
   }
 }
 
-/**
- * Checks if a model is not available on any of the specified providers in the server.
- *
- * @param {string} customModels - A string of custom models, comma-separated.
- * @param {string} modelName - The name of the model to check.
- * @param {string|string[]} providerNames - A string or array of provider names to check against.
- *
- * @returns {boolean} True if the model is not available on any of the specified providers, false otherwise.
- */
+// 检查模型在所有指定 Provider 上是否均不可用
 export function isModelNotAvailableInServer(
   customModels: string,
   modelName: string,

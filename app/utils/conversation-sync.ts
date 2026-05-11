@@ -79,54 +79,6 @@ export async function deleteConversationFromDB(sessionId: string) {
   }
 }
 
-// 从数据库加载用户所有对话（仅元数据，不含消息）
-export async function loadConversationsFromDB(): Promise<any[]> {
-  const userStore = useUserStore.getState();
-  if (!userStore.isLoggedIn || !userStore.token) return [];
-
-  try {
-    const res = await fetch("/api/conversations", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${userStore.token}`,
-      },
-    });
-
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    return data.conversations || [];
-  } catch (error) {
-    console.error("[Sync] Failed to load conversations:", error);
-    return [];
-  }
-}
-
-// 从数据库加载单个对话详情（含消息）
-export async function loadConversationDetail(
-  sessionId: string,
-): Promise<any | null> {
-  const userStore = useUserStore.getState();
-  if (!userStore.isLoggedIn || !userStore.token) return null;
-
-  try {
-    const res = await fetch(`/api/conversations/${sessionId}`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${userStore.token}`,
-      },
-    });
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    return data.conversation || null;
-  } catch (error) {
-    console.error("[Sync] Failed to load conversation detail:", error);
-    return null;
-  }
-}
-
 // 将数据库中的消息 content 字段还原为原始类型
 // 存库时 MultimodalContent[] 被 JSON.stringify，加载时需反序列化
 function parseMessageContent(content: string): string | any[] {

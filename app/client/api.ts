@@ -1,7 +1,7 @@
 import { ACCESS_CODE_PREFIX, ServiceProvider } from "../constant";
 import {
-  ChatMessageTool,
   ChatMessage,
+  ChatMessageTool,
   ModelType,
   useAccessStore,
   useAppConfig,
@@ -28,11 +28,6 @@ export interface MultimodalContent {
     size: number;
     type?: string;
   };
-}
-
-export interface MultimodalContentForAlibaba {
-  text?: string;
-  image?: string;
 }
 
 export interface RequestMessage {
@@ -94,16 +89,9 @@ export abstract class LLMApi {
 export class ClientApi {
   public llm: LLMApi;
 
-  // 聊天请求共用 OpenAI 兼容客户端，provider 对应的端点、密钥和模型从各请求配置解析。
-  constructor(_provider: ServiceProvider = ServiceProvider.CSGPT) {
+  constructor() {
     this.llm = new ChatGPTApi();
   }
-
-  config() {}
-
-  prompts() {}
-
-  masks() {}
 
   async share(_messages: ChatMessage[], _avatarUrl: string | null = null) {
     return undefined;
@@ -183,6 +171,6 @@ function getApiKeyForProvider(
   return keyMap[providerName] || "";
 }
 
-export function getClientApi(provider: ServiceProvider): ClientApi {
-  return new ClientApi(provider);
+export function getClientApi(_provider?: ServiceProvider): ClientApi {
+  return new ClientApi();
 }

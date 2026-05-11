@@ -51,7 +51,7 @@ function parseOffset(request: NextRequest) {
 
 // GET：读取文件内容
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { filename: string } },
 ) {
   try {
@@ -60,8 +60,13 @@ export async function GET(
       return NextResponse.json({ error: "无效的文件名" }, { status: 400 });
     }
 
-    const file = await prisma.uploadedFile.findUnique({
-      where: { id: fileId },
+    const userId = await getUserFromRequest(request);
+    if (!userId) {
+      return NextResponse.json({ error: "未授权" }, { status: 401 });
+    }
+
+    const file = await prisma.uploadedFile.findFirst({
+      where: { id: fileId, userId },
       select: {
         data: true,
         mimeType: true,
@@ -181,6 +186,22 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => null);
+
+    // 设置文件解析文本
+    if (body?.action === "setExtractedText") {
+      if (typeof body.extractedText !== "string") {
+        return NextResponse.json({ error: "缺少解析文本" }, { status: 400 });
+      }
+      const result = await prisma.uploadedFile.updateMany({
+        where: { id: fileId, userId },
+        data: { extractedText: body.extractedText },
+      });
+      if (result.count === 0) {
+        return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+      }
+      return NextResponse.json({ code: 0 });
+    }
+
     if (body?.action !== "complete") {
       return NextResponse.json({ error: "无效的文件操作" }, { status: 400 });
     }

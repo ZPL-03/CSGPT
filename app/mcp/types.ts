@@ -1,6 +1,5 @@
 // MCP 协议消息类型定义
 
-import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 export interface McpRequestMessage {
@@ -11,13 +10,6 @@ export interface McpRequestMessage {
     [key: string]: unknown;
   };
 }
-
-export const McpRequestMessageSchema: z.ZodType<McpRequestMessage> = z.object({
-  jsonrpc: z.literal("2.0").optional(),
-  id: z.union([z.string(), z.number()]).optional(),
-  method: z.string(),
-  params: z.record(z.unknown()).optional(),
-});
 
 export interface McpResponseMessage {
   jsonrpc?: "2.0";
@@ -31,39 +23,6 @@ export interface McpResponseMessage {
     data?: unknown;
   };
 }
-
-export const McpResponseMessageSchema: z.ZodType<McpResponseMessage> = z.object(
-  {
-    jsonrpc: z.literal("2.0").optional(),
-    id: z.union([z.string(), z.number()]).optional(),
-    result: z.record(z.unknown()).optional(),
-    error: z
-      .object({
-        code: z.number(),
-        message: z.string(),
-        data: z.unknown().optional(),
-      })
-      .optional(),
-  },
-);
-
-export interface McpNotifications {
-  jsonrpc?: "2.0";
-  method: string;
-  params?: {
-    [key: string]: unknown;
-  };
-}
-
-export const McpNotificationsSchema: z.ZodType<McpNotifications> = z.object({
-  jsonrpc: z.literal("2.0").optional(),
-  method: z.string(),
-  params: z.record(z.unknown()).optional(),
-});
-
-////////////
-// NextChat 扩展类型
-////////////
 export interface ListToolsResponse {
   tools: {
     name?: string;
@@ -127,13 +86,8 @@ export const DEFAULT_MCP_CONFIG: McpConfigData = {
 };
 
 export interface ArgsMapping {
-  // 参数映射的类型
   type: "spread" | "single" | "env";
-
-  // 参数映射的位置
   position?: number;
-
-  // 参数映射的 key
   key?: string;
 }
 

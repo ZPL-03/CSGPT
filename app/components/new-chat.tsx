@@ -79,7 +79,7 @@ export function NewChat() {
   const chatStore = useChatStore();
   const maskStore = useMaskStore();
 
-  const filterLang = maskStore.language ?? getLang();
+  const filterLang = getLang();
   const masks = maskStore
     .getAll()
     .filter((m) => !filterLang || m.lang === filterLang);

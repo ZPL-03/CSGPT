@@ -432,7 +432,7 @@ export function MaskPage() {
   const maskStore = useMaskStore();
   const chatStore = useChatStore();
 
-  const filterLang = maskStore.language ?? getLang();
+  const filterLang = getLang();
 
   const allMasks = maskStore
     .getAll()

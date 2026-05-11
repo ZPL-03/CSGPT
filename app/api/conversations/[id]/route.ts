@@ -48,6 +48,23 @@ export async function GET(
       return NextResponse.json({ error: "对话不存在" }, { status: 404 });
     }
 
+    // 收集消息中引用的文件 ID，从 UploadedFile 表取回解析文本
+    const allFileIds = new Set<string>();
+    for (const msg of conversation.messages) {
+      const ids = collectFileIdsFromMessageContent(msg.content);
+      for (const fid of ids) allFileIds.add(fid);
+    }
+    const fileRecords =
+      allFileIds.size > 0
+        ? await prisma.uploadedFile.findMany({
+            where: { id: { in: Array.from(allFileIds) }, userId },
+            select: { id: true, extractedText: true },
+          })
+        : [];
+    const extractedTextMap = new Map(
+      fileRecords.map((f) => [f.id, f.extractedText]),
+    );
+
     const res = NextResponse.json({
       conversation: {
         id: conversation.id,
@@ -59,16 +76,24 @@ export async function GET(
         maskConfig: conversation.maskConfig,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
-        messages: conversation.messages.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          content: parseMessageContent(m.content),
-          date: m.date,
-          isError: m.isError,
-          model: m.model,
-          tools: m.tools,
-          fileContent: m.fileContent,
-        })),
+        messages: conversation.messages.map((m: any) => {
+          // 从消息内容中提取文件 ID，从数据库取回解析文本
+          const msgFileIds = collectFileIdsFromMessageContent(m.content);
+          const reconstitutedFileContent = msgFileIds
+            .map((fid: string) => extractedTextMap.get(fid))
+            .filter(Boolean)
+            .join("\n\n");
+          return {
+            id: m.id,
+            role: m.role,
+            content: parseMessageContent(m.content),
+            date: m.date,
+            isError: m.isError,
+            model: m.model,
+            tools: m.tools,
+            fileContent: reconstitutedFileContent || m.fileContent,
+          };
+        }),
       },
     });
     res.headers.set(

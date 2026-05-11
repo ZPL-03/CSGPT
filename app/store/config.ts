@@ -140,8 +140,6 @@ export const useAppConfig = createPersistStore(
         models: Object.values(modelMap),
       }));
     },
-
-    allModels() {},
   }),
   {
     name: StoreKey.Config,

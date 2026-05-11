@@ -84,6 +84,7 @@ model UploadedFile {
   mimeType       String
   size           Int
   data           Bytes
+  extractedText  String?   @db.Text
   createdAt      DateTime  @default(now())
 
   @@index([userId, createdAt])
