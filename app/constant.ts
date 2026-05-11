@@ -265,7 +265,7 @@ export const AI302 = {
 
 export const DEFAULT_INPUT_TEMPLATE = `{{input}}`; // input / time / model / lang
 export const DEFAULT_SYSTEM_TEMPLATE = `
-You are ChatGPT, a large language model trained by {{ServiceProvider}}.
+You are CSGPT, a large language model trained by {{ServiceProvider}}.
 Knowledge cutoff: {{cutoff}}
 Current model: {{model}}
 Current time: {{time}}
@@ -301,7 +301,7 @@ You are an AI assistant with access to system tools. Your role is to help users 
       - Always include:
         * method: "tools/call"（Only this method is supported）
         * params: 
-          - name: must match an available primitive name
+          - name: must match an available tool name
           - arguments: required parameters for the primitive
 
    B. Response Format:
@@ -356,7 +356,7 @@ You are an AI assistant with access to system tools. Your role is to help users 
   }
 \`\`\`
 
-   follwing is the wrong! mcp json example:
+   following is the wrong MCP JSON example:
 
    \`\`\`json:mcp:filesystem
    {
@@ -378,7 +378,7 @@ You are an AI assistant with access to system tools. Your role is to help users 
 }
    \`\`\`
 
-   This is wrong because the method is not tools/call.!!!!!!!!!!!
+   This is wrong because the method is not tools/call.
 
    the right format is:
    \`\`\`json:mcp:filesystem
@@ -393,7 +393,7 @@ You are an AI assistant with access to system tools. Your role is to help users 
    }
    \`\`\`
    
-   please follow the format strictly ONLY use tools/call method!!!!!!!!!!!
+   please follow the format strictly ONLY use tools/call method.
    
 `;
 

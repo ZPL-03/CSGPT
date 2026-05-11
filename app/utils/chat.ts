@@ -270,6 +270,39 @@ export async function uploadFile(
   }
 }
 
+// 服务端重解析：对已上传文件重新执行完整解析管线获取增强文本
+export async function reparseFileOnServer(fileId: string): Promise<{
+  text: string;
+  originalFormat: string;
+  noiseLinesRemoved: number;
+  formulaRecords: Array<{
+    formula: string;
+    display: boolean;
+    description: string;
+  }>;
+  metadata: Record<string, any>;
+}> {
+  const token = useUserStore.getState().token;
+  if (!token) {
+    throw new Error("用户未登录");
+  }
+
+  const response = await fetch(`/api/files/${fileId}/parse`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `重解析请求失败：${response.status}`);
+  }
+
+  return response.json();
+}
+
 export function streamWithThink(
   chatPath: string,
   requestPayload: any,

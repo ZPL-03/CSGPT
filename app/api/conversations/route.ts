@@ -1,6 +1,7 @@
 // 对话数据 API
-// GET  /api/conversations - 获取用户所有对话列表
-// POST /api/conversations - 创建/保存对话
+// GET    /api/conversations - 获取用户所有对话列表
+// POST   /api/conversations - 创建/保存对话
+// DELETE /api/conversations - 删除用户所有对话和关联文件
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
@@ -178,5 +179,70 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[Conversations POST] Error:", error);
     return NextResponse.json({ error: "保存对话失败" }, { status: 500 });
+  }
+}
+
+// 删除当前用户所有对话和关联文件
+export async function DELETE(request: NextRequest) {
+  try {
+    const userId = await getUserFromRequest(request);
+    if (!userId) {
+      return NextResponse.json({ error: "未授权" }, { status: 401 });
+    }
+
+    // 统计要删除的数据
+    const conversationCount = await prisma.conversation.count({
+      where: { userId },
+    });
+
+    if (conversationCount === 0) {
+      return NextResponse.json({ deletedConversations: 0, deletedFiles: 0 });
+    }
+
+    // 收集所有对话中的文件引用
+    const conversations = await prisma.conversation.findMany({
+      where: { userId },
+      include: { messages: { select: { content: true } } },
+    });
+
+    const allFileIds = new Set<string>();
+    for (const conv of conversations) {
+      for (const msg of conv.messages) {
+        const fileIds = collectFileIdsFromMessageContent(msg.content);
+        for (const fid of fileIds) allFileIds.add(fid);
+      }
+    }
+
+    // 检查哪些文件存在且属于当前用户
+    const existingFiles =
+      allFileIds.size > 0
+        ? await prisma.uploadedFile.findMany({
+            where: { id: { in: Array.from(allFileIds) }, userId },
+            select: { id: true },
+          })
+        : [];
+    const fileIdsToDelete = existingFiles.map((f) => f.id);
+
+    // 在事务中删除所有对话、消息和未引用文件
+    await prisma.$transaction(async (tx: any) => {
+      // 先删除所有消息
+      await tx.message.deleteMany({
+        where: { conversationId: { in: conversations.map((c) => c.id) } },
+      });
+      // 删除所有对话
+      await tx.conversation.deleteMany({ where: { userId } });
+      // 删除关联文件
+      if (fileIdsToDelete.length > 0) {
+        await deleteUnreferencedFiles(tx, fileIdsToDelete, userId);
+      }
+    });
+
+    return NextResponse.json({
+      deletedConversations: conversationCount,
+      deletedFiles: fileIdsToDelete.length,
+    });
+  } catch (error) {
+    console.error("[Conversations DELETE] Error:", error);
+    return NextResponse.json({ error: "清除数据失败" }, { status: 500 });
   }
 }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 上传文件解析工具。
  * 文本接口读取解析文本，多模态接口同时接收原始图片或渲染图片。
  */
@@ -204,19 +204,443 @@ async function resolveToFileSource(
 }
 
 function cleanText(text: string): string {
+  return (
+    text
+      // 零宽字符
+      .replace(/​/g, "")
+      .replace(/‌/g, "")
+      .replace(/‍/g, "")
+      .replace(/﻿/g, "")
+      // 软连字符
+      .replace(/­/g, "")
+      // 控制字符
+      .replace(/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, " ")
+      // PDF 编码噪声修复
+      .replace(/Â±/g, "±")
+      .replace(/Â°/g, "°")
+      .replace(/Âµ/g, "µ")
+      .replace(/Â²/g, "²")
+      .replace(/Â³/g, "³")
+      .replace(/â‰¤/g, "≤")
+      .replace(/â‰¥/g, "≥")
+      // 替换字符
+      .replace(/�/g, " ")
+      // 连字规范化
+      .replace(/ﬀ/g, "ff")
+      .replace(/ﬁ/g, "fi")
+      .replace(/ﬂ/g, "fl")
+      .replace(/ﬃ/g, "ffi")
+      .replace(/ﬄ/g, "ffl")
+      // 换行符统一
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      // 跨行断词修复（含拉丁扩展字符）
+      .replace(/([A-Za-zÀ-ɏ])-\s*\n\s*([A-Za-zÀ-ɏ])/g, "$1$2")
+      // 行尾空白清理
+      .replace(/[ \t]+\n/g, "\n")
+      // 多余空行压缩
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+// 工程单位标准化模式
+const UNIT_PATTERNS: Array<
+  [RegExp, string | ((_m: string, unit: string) => string)]
+> = [
+  [/\b(g\s*pa|gpa)\b/gi, "GPa"],
+  [/\b(m\s*pa|mpa)\b/gi, "MPa"],
+  [/\b(k\s*pa|kpa)\b/gi, "kPa"],
+  [/\b(n\s*\/\s*mm\s*(?:2|²))\b/gi, "MPa"],
+  [/\b(g\s*\/\s*cm\s*(?:3|³))\b/gi, "g/cm³"],
+  [/\b(kg\s*\/\s*m\s*(?:3|³))\b/gi, "kg/m³"],
+  [
+    /\b(mm|cm|m|nm|µm|um)\s*\^\s*2\b/gi,
+    (_m: string, unit: string) => `${unit.toLowerCase()}²`,
+  ],
+  [
+    /\b(mm|cm|m|nm|µm|um)\s*\^\s*3\b/gi,
+    (_m: string, unit: string) => `${unit.toLowerCase()}³`,
+  ],
+  [/\b(deg|degree|degrees)\b/gi, "°"],
+  [/\b(percent)\b/gi, "%"],
+];
+
+function standardizeUnits(text: string): string {
+  let result = text;
+  for (const [pattern, replacement] of UNIT_PATTERNS) {
+    result = result.replace(pattern, replacement as any);
+  }
+  return result;
+}
+
+export function normalizeEngineeringText(text: string): string {
+  return standardizeUnits(cleanText(text));
+}
+
+// 学术论文噪声行模式
+const NOISE_LINE_PATTERNS: RegExp[] = [
+  /^\s*doi\s*[:：]\s*\S+\s*$/i,
+  /^\s*https?:\/\/\S+\s*$/i,
+  /^\s*(received|accepted|available online|published online)\b/i,
+  /^\s*(copyright|©)\b/i,
+  /^\s*(journal|proceedings) of\b.{0,120}$/i,
+  /^\s*\d+\s*\/\s*\d+\s*$/,
+  /^\s*page\s+\d+\s+of\s+\d+\s*$/i,
+  /^\s*vol(?:ume)?\.?\s*\d+\s*$/i,
+  /^\s*(iss(?:ue)?|no)\.?\s*[\d-]+\s*$/i,
+];
+
+function isNoiseLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (/^[IVXLC]+\s*$/i.test(trimmed) && trimmed.length <= 4) return true;
+  if (/^\d{1,4}\s*$/.test(trimmed)) return true;
+  return NOISE_LINE_PATTERNS.some((p) => p.test(trimmed));
+}
+
+export function filterNoiseLines(text: string): string {
   return text
-    .replace(/\u00ad/g, "")
-    .replace(/ﬀ/g, "ff")
-    .replace(/ﬁ/g, "fi")
-    .replace(/ﬂ/g, "fl")
-    .replace(/ﬃ/g, "ffi")
-    .replace(/ﬄ/g, "ffl")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/([A-Za-z])-\n([A-Za-z])/g, "$1$2")
-    .replace(/[ \t]+\n/g, "\n")
+    .split("\n")
+    .filter((line) => !isNoiseLine(line))
+    .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// LaTeX 公式检测
+const DISPLAY_FORMULA_PATTERN = /\$\$(.+?)\$\$|\\\[(.+?)\\\]/gs;
+const INLINE_FORMULA_PATTERN =
+  /(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)|\\\((.+?)\\\)/gs;
+const MATH_SIGNAL_PATTERN = /[\\{}()\[\]_^]|\\[a-zA-Z]+|[α-ωΑ-Ω∀-⋿←-⇿]/;
+
+// 复合材料公式术语映射
+const FORMULA_TERM_MAP: Record<string, string> = {
+  sigma: "应力",
+  epsilon: "应变",
+  tau: "剪应力",
+  E: "弹性模量",
+  G: "剪切模量",
+  nu: "泊松比",
+  rho: "密度",
+  theta: "角度",
+  alpha: "热膨胀系数",
+  sigma_1: "纵向应力",
+  sigma_2: "横向应力",
+  tau_12: "面内剪应力",
+  E_1: "纵向模量",
+  E_2: "横向模量",
+  G_12: "面内剪切模量",
+  epsilon_1: "纵向应变",
+  epsilon_2: "横向应变",
+  gamma_12: "面内剪应变",
+  Q: "刚度矩阵",
+  S: "柔度矩阵",
+  T: "转换矩阵",
+};
+
+function validateLatexFormula(formula: string): boolean {
+  const brackets: Record<string, string> = { "{": "}", "(": ")", "[": "]" };
+  const stack: string[] = [];
+  let leftCount = 0;
+  let rightCount = 0;
+
+  for (let i = 0; i < formula.length; i++) {
+    const ch = formula[i];
+    if (ch === "\\" && i + 1 < formula.length) {
+      const rest = formula.slice(i);
+      if (rest.startsWith("\\left")) leftCount++;
+      if (rest.startsWith("\\right")) rightCount++;
+    }
+    if ("{([".includes(ch)) stack.push(ch);
+    if ("})]".includes(ch)) {
+      const last = stack.pop();
+      if (!last || brackets[last] !== ch) return false;
+    }
+  }
+
+  return stack.length === 0 && leftCount === rightCount;
+}
+
+function formulaSearchDescription(formula: string): string {
+  const terms: string[] = [];
+  for (const [symbol, name] of Object.entries(FORMULA_TERM_MAP)) {
+    if (formula.includes(symbol) || formula.includes(`\\${symbol}`)) {
+      terms.push(`${symbol}（${name}）`);
+    }
+  }
+  return terms.length > 0 ? `公式检索说明：${terms.join("；")}。` : "";
+}
+
+function enrichTextWithFormulas(text: string): string {
+  let result = text;
+
+  result = result.replace(DISPLAY_FORMULA_PATTERN, (match, d1, d2) => {
+    const formula = (d1 || d2 || "").trim();
+    const desc = formulaSearchDescription(formula);
+    return desc ? `$$ ${formula} $$ ${desc}` : match;
+  });
+
+  result = result.replace(INLINE_FORMULA_PATTERN, (match, i1, i2) => {
+    const formula = (i1 || i2 || "").trim();
+    if (!validateLatexFormula(formula) || !MATH_SIGNAL_PATTERN.test(formula))
+      return match;
+    return `$ ${formula} $`;
+  });
+
+  return result;
+}
+
+interface FormulaRecord {
+  formula: string;
+  display: boolean;
+  description: string;
+}
+
+export function extractFormulaRecords(text: string): FormulaRecord[] {
+  const records: FormulaRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const pattern of [DISPLAY_FORMULA_PATTERN, INLINE_FORMULA_PATTERN]) {
+    const isDisplay = pattern === DISPLAY_FORMULA_PATTERN;
+    const regex = new RegExp(pattern.source, "gs");
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const formula = (match[1] || match[2] || "").trim();
+      if (!formula || seen.has(formula)) continue;
+      if (!validateLatexFormula(formula)) continue;
+      seen.add(formula);
+      records.push({
+        formula,
+        display: isDisplay,
+        description: formulaSearchDescription(formula),
+      });
+    }
+  }
+
+  return records;
+}
+
+// OLE 复合文档读取器（最小化实现，用于 .doc/.ppt 文本提取）
+const OLE_SECTOR_SIZE = 512;
+const OLE_DIR_ENTRY_SIZE = 128;
+
+interface OleStream {
+  name: string;
+  data: Uint8Array;
+}
+
+function readOleStreams(bytes: Uint8Array): OleStream[] {
+  if (bytes.length < 512) return [];
+
+  // 魔数校验 OLE2: D0 CF 11 E0
+  if (
+    bytes[0] !== 0xd0 ||
+    bytes[1] !== 0xcf ||
+    bytes[2] !== 0x11 ||
+    bytes[3] !== 0xe0
+  ) {
+    return [];
+  }
+
+  const sectorSize = 1 << bytes[30];
+  const dirSectorSize = sectorSize <= 9 ? 512 : 4096;
+
+  const fatCount =
+    bytes[44] | (bytes[45] << 8) | (bytes[46] << 16) | (bytes[47] << 24);
+  const dirStartSector =
+    bytes[48] | (bytes[49] << 8) | (bytes[50] << 16) | (bytes[51] << 24);
+
+  if (dirStartSector === 0xfffffffe || dirStartSector === 0xffffffff) return [];
+
+  // 读取 FAT 扇区链
+  const fat: number[] = [];
+  for (let i = 0; i < fatCount; i++) {
+    const offset = 76 + i * 4;
+    if (offset + 4 > bytes.length) break;
+    const fatSector =
+      bytes[offset] |
+      (bytes[offset + 1] << 8) |
+      (bytes[offset + 2] << 16) |
+      (bytes[offset + 3] << 24);
+    const sectorStart = (fatSector + 1) * dirSectorSize;
+    for (let j = 0; j < dirSectorSize; j += 4) {
+      if (sectorStart + j + 4 > bytes.length) break;
+      fat.push(
+        bytes[sectorStart + j] |
+          (bytes[sectorStart + j + 1] << 8) |
+          (bytes[sectorStart + j + 2] << 16) |
+          (bytes[sectorStart + j + 3] << 24),
+      );
+    }
+  }
+
+  // 遍历扇区链读取目录
+  const dirData: number[] = [];
+  let sectorIdx = dirStartSector;
+  const visited = new Set<number>();
+  while (
+    sectorIdx >= 0 &&
+    sectorIdx < fat.length &&
+    sectorIdx !== 0xfffffffe &&
+    sectorIdx !== 0xffffffff
+  ) {
+    if (visited.has(sectorIdx)) break;
+    visited.add(sectorIdx);
+    const sectorStart = (sectorIdx + 1) * dirSectorSize;
+    for (let j = 0; j < dirSectorSize && sectorStart + j < bytes.length; j++) {
+      dirData.push(bytes[sectorStart + j]);
+    }
+    sectorIdx = fat[sectorIdx];
+  }
+
+  // 解析目录条目
+  const entries: Array<{ name: string; startSector: number; size: number }> =
+    [];
+  for (
+    let i = 0;
+    i + OLE_DIR_ENTRY_SIZE <= dirData.length;
+    i += OLE_DIR_ENTRY_SIZE
+  ) {
+    const nameLen = dirData[i + 64] | (dirData[i + 65] << 8);
+    if (nameLen === 0) continue;
+
+    const nameBytes = new Uint8Array(
+      dirData.slice(i, i + Math.min(nameLen, 64)),
+    );
+    const name = new TextDecoder("utf-16le")
+      .decode(nameBytes)
+      .replace(/\0/g, "");
+
+    const startSector =
+      dirData[i + 116] |
+      (dirData[i + 117] << 8) |
+      (dirData[i + 118] << 16) |
+      (dirData[i + 119] << 24);
+    const size =
+      dirData[i + 120] |
+      (dirData[i + 121] << 8) |
+      (dirData[i + 122] << 16) |
+      (dirData[i + 123] << 24);
+
+    if (size > 0 && startSector !== 0xfffffffe) {
+      entries.push({ name, startSector, size });
+    }
+  }
+
+  // 读取各流数据
+  const streams: OleStream[] = [];
+  for (const entry of entries) {
+    const streamData: number[] = [];
+    let secIdx = entry.startSector;
+    let bytesRead = 0;
+    const visitedSectors = new Set<number>();
+
+    while (
+      secIdx >= 0 &&
+      secIdx < fat.length &&
+      bytesRead < entry.size &&
+      secIdx !== 0xfffffffe &&
+      secIdx !== 0xffffffff
+    ) {
+      if (visitedSectors.has(secIdx)) break;
+      visitedSectors.add(secIdx);
+      const secStart = (secIdx + 1) * dirSectorSize;
+      const remain = Math.min(dirSectorSize, entry.size - bytesRead);
+      for (let j = 0; j < remain && secStart + j < bytes.length; j++) {
+        streamData.push(bytes[secStart + j]);
+      }
+      bytesRead += remain;
+      secIdx = fat[secIdx];
+    }
+
+    streams.push({ name: entry.name, data: new Uint8Array(streamData) });
+  }
+
+  return streams;
+}
+
+// 从二进制流中提取多编码文本
+function extractBinaryText(data: Uint8Array): string {
+  const decoders = ["utf-16le", "gb18030", "latin-1"];
+  const results: string[] = [];
+
+  for (const encoding of decoders) {
+    try {
+      const text = new TextDecoder(encoding).decode(data);
+      const cleaned = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, " ");
+      const matches = cleaned.match(
+        /[一-鿿A-Za-z0-9　-ヿ＀-￯\[\]().,;:!?%\/\+\-=<>_^\s]{12,}/g,
+      );
+      if (matches) results.push(matches.join("\n"));
+    } catch {
+      // 忽略解码错误
+    }
+  }
+
+  results.sort((a, b) => cleanText(b).length - cleanText(a).length);
+  return results.length > 0 ? results[0] : "";
+}
+
+async function extractLegacyDoc(
+  bytes: Uint8Array,
+  fileName: string,
+  options: Required<FileExtractionOptions>,
+): Promise<FileExtractionResult> {
+  options.onProgress(10, "读取 DOC 二进制");
+  const streams = readOleStreams(bytes);
+  const wordStream = streams.find(
+    (s) =>
+      s.name === "WordDocument" || s.name === "1Table" || s.name === "0Table",
+  );
+
+  let text = "";
+  if (wordStream) {
+    text = extractBinaryText(wordStream.data);
+  }
+
+  if (!cleanText(text)) {
+    for (const stream of streams) {
+      const streamText = extractBinaryText(stream.data);
+      if (cleanText(streamText).length > cleanText(text).length) {
+        text = streamText;
+      }
+    }
+  }
+
+  options.onProgress(100, "DOC 解析完成");
+  return {
+    text: cleanText(text) || `[文件: ${fileName}，未提取到可读文本]`,
+    images: [],
+    metadata: { parser: "doc", fileName, streamCount: streams.length },
+  };
+}
+
+async function extractLegacyPpt(
+  bytes: Uint8Array,
+  fileName: string,
+  options: Required<FileExtractionOptions>,
+): Promise<FileExtractionResult> {
+  options.onProgress(10, "读取 PPT 二进制");
+  const streams = readOleStreams(bytes);
+
+  const textParts: string[] = [];
+  for (const stream of streams) {
+    if (stream.name.startsWith("__")) continue;
+    const streamText = extractBinaryText(stream.data);
+    if (cleanText(streamText)) {
+      textParts.push(streamText);
+    }
+  }
+
+  options.onProgress(100, "PPT 解析完成");
+  return {
+    text:
+      cleanText(textParts.join("\n")) ||
+      `[文件: ${fileName}，未提取到可读文本]`,
+    images: [],
+    metadata: { parser: "ppt", fileName, streamCount: streams.length },
+  };
 }
 
 function decodeXmlEntities(text: string): string {
@@ -1029,8 +1453,16 @@ export async function extractTextFromFile(
     return extractPdf(source.bytes, fileName, normalizedOptions);
   }
 
-  if (PRESENTATION_EXTENSIONS.has(ext)) {
+  if (ext === "pptx") {
     return extractPresentation(source.bytes, fileName, normalizedOptions);
+  }
+
+  if (ext === "doc") {
+    return extractLegacyDoc(source.bytes, fileName, normalizedOptions);
+  }
+
+  if (ext === "ppt") {
+    return extractLegacyPpt(source.bytes, fileName, normalizedOptions);
   }
 
   return {

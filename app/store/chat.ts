@@ -11,6 +11,7 @@ import {
 } from "../utils/conversation-sync";
 
 import { indexedDBStorage } from "@/app/utils/indexedDB-storage";
+import { useUserStore } from "./user";
 import { nanoid } from "nanoid";
 import type {
   ClientApi,
@@ -924,6 +925,18 @@ export const useChatStore = createPersistStore(
         set(() => ({ sessions }));
       },
       async clearAllData() {
+        // 先删除服务端所有对话和文件
+        const token = useUserStore.getState().token;
+        if (token) {
+          try {
+            await fetch("/api/conversations", {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } catch {
+            // 服务端删除失败也继续清理本地数据
+          }
+        }
         await indexedDBStorage.clear();
         localStorage.clear();
         location.reload();
