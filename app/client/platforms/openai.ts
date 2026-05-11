@@ -264,10 +264,30 @@ export class ChatGPTApi implements LLMApi {
           ? v.content
           : await preProcessImageContent(providerContent);
         if (fileContent) {
-          content =
-            typeof content === "string"
-              ? fileContent + "\n\n" + content
-              : [{ type: "text", text: fileContent }, ...content];
+          // CSGPT 为纯文本模型，fileContent 已含附件解析文本，剔除冗余的媒体引用防止重复计数
+          const mediaParts =
+            isCSGPTProvider && Array.isArray(content)
+              ? content.filter(
+                  (part) =>
+                    part.type === "image_url" || part.type === "file_url",
+                )
+              : [];
+          if (mediaParts.length > 0) {
+            content = [
+              { type: "text", text: fileContent },
+              ...(Array.isArray(content)
+                ? content.filter(
+                    (part) =>
+                      part.type !== "image_url" && part.type !== "file_url",
+                  )
+                : []),
+            ];
+          } else {
+            content =
+              typeof content === "string"
+                ? fileContent + "\n\n" + content
+                : [{ type: "text", text: fileContent }, ...content];
+          }
         }
         if (!isCSGPTProvider && Array.isArray(content)) {
           content = content.filter((part) => part.type !== "file_url");

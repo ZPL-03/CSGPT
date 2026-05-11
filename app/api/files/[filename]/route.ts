@@ -86,7 +86,7 @@ export async function GET(
         "Content-Type": file.mimeType,
         "Content-Length": String(buffer.length),
         "Content-Disposition": contentDisposition(file.originalName),
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
         "Access-Control-Allow-Origin": "*",
       },
     });
