@@ -16,61 +16,41 @@ function getPersistableMessages(session: any) {
   return (session.messages || [])
     .filter((message: any) => !isEmptyStreamingAssistant(message))
     .map((message: any) => {
-      const { streaming, ...persistableMessage } = message;
+      // 剥离 stream 标记和文件解析文本，后者体积过大容易超过 Vercel 4.5MB 限制
+      const { streaming, fileContent, ...persistableMessage } = message;
       return persistableMessage;
     });
 }
 
-async function compressToGzip(data: string): Promise<Uint8Array> {
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(data);
-  const cs = new CompressionStream("gzip");
-  const writer = cs.writable.getWriter();
-  writer.write(bytes);
-  writer.close();
-  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
-}
-
-interface SyncResponse {
-  ok: boolean;
-  error?: string;
-}
-
-export async function syncConversationToDB(session: any): Promise<boolean> {
+// 同步单个对话到数据库
+export async function syncConversationToDB(session: any) {
   const userStore = useUserStore.getState();
   if (!userStore.isLoggedIn || !userStore.token) return false;
 
   try {
-    const json = JSON.stringify({
-      id: session.id,
-      topic: session.topic,
-      messages: getPersistableMessages(session),
-      mask: session.mask,
-      memoryPrompt: session.memoryPrompt,
-      lastUpdate: session.lastUpdate,
-      lastSummarizeIndex: session.lastSummarizeIndex,
-      clearContextIndex: session.clearContextIndex,
-    });
-
-    // gzip 压缩请求体，使大文件解析文本不受 Vercel 4.5MB 限制
-    const compressed = await compressToGzip(json);
-
     const response = await fetch("/api/conversations", {
       method: "POST",
       cache: "no-store",
       headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Encoding": "gzip",
+        "Content-Type": "application/json",
         Authorization: `Bearer ${userStore.token}`,
       },
-      body: compressed,
+      body: JSON.stringify({
+        id: session.id,
+        topic: session.topic,
+        messages: getPersistableMessages(session),
+        mask: session.mask,
+        memoryPrompt: session.memoryPrompt,
+        lastUpdate: session.lastUpdate,
+        lastSummarizeIndex: session.lastSummarizeIndex,
+        clearContextIndex: session.clearContextIndex,
+      }),
     });
-
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
+      const detail = await response.text().catch(() => "");
       console.error("[Sync] Conversation sync rejected:", {
         status: response.status,
-        error: (body as SyncResponse).error || response.statusText,
+        detail,
       });
       return false;
     }
