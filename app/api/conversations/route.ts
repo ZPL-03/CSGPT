@@ -10,9 +10,20 @@ import {
   collectFileIdsFromMessageContent,
   deleteUnreferencedFiles,
 } from "./file-refs";
+import zlib from "zlib";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+async function readJsonBody(request: NextRequest): Promise<any> {
+  const encoding = request.headers.get("content-encoding");
+  if (encoding === "gzip") {
+    const buffer = Buffer.from(await request.arrayBuffer());
+    const decompressed = zlib.gunzipSync(buffer);
+    return JSON.parse(decompressed.toString("utf-8"));
+  }
+  return request.json();
+}
 
 // 获取用户所有对话
 export async function GET(request: NextRequest) {
@@ -61,7 +72,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const {
       id,
       topic,

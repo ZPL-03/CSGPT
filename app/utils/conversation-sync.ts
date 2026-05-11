@@ -16,41 +16,61 @@ function getPersistableMessages(session: any) {
   return (session.messages || [])
     .filter((message: any) => !isEmptyStreamingAssistant(message))
     .map((message: any) => {
-      // 剥离 stream 标记和大文件提取文本，避免超过 Vercel 4.5MB 请求体限制
-      const { streaming, fileContent, ...persistableMessage } = message;
+      const { streaming, ...persistableMessage } = message;
       return persistableMessage;
     });
 }
 
-// 同步单个对话到数据库
-export async function syncConversationToDB(session: any) {
+async function compressToGzip(data: string): Promise<Uint8Array> {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(data);
+  const cs = new CompressionStream("gzip");
+  const writer = cs.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  return new Uint8Array(await new Response(cs.readable).arrayBuffer());
+}
+
+interface SyncResponse {
+  ok: boolean;
+  error?: string;
+}
+
+export async function syncConversationToDB(session: any): Promise<boolean> {
   const userStore = useUserStore.getState();
   if (!userStore.isLoggedIn || !userStore.token) return false;
 
   try {
+    const json = JSON.stringify({
+      id: session.id,
+      topic: session.topic,
+      messages: getPersistableMessages(session),
+      mask: session.mask,
+      memoryPrompt: session.memoryPrompt,
+      lastUpdate: session.lastUpdate,
+      lastSummarizeIndex: session.lastSummarizeIndex,
+      clearContextIndex: session.clearContextIndex,
+    });
+
+    // gzip 压缩请求体，使大文件解析文本不受 Vercel 4.5MB 限制
+    const compressed = await compressToGzip(json);
+
     const response = await fetch("/api/conversations", {
       method: "POST",
       cache: "no-store",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/octet-stream",
+        "Content-Encoding": "gzip",
         Authorization: `Bearer ${userStore.token}`,
       },
-      body: JSON.stringify({
-        id: session.id,
-        topic: session.topic,
-        messages: getPersistableMessages(session),
-        mask: session.mask,
-        memoryPrompt: session.memoryPrompt,
-        lastUpdate: session.lastUpdate,
-        lastSummarizeIndex: session.lastSummarizeIndex,
-        clearContextIndex: session.clearContextIndex,
-      }),
+      body: compressed,
     });
+
     if (!response.ok) {
-      const detail = await response.text().catch(() => "");
+      const body = await response.json().catch(() => ({}));
       console.error("[Sync] Conversation sync rejected:", {
         status: response.status,
-        detail,
+        error: (body as SyncResponse).error || response.statusText,
       });
       return false;
     }

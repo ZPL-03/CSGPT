@@ -10,7 +10,7 @@ import EyeIcon from "../icons/eye.svg";
 
 import { useLocation, useNavigate } from "react-router-dom";
 import { Mask, useMaskStore } from "../store/mask";
-import Locale from "../locales";
+import Locale, { getLang } from "../locales";
 import { useAppConfig, useChatStore } from "../store";
 import { MaskAvatar } from "./mask";
 import { useCommand } from "../command";
@@ -79,7 +79,10 @@ export function NewChat() {
   const chatStore = useChatStore();
   const maskStore = useMaskStore();
 
-  const masks = maskStore.getAll();
+  const filterLang = maskStore.language ?? getLang();
+  const masks = maskStore
+    .getAll()
+    .filter((m) => !filterLang || m.lang === filterLang);
   const groups = useMaskGroup(masks);
 
   const navigate = useNavigate();
