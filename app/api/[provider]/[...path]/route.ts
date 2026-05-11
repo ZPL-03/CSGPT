@@ -651,7 +651,7 @@ async function handleGenericProxy(
       );
     }
 
-    const body = req.body ? await req.text() : undefined;
+    const body = await req.text();
     const apiUrl = joinUrl(backend.baseUrl, pathStr);
 
     const response = await fetch(apiUrl, {

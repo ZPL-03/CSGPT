@@ -70,7 +70,10 @@ import {
   selectOrCopy,
 } from "../utils";
 
-import { uploadFile as uploadFileRemote } from "@/app/utils/chat";
+import {
+  uploadFile as uploadFileRemote,
+  saveExtractedText,
+} from "@/app/utils/chat";
 
 import dynamic from "next/dynamic";
 
@@ -1154,6 +1157,8 @@ function _Chat() {
           file: undefined,
           extractedText: extraction.text,
         });
+        // 将解析结果异步持久化到服务端，后续对话加载时重建 fileContent
+        saveExtractedText(fileUrl, extraction.text);
       } catch (error) {
         if (cancelledAttachmentIdsRef.current.has(id)) return;
         updateAttachment(id, {

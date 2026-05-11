@@ -81,7 +81,7 @@ export async function deleteConversationFromDB(sessionId: string) {
 
 // 将数据库中的消息 content 字段还原为原始类型
 // 存库时 MultimodalContent[] 被 JSON.stringify，加载时需反序列化
-function parseMessageContent(content: string): string | any[] {
+export function parseMessageContent(content: string): string | any[] {
   if (!content) return content;
   try {
     const parsed = JSON.parse(content);

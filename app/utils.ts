@@ -215,9 +215,7 @@ export function getCSSVar(varName: string) {
   return getComputedStyle(document.body).getPropertyValue(varName).trim();
 }
 
-/**
- * Detects Macintosh
- */
+/* 检测是否为 macOS 系统 */
 export function isMacOS(): boolean {
   if (typeof window !== "undefined") {
     let userAgent = window.navigator.userAgent.toLocaleLowerCase();

@@ -40,18 +40,14 @@ export class MCPClientLogger {
     }
   }
 
-  /**
-   * Format message to string, if message is object, convert to JSON string
-   */
+  // 将消息格式化为字符串，对象转为 JSON 字符串
   private formatMessage(message: any): string {
     return typeof message === "object"
       ? JSON.stringify(message, null, 2)
       : message;
   }
 
-  /**
-   * Print formatted message to console
-   */
+  // 输出格式化消息到控制台
   private print(color: string, message: any) {
     const formattedMessage = this.formatMessage(message);
     const logMessage = `${color}${colors.bright}[${this.prefix}]${colors.reset} ${formattedMessage}`;

@@ -130,14 +130,6 @@ export async function preProcessImageContent(
   })) as Promise<MultimodalContent[] | string>;
 }
 
-export async function preProcessImageContentForAlibabaDashScope(
-  content: RequestMessage["content"],
-) {
-  return preProcessImageContentBase(content, async (url) => ({
-    image: url,
-  }));
-}
-
 export function resolveAttachmentDataUrl(attachmentUrl: string) {
   if (attachmentUrl.startsWith("data:")) {
     return Promise.resolve(attachmentUrl);
@@ -268,6 +260,24 @@ export async function uploadFile(
     }
     throw error;
   }
+}
+
+// 将文件解析结果保存到服务端 UploadedFile 表
+export async function saveExtractedText(
+  fileUrl: string,
+  extractedText: string,
+) {
+  if (!extractedText || !fileUrl?.startsWith("/api/files/")) return;
+  const token = useUserStore.getState().token;
+  if (!token) return;
+  await fetch(fileUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action: "setExtractedText", extractedText }),
+  }).catch(() => {});
 }
 
 // 服务端重解析：对已上传文件重新执行完整解析管线获取增强文本

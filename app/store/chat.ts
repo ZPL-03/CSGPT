@@ -1035,7 +1035,7 @@ export const useChatStore = createPersistStore(
         newState.sessions.forEach((s) => {
           if (
             // 不覆盖用户已自行设置的配置
-            !s.mask.modelConfig.hasOwnProperty("enableInjectSystemPrompts")
+            !Object.hasOwn(s.mask.modelConfig, "enableInjectSystemPrompts")
           ) {
             // 用户可能已修改过配置，使用当前配置而不是默认值
             const config = useAppConfig.getState();

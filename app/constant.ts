@@ -1,13 +1,8 @@
 // CSGPT 项目归属信息
-export const OWNER = "ZPL-03";
-export const REPO = "CSGPT";
+const OWNER = "ZPL-03";
+const REPO = "CSGPT";
 export const REPO_URL = `https://github.com/${OWNER}/${REPO}`;
 export const ISSUE_URL = `https://github.com/${OWNER}/${REPO}/issues`;
-export const UPDATE_URL = `${REPO_URL}#keep-updated`;
-export const RELEASE_URL = `${REPO_URL}/releases`;
-export const FETCH_COMMIT_URL = `https://api.github.com/repos/${OWNER}/${REPO}/commits?per_page=1`;
-export const FETCH_TAG_URL = `https://api.github.com/repos/${OWNER}/${REPO}/tags?per_page=1`;
-export const RUNTIME_CONFIG_DOM = "danger-runtime-config";
 
 export const STABILITY_BASE_URL = "https://api.stability.ai";
 
@@ -124,25 +119,6 @@ export enum ServiceProvider {
   Tencent = "Tencent",
   Moonshot = "Moonshot",
   Stability = "Stability",
-  Iflytek = "Iflytek",
-  XAI = "XAI",
-  ChatGLM = "ChatGLM",
-  DeepSeek = "DeepSeek",
-  SiliconFlow = "SiliconFlow",
-  "302.AI" = "302.AI",
-}
-
-export enum ModelProvider {
-  CSGPT = "CSGPT",
-  Stability = "Stability",
-  GPT = "GPT",
-  GeminiPro = "GeminiPro",
-  Claude = "Claude",
-  Ernie = "Ernie",
-  Doubao = "Doubao",
-  Qwen = "Qwen",
-  Hunyuan = "Hunyuan",
-  Moonshot = "Moonshot",
   Iflytek = "Iflytek",
   XAI = "XAI",
   ChatGLM = "ChatGLM",
@@ -903,13 +879,5 @@ export const CHAT_PAGE_SIZE = 15;
 
 export const DEFAULT_GA_ID = "G-89WN60ZK2E";
 
-// ===== CSGPT 专用配置 =====
-
 // CSGPT API 路径
 export const CSGPT_BASE_URL = "/api/csgpt";
-
-// CSGPT 模型路径（供 client/platforms/openai.ts 使用）
-export const CSGPTPath = {
-  ChatPath: "chat/completions",
-  ListModelPath: "models",
-};
