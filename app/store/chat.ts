@@ -516,13 +516,7 @@ export const useChatStore = createPersistStore(
         const attachmentFileContent =
           fileContentOverride ||
           (attachments || [])
-            .map((att) =>
-              att.extractedText
-                ? `[${att.type.startsWith("image/") ? "图片" : "文件"}: ${
-                    att.name
-                  }]\n${att.extractedText}`
-                : "",
-            )
+            .map((att) => att.extractedText || "")
             .filter(Boolean)
             .join("\n\n") ||
           undefined;
