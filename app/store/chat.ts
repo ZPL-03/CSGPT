@@ -841,6 +841,11 @@ export const useChatStore = createPersistStore(
                     (session.topic =
                       message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC),
                 );
+                // 标题更新后同步到数据库
+                const updated = get().sessions.find(
+                  (s: ChatSession) => s.id === session.id,
+                );
+                if (updated) syncConversationToDB(updated);
               }
             },
           });
@@ -896,8 +901,13 @@ export const useChatStore = createPersistStore(
               if (responseRes?.status === 200) {
                 get().updateTargetSession(session, (session) => {
                   session.lastSummarizeIndex = lastSummarizeIndex;
-                  session.memoryPrompt = message; // 更新记忆提示词并持久化到本地存储
+                  session.memoryPrompt = message;
                 });
+                // 记忆更新后同步到数据库
+                const updated = get().sessions.find(
+                  (s: ChatSession) => s.id === session.id,
+                );
+                if (updated) syncConversationToDB(updated);
               }
             },
             onError(err) {
