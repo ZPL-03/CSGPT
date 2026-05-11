@@ -138,7 +138,7 @@ export function collectModelTable(
           const provider = customProvider(
             customProviderName || customModelName,
           );
-          // swap name and displayName for bytedance
+          // 字节跳动模型交换名称和显示名
           if (displayName && provider.providerName == "ByteDance") {
             [customModelName, displayName] = [displayName, customModelName];
           }

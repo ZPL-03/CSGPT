@@ -286,8 +286,7 @@ function ContextPromptItem(props: {
         onFocus={() => setFocusingInput(true)}
         onBlur={() => {
           setFocusingInput(false);
-          // If the selection is not removed when the user loses focus, some
-          // 某些扩展（如翻译插件）会始终显示浮动栏
+          // 失焦时不取消选区的话，某些扩展（如翻译插件）会始终显示浮动栏
           window?.getSelection()?.removeAllRanges();
         }}
         onInput={(e) =>
@@ -477,7 +476,7 @@ export function MaskPage() {
           }
           return;
         }
-        //if the content is a single mask.
+        // 内容是单个面具
         if (importMasks.name) {
           maskStore.create(importMasks);
         }

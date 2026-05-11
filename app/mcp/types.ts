@@ -1,4 +1,4 @@
-// ref: https://spec.modelcontextprotocol.io/specification/basic/messages/
+// MCP 协议消息类型定义
 
 import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

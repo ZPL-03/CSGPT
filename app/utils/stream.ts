@@ -46,7 +46,7 @@ export function fetch(url: string, options?: RequestInit): Promise<Response> {
     if (signal) {
       signal.addEventListener("abort", () => close());
     }
-    // @ts-ignore 2. listen response multi times, and write to Response.body
+    // @ts-ignore Tauri 流式响应：多次监听事件并写入 Response.body
     window.__TAURI__.event
       .listen("stream-response", (e: ResponseEvent) =>
         requestIdPromise.then((request_id) => {
@@ -59,7 +59,7 @@ export function fetch(url: string, options?: RequestInit): Promise<Response> {
               writer.write(new Uint8Array(chunk));
             });
           } else if (status === 0) {
-            // end of body
+            // 响应体结束
             close();
           }
         }),
@@ -99,7 +99,6 @@ export function fetch(url: string, options?: RequestInit): Promise<Response> {
       })
       .catch((e) => {
         console.error("stream error", e);
-        // throw e;
         return new Response("", { status: 599 });
       });
   }

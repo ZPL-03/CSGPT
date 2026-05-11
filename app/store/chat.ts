@@ -1033,7 +1033,7 @@ export const useChatStore = createPersistStore(
             config.modelConfig.compressProviderName;
         });
       }
-      // revert default summarize model for every session
+      // 每个会话恢复默认摘要模型
       if (version < 3.3) {
         newState.sessions.forEach((s) => {
           const config = useAppConfig.getState();

@@ -87,7 +87,7 @@ export function SearchChatPage() {
       }
     }, 1000);
 
-    // Cleanup the interval on component unmount
+    // 组件卸载时清理定时器
     return () => clearInterval(intervalId);
   }, [doSearch]);
 
