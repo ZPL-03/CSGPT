@@ -65,6 +65,7 @@ export interface RequestPayload {
   top_p: number;
   max_tokens?: number;
   max_completion_tokens?: number;
+  chat_template_kwargs?: Record<string, unknown>;
 }
 
 export interface DalleRequestPayload {
@@ -278,6 +279,10 @@ export class ChatGPTApi implements LLMApi {
         top_p: !isO1OrO3 ? modelConfig.top_p : 1,
         max_tokens: modelConfig.max_tokens,
       };
+      if (options.config.chat_template_kwargs) {
+        requestPayload.chat_template_kwargs =
+          options.config.chat_template_kwargs;
+      }
 
       if (isGpt5) {
         // GPT-5 的输出预算字段是 max_completion_tokens。

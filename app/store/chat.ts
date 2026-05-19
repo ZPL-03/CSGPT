@@ -15,6 +15,7 @@ import { useUserStore } from "./user";
 import { nanoid } from "nanoid";
 import type {
   ClientApi,
+  LLMConfig,
   MultimodalContent,
   RequestMessage,
 } from "../client/api";
@@ -105,6 +106,7 @@ export interface ChatSession {
 export const DEFAULT_TOPIC = Locale.Store.DefaultTopic;
 const TOPIC_MAX_LENGTH = 24;
 const STORE_SCHEMA_VERSION = 1;
+const TITLE_SOURCE_MAX_LENGTH = 2000;
 const titleGenerationSessions = new Set<string>();
 export const BOT_HELLO: ChatMessage = createMessage({
   role: "assistant",
@@ -174,41 +176,102 @@ function getTitleSourceMessage(messages: ChatMessage[]) {
   );
 }
 
+function getTitleAttachmentNames(message: ChatMessage) {
+  if (typeof message.content === "string") return [];
+
+  return message.content
+    .map((item) => item.file_url?.name || item.image_url?.name || "")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+function buildTitleSourceText(message: ChatMessage, textLabel = "用户消息") {
+  const text = getMessageTextContent(message).trim();
+  const attachmentNames = getTitleAttachmentNames(message);
+  const sections = [
+    text ? `${textLabel}：${text}` : "",
+    attachmentNames.length > 0 ? `附件名称：${attachmentNames.join("、")}` : "",
+  ].filter(Boolean);
+
+  return sections.join("\n").slice(0, TITLE_SOURCE_MAX_LENGTH).trim();
+}
+
+function buildTitlePromptMessage(sourceText: string) {
+  return createMessage({
+    role: "user",
+    content: `${Locale.Store.Prompt.Topic}\n\n待命名内容：\n${sourceText}`,
+    date: "",
+  });
+}
+
 function buildInitialTitleRequestMessages(messages: ChatMessage[]) {
   const firstUserMessage = getTitleSourceMessage(messages);
   if (!firstUserMessage) return [];
+  const sourceText = buildTitleSourceText(firstUserMessage);
+  if (!sourceText) return [];
 
-  return [
-    createMessage({
-      role: "system",
-      content: Locale.Store.Prompt.Topic,
-      date: "",
-    }),
-    firstUserMessage,
-  ];
+  return [buildTitlePromptMessage(sourceText)];
 }
 
 function buildConversationTitleRequestMessages(messages: ChatMessage[]) {
   const visibleMessages = messages.filter(
-    (message) => !message.isError && message.role !== "system",
+    (message) =>
+      !message.isError && !message.streaming && message.role !== "system",
   );
-  if (visibleMessages.length === 0) return [];
+  const sourceText = visibleMessages
+    .map((message) => {
+      const content = buildTitleSourceText(
+        message,
+        message.role === "assistant" ? "助手回复" : "用户消息",
+      );
+      if (!content) return "";
+      return `${message.role === "assistant" ? "助手" : "用户"}：${content}`;
+    })
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, TITLE_SOURCE_MAX_LENGTH)
+    .trim();
+  if (!sourceText) return [];
 
-  return visibleMessages.concat(
-    createMessage({
-      role: "system",
-      content: Locale.Store.Prompt.Topic,
-      date: "",
-    }),
-  );
+  return [buildTitlePromptMessage(sourceText)];
 }
 
 function normalizeGeneratedTitle(title: string) {
-  const normalized = trimTopic(title.replace(/\s+/g, " ").trim()).slice(
-    0,
-    TOPIC_MAX_LENGTH,
+  const firstLine = title
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  const normalized = trimTopic(
+    (firstLine || "")
+      .replace(/^#{1,6}\s*/, "")
+      .replace(/^(?:标题|题目|对话标题|title)\s*[:：\-]\s*/i, "")
+      .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, "")
+      .replace(/[。.!！?？,，;；:：]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
   );
+  if (Array.from(normalized).length > TOPIC_MAX_LENGTH) return DEFAULT_TOPIC;
   return normalized || DEFAULT_TOPIC;
+}
+
+function buildTitleRequestConfig(
+  modelConfig: ModelConfig,
+  model: string,
+  providerName: string,
+): LLMConfig {
+  const { max_tokens, ...modelcfg } = modelConfig;
+  const titleConfig: LLMConfig = {
+    ...modelcfg,
+    stream: false,
+    model,
+    providerName,
+  };
+
+  if (providerName === ServiceProvider.CSGPT) {
+    titleConfig.chat_template_kwargs = { enable_thinking: false };
+  }
+
+  return titleConfig;
 }
 
 function normalizeChatMessage(message: Partial<ChatMessage>): ChatMessage {
@@ -903,15 +966,9 @@ export const useChatStore = createPersistStore(
               session.mask.modelConfig.providerName,
             );
         const api: ClientApi = getClientApi(providerName as ServiceProvider);
-        const { max_tokens, ...modelcfg } = modelConfig;
         api.llm.chat({
           messages: titleMessages,
-          config: {
-            ...modelcfg,
-            stream: false,
-            model,
-            providerName,
-          },
+          config: buildTitleRequestConfig(modelConfig, model, providerName),
           onFinish(message, responseRes) {
             titleGenerationSessions.delete(session.id);
             if (responseRes?.status !== 200) return;
