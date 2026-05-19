@@ -614,6 +614,7 @@ export function ChatActions(props: {
         session.mask.modelConfig.model = nextModel.name;
         session.mask.modelConfig.providerName = nextModel?.provider
           ?.providerName as ServiceProvider;
+        session.mask.syncGlobalConfig = false;
       });
       showToast(
         nextModel?.provider?.providerName == "ByteDance"
@@ -768,6 +769,7 @@ export function ChatActions(props: {
               const size = s[0];
               chatStore.updateTargetSession(session, (session) => {
                 session.mask.modelConfig.size = size;
+                session.mask.syncGlobalConfig = false;
               });
               showToast(size);
             }}
@@ -795,6 +797,7 @@ export function ChatActions(props: {
               const quality = q[0];
               chatStore.updateTargetSession(session, (session) => {
                 session.mask.modelConfig.quality = quality;
+                session.mask.syncGlobalConfig = false;
               });
               showToast(quality);
             }}
@@ -822,6 +825,7 @@ export function ChatActions(props: {
               const style = s[0];
               chatStore.updateTargetSession(session, (session) => {
                 session.mask.modelConfig.style = style;
+                session.mask.syncGlobalConfig = false;
               });
               showToast(style);
             }}
