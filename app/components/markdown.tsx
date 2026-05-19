@@ -19,6 +19,7 @@ import { IconButton } from "./button";
 
 import { useAppConfig } from "../store/config";
 import clsx from "clsx";
+import { splitThinkingContent } from "../utils/thinking";
 
 export function Mermaid(props: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -220,7 +221,7 @@ function tryWrapHtmlCode(text: string) {
     );
 }
 
-function _MarkDownContent(props: { content: string }) {
+function MarkdownRenderer(props: { content: string }) {
   const escapedContent = useMemo(() => {
     return tryWrapHtmlCode(escapeBrackets(props.content));
   }, [props.content]);
@@ -266,6 +267,36 @@ function _MarkDownContent(props: { content: string }) {
     >
       {escapedContent}
     </ReactMarkdown>
+  );
+}
+
+function ThinkingBlock(props: { content: string }) {
+  return (
+    <details className="thinking-block">
+      <summary>{Locale.Chat.Thinking}</summary>
+      <div className="thinking-block-content">
+        <MarkdownRenderer content={props.content} />
+      </div>
+    </details>
+  );
+}
+
+function _MarkDownContent(props: { content: string }) {
+  const segments = useMemo(
+    () => splitThinkingContent(props.content),
+    [props.content],
+  );
+
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.type === "thinking" ? (
+          <ThinkingBlock content={segment.content} key={index} />
+        ) : (
+          <MarkdownRenderer content={segment.content} key={index} />
+        ),
+      )}
+    </>
   );
 }
 

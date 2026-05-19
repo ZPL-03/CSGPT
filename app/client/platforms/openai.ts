@@ -42,6 +42,7 @@ import {
 } from "@/app/utils";
 import { fetch } from "@/app/utils/stream";
 import { prettyObject } from "@/app/utils/format";
+import { stripThinkingContent } from "@/app/utils/thinking";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -253,9 +254,16 @@ export class ChatGPTApi implements LLMApi {
       const messages: ChatOptions["messages"] = [];
       for (const v of options.messages) {
         let fileContent = (v as ChatMessage).fileContent;
-        const standardContent = Array.isArray(v.content)
-          ? v.content.filter((part) => part.type !== "file_url")
-          : v.content;
+        const messageContent = Array.isArray(v.content)
+          ? v.content.map((part) =>
+              part.type === "text"
+                ? { ...part, text: stripThinkingContent(part.text ?? "") }
+                : part,
+            )
+          : stripThinkingContent(v.content);
+        const standardContent = Array.isArray(messageContent)
+          ? messageContent.filter((part) => part.type !== "file_url")
+          : messageContent;
 
         let content = await preProcessImageContent(standardContent);
         if (fileContent) {

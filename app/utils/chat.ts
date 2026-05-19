@@ -12,6 +12,7 @@ import {
 } from "@fortaine/fetch-event-source";
 import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
+import { THINKING_BLOCK_END, THINKING_BLOCK_START } from "./thinking";
 
 const MODEL_IMAGE_DATA_URL_LIMIT = 2 * 1024 * 1024;
 const EXTRACTED_TEXT_CHUNK_SIZE = 512 * 1024;
@@ -393,6 +394,10 @@ export function streamWithThink(
 
   const finish = () => {
     if (!finished) {
+      if (isInThinkingMode) {
+        remainText += THINKING_BLOCK_END;
+        isInThinkingMode = false;
+      }
       if (!running && runTools.length > 0) {
         const toolCallMessage = {
           role: "assistant",
@@ -565,23 +570,17 @@ export function streamWithThink(
             if (!isInThinkingMode || isThinkingChanged) {
               isInThinkingMode = true;
               if (remainText.length > 0) {
-                remainText += "\n";
+                remainText += "\n\n";
               }
-              remainText += "> " + chunk.content;
+              remainText += THINKING_BLOCK_START + chunk.content;
             } else {
-              // 处理思考内容中的换行
-              if (chunk.content.includes("\n\n")) {
-                const lines = chunk.content.split("\n\n");
-                remainText += lines.join("\n\n> ");
-              } else {
-                remainText += chunk.content;
-              }
+              remainText += chunk.content;
             }
           } else {
             // 普通模式
             if (isInThinkingMode || isThinkingChanged) {
               isInThinkingMode = false;
-              remainText += "\n\n" + chunk.content;
+              remainText += THINKING_BLOCK_END + "\n\n" + chunk.content;
             } else {
               remainText += chunk.content;
             }

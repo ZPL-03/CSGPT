@@ -45,6 +45,7 @@ import { collectModelsWithDefaultModel } from "../utils/model";
 import { createEmptyMask, Mask } from "./mask";
 import { executeMcpAction, getAllTools, isMcpEnabled } from "../mcp/actions";
 import { extractMcpJson, isMcpJson } from "../mcp/utils";
+import { stripThinkingContent } from "../utils/thinking";
 
 const localStorage = safeLocalStorage();
 
@@ -186,7 +187,7 @@ function getTitleAttachmentNames(message: ChatMessage) {
 }
 
 function buildTitleSourceText(message: ChatMessage, textLabel = "用户消息") {
-  const text = getMessageTextContent(message).trim();
+  const text = stripThinkingContent(getMessageTextContent(message)).trim();
   const attachmentNames = getTitleAttachmentNames(message);
   const sections = [
     text ? `${textLabel}：${text}` : "",

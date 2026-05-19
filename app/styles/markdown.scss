@@ -422,6 +422,34 @@
   border-left: 0.25em solid var(--color-border-default);
 }
 
+.markdown-body .thinking-block {
+  margin: 0 0 10px;
+  color: var(--color-fg-muted);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.markdown-body .thinking-block summary {
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.markdown-body .thinking-block[open] summary {
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.markdown-body .thinking-block-content {
+  padding: 10px;
+}
+
+.markdown-body .thinking-block-content > :last-child {
+  margin-bottom: 0;
+}
+
 .markdown-body ul,
 .markdown-body ol {
   margin-top: 0;
