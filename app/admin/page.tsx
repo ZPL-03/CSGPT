@@ -220,7 +220,7 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userStore.isLoggedIn]);
 
-  // 刷新统计数据（仅在已授权后使用）
+  // 授权状态下的统计数据加载
   async function refreshStats() {
     const token = useUserStore.getState().token;
     if (!token) return;
@@ -372,7 +372,7 @@ export default function AdminPage() {
     );
   }
 
-  // 已授权 — 管理后台主界面
+  // 管理后台主界面
   const tabs: { key: TabKey; label: string }[] = [
     { key: "overview", label: "概览" },
     { key: "users", label: "用户" },

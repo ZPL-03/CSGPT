@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查用户名是否已存在
+    // 用户名唯一性校验
     const existingUser = await prisma.user.findUnique({
       where: { username },
     });

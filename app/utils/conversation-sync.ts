@@ -16,7 +16,7 @@ function getPersistableMessages(session: any) {
   return (session.messages || [])
     .filter((message: any) => !isEmptyStreamingAssistant(message))
     .map((message: any) => {
-      // 剥离 stream 标记和文件解析文本，后者体积过大容易超过 Vercel 4.5MB 限制
+      // 消息同步提交可渲染内容；解析文本由服务端按附件引用写入消息记录。
       const { streaming, fileContent, ...persistableMessage } = message;
       return persistableMessage;
     });

@@ -169,7 +169,7 @@ export async function PATCH(
   }
 }
 
-// POST：确认文件分片已经完整写入
+// POST：文件分片完整性确认
 export async function POST(
   request: NextRequest,
   { params }: { params: { filename: string } },
@@ -187,16 +187,30 @@ export async function POST(
 
     const body = await request.json().catch(() => null);
 
-    // 设置文件解析文本
-    if (body?.action === "setExtractedText") {
-      if (typeof body.extractedText !== "string") {
-        return NextResponse.json({ error: "缺少解析文本" }, { status: 400 });
-      }
+    if (body?.action === "beginExtractedText") {
       const result = await prisma.uploadedFile.updateMany({
         where: { id: fileId, userId },
-        data: { extractedText: body.extractedText },
+        data: { extractedText: "" },
       });
       if (result.count === 0) {
+        return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+      }
+      return NextResponse.json({ code: 0 });
+    }
+
+    if (body?.action === "appendExtractedText") {
+      if (typeof body.chunk !== "string") {
+        return NextResponse.json(
+          { error: "缺少解析文本分段" },
+          { status: 400 },
+        );
+      }
+      const updated = await prisma.$executeRaw`
+        UPDATE "UploadedFile"
+        SET "extractedText" = COALESCE("extractedText", '') || ${body.chunk}
+        WHERE "id" = ${fileId} AND "userId" = ${userId}
+      `;
+      if (updated === 0) {
         return NextResponse.json({ error: "文件不存在" }, { status: 404 });
       }
       return NextResponse.json({ code: 0 });

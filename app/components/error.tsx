@@ -22,7 +22,7 @@ export class ErrorBoundary extends React.Component<any, IErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // 更新状态为错误详情
+    // 错误详情状态
     this.setState({ hasError: true, error, info });
   }
 

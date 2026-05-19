@@ -1,7 +1,7 @@
 import { getClientConfig } from "../config/client";
 import { SubmitKey } from "../store/config";
 import { LocaleType } from "./index";
-// 如果新增翻译条目，请使用 PartialLocaleType 替代 LocaleType
+// 翻译条目类型使用 PartialLocaleType。
 
 const isApp = !!getClientConfig()?.isApp;
 const en: LocaleType = {

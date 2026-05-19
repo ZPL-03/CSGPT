@@ -179,7 +179,7 @@ function Screen() {
 
     if (serverDataReady || serverLoading) return;
 
-    // 检查数据是否已由 AuthPage 直接加载
+    // AuthPage 直接加载的数据状态
     const sessions = useChatStore.getState().sessions;
     if (sessions.some((s) => s.messages?.length > 0)) {
       setServerDataReady(true);
@@ -210,7 +210,7 @@ function Screen() {
     return <AuthPage />;
   }
 
-  // 已登录但服务器数据尚未加载完毕，显示加载动画
+  // 登录状态下的服务器数据加载界面
   if (userStore.isLoggedIn && !serverDataReady) {
     return <Loading />;
   }

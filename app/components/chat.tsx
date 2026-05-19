@@ -301,7 +301,7 @@ function useSubmitHandler() {
   }, []);
 
   const shouldSubmit = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // 修复 Safari 上中文输入法回车问题
+    // Safari 中文输入法回车事件处理
     if (e.keyCode == 229) return false;
     if (e.key !== "Enter") return false;
     if (e.key === "Enter" && (e.nativeEvent.isComposing || isComposing.current))
@@ -1096,7 +1096,7 @@ function _Chat() {
   );
 
   // 用户正在输入时，自动滚动到底部
-  // 用户未输入时，仅在已位于底部才自动滚动到底部
+  // 用户未输入时，仅在底部视图状态下自动滚动到底部。
   const { setAutoScroll, scrollDomToBottom } = useScrollToBottom(
     scrollRef,
     (isScrolledToBottom || isAttachWithTop) && !isTyping,
@@ -1145,6 +1145,7 @@ function _Chat() {
   const parseSelectedFile = useCallback(
     async (file: File) => {
       const id = createAttachmentId();
+      let uploadedFileUrl = "";
       const previewUrl = file.type.startsWith("image/")
         ? URL.createObjectURL(file)
         : undefined;
@@ -1209,6 +1210,13 @@ function _Chat() {
             stage: "解析中",
           });
         });
+        uploadedFileUrl = fileUrl;
+        if (cancelledAttachmentIdsRef.current.has(id)) {
+          await deleteAttachmentRemote(fileUrl);
+          return;
+        }
+
+        await saveExtractedText(fileUrl, extraction.text);
         if (cancelledAttachmentIdsRef.current.has(id)) {
           await deleteAttachmentRemote(fileUrl);
           return;
@@ -1222,10 +1230,11 @@ function _Chat() {
           file: undefined,
           extractedText: extraction.text,
         });
-        // 将解析结果异步持久化到服务端，后续对话加载时重建 fileContent
-        saveExtractedText(fileUrl, extraction.text);
       } catch (error) {
         if (cancelledAttachmentIdsRef.current.has(id)) return;
+        if (uploadedFileUrl) {
+          await deleteAttachmentRemote(uploadedFileUrl);
+        }
         updateAttachment(id, {
           status: "error",
           progress: 100,

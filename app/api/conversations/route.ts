@@ -7,9 +7,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
 import {
+  buildFileContentFromMessage,
   collectFileIdsFromMessageContent,
   deleteUnreferencedFiles,
 } from "./file-refs";
+import type { ExtractedFileRecord } from "./file-refs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // 使用事务保存对话和消息
     const conversation = await prisma.$transaction(async (tx: any) => {
-      // 创建或更新对话
+      // 对话写入
       const conv = await tx.conversation.upsert({
         where: { id },
         create: {
@@ -118,11 +120,14 @@ export async function POST(request: NextRequest) {
 
       // 如果有消息数组，按前端当前消息列表保存数据库消息。
       if (messages && Array.isArray(messages)) {
-        const existingMessages: Array<{ content: string }> =
-          await tx.message.findMany({
-            where: { conversationId: id },
-            select: { content: true },
-          });
+        const existingMessages: Array<{
+          id: string;
+          content: string;
+          fileContent: string | null;
+        }> = await tx.message.findMany({
+          where: { conversationId: id },
+          select: { id: true, content: true, fileContent: true },
+        });
         const previousFileIds = Array.from(
           new Set(
             existingMessages.flatMap((message) =>
@@ -130,10 +135,30 @@ export async function POST(request: NextRequest) {
             ),
           ),
         );
-        const currentFileIds = new Set(
+        const currentFileIds = new Set<string>(
           messages.flatMap((msg: Record<string, any>) =>
             collectFileIdsFromMessageContent(msg.content),
           ),
+        );
+        const currentFileIdList = Array.from(currentFileIds);
+        const fileRecords: ExtractedFileRecord[] =
+          currentFileIdList.length > 0
+            ? await tx.uploadedFile.findMany({
+                where: { id: { in: currentFileIdList }, userId },
+                select: {
+                  id: true,
+                  originalName: true,
+                  extractedText: true,
+                },
+              })
+            : [];
+        const filesById = new Map<string, ExtractedFileRecord>(
+          fileRecords.map((file) => [file.id, file]),
+        );
+        const existingFileContentByMessageId = new Map(
+          existingMessages
+            .filter((message) => message.fileContent)
+            .map((message) => [message.id, message.fileContent as string]),
         );
         const detachedFileIds = previousFileIds.filter(
           (fileId) => !currentFileIds.has(fileId),
@@ -144,21 +169,37 @@ export async function POST(request: NextRequest) {
         });
 
         if (messages.length > 0) {
+          const baseCreatedAt = Date.now();
           await tx.message.createMany({
-            data: messages.map((msg: Record<string, any>) => ({
-              id: msg.id || `${id}-${Date.now()}-${Math.random()}`,
-              conversationId: id,
-              role: msg.role,
-              content:
-                typeof msg.content === "string"
-                  ? msg.content
-                  : JSON.stringify(msg.content),
-              date: msg.date || new Date().toISOString(),
-              isError: msg.isError || false,
-              model: msg.model || null,
-              tools: msg.tools || undefined,
-              fileContent: msg.fileContent || null,
-            })),
+            data: messages.map((msg: Record<string, any>, index: number) => {
+              const messageFileIds = collectFileIdsFromMessageContent(
+                msg.content,
+              );
+              const fileContentFromRefs = buildFileContentFromMessage(
+                msg.content,
+                filesById,
+              );
+              const existingFileContent =
+                messageFileIds.length > 0 && typeof msg.id === "string"
+                  ? existingFileContentByMessageId.get(msg.id) || null
+                  : null;
+
+              return {
+                id: msg.id || `${id}-${Date.now()}-${Math.random()}`,
+                conversationId: id,
+                role: msg.role,
+                content:
+                  typeof msg.content === "string"
+                    ? msg.content
+                    : JSON.stringify(msg.content),
+                date: msg.date || new Date().toISOString(),
+                isError: msg.isError || false,
+                model: msg.model || null,
+                tools: msg.tools || undefined,
+                fileContent: fileContentFromRefs || existingFileContent,
+                createdAt: new Date(baseCreatedAt + index),
+              };
+            }),
           });
         }
 
@@ -190,56 +231,37 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    // 统计要删除的数据
-    const conversationCount = await prisma.conversation.count({
-      where: { userId },
-    });
+    const [conversationCount, fileCount] = await Promise.all([
+      prisma.conversation.count({
+        where: { userId },
+      }),
+      prisma.uploadedFile.count({
+        where: { userId },
+      }),
+    ]);
 
-    if (conversationCount === 0) {
+    if (conversationCount === 0 && fileCount === 0) {
       return NextResponse.json({ deletedConversations: 0, deletedFiles: 0 });
     }
 
-    // 收集所有对话中的文件引用
     const conversations = await prisma.conversation.findMany({
       where: { userId },
-      include: { messages: { select: { content: true } } },
+      select: { id: true },
     });
 
-    const allFileIds = new Set<string>();
-    for (const conv of conversations) {
-      for (const msg of conv.messages) {
-        const fileIds = collectFileIdsFromMessageContent(msg.content);
-        for (const fid of fileIds) allFileIds.add(fid);
-      }
-    }
-
-    // 检查哪些文件存在且属于当前用户
-    const existingFiles =
-      allFileIds.size > 0
-        ? await prisma.uploadedFile.findMany({
-            where: { id: { in: Array.from(allFileIds) }, userId },
-            select: { id: true },
-          })
-        : [];
-    const fileIdsToDelete = existingFiles.map((f) => f.id);
-
-    // 在事务中删除所有对话、消息和未引用文件
     await prisma.$transaction(async (tx: any) => {
-      // 先删除所有消息
-      await tx.message.deleteMany({
-        where: { conversationId: { in: conversations.map((c) => c.id) } },
-      });
-      // 删除所有对话
-      await tx.conversation.deleteMany({ where: { userId } });
-      // 删除关联文件
-      if (fileIdsToDelete.length > 0) {
-        await deleteUnreferencedFiles(tx, fileIdsToDelete, userId);
+      if (conversations.length > 0) {
+        await tx.message.deleteMany({
+          where: { conversationId: { in: conversations.map((c) => c.id) } },
+        });
+        await tx.conversation.deleteMany({ where: { userId } });
       }
+      await tx.uploadedFile.deleteMany({ where: { userId } });
     });
 
     return NextResponse.json({
       deletedConversations: conversationCount,
-      deletedFiles: fileIdsToDelete.length,
+      deletedFiles: fileCount,
     });
   } catch (error) {
     console.error("[Conversations DELETE] Error:", error);

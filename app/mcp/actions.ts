@@ -142,7 +142,7 @@ async function initializeSingleClient(
 export async function initializeMcpSystem() {
   logger.info("MCP Actions starting...");
   try {
-    // 检查是否已有活跃的客户端
+    // 活跃客户端状态
     if (clientsMap.size > 0) {
       logger.info("MCP system already initialized, skipping...");
       return;
@@ -201,7 +201,7 @@ export async function pauseMcpServer(clientId: string) {
       throw new Error(`Server ${clientId} not found`);
     }
 
-    // 先更新配置
+    // 配置写入
     const newConfig: McpConfigData = {
       ...currentConfig,
       mcpServers: {
@@ -228,7 +228,7 @@ export async function pauseMcpServer(clientId: string) {
   }
 }
 
-// 恢复服务器
+// 服务器启用
 export async function resumeMcpServer(clientId: string): Promise<void> {
   try {
     const currentConfig = await getMcpConfigFromFile();
@@ -245,7 +245,7 @@ export async function resumeMcpServer(clientId: string): Promise<void> {
       clientsMap.set(clientId, { client, tools, errorMsg: null });
       logger.success(`Client [${clientId}] initialized successfully`);
 
-      // 初始化成功后更新配置
+      // 初始化成功后的配置状态
       const newConfig: McpConfigData = {
         ...currentConfig,
         mcpServers: {
@@ -261,7 +261,7 @@ export async function resumeMcpServer(clientId: string): Promise<void> {
       const currentConfig = await getMcpConfigFromFile();
       const serverConfig = currentConfig.mcpServers[clientId];
 
-      // 如果配置中存在该服务器，则更新其状态为 error
+      // 配置中的服务器状态标记为 error
       if (serverConfig) {
         serverConfig.status = "error";
         await updateMcpConfig(currentConfig);
@@ -282,7 +282,7 @@ export async function resumeMcpServer(clientId: string): Promise<void> {
   }
 }
 
-// 移除服务器
+// 服务器删除
 export async function removeMcpServer(clientId: string) {
   try {
     const currentConfig = await getMcpConfigFromFile();
@@ -293,7 +293,7 @@ export async function removeMcpServer(clientId: string) {
     };
     await updateMcpConfig(newConfig);
 
-    // 关闭并移除客户端
+    // 客户端关闭与删除
     const client = clientsMap.get(clientId);
     if (client?.client) {
       await removeClient(client.client);
@@ -362,7 +362,7 @@ export async function getMcpConfigFromFile(): Promise<McpConfigData> {
   }
 }
 
-// 更新 MCP 配置文件
+// MCP 配置文件写入
 async function updateMcpConfig(config: McpConfigData): Promise<void> {
   try {
     // 确保目录存在

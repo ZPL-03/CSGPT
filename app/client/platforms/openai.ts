@@ -80,7 +80,7 @@ export interface DalleRequestPayload {
 export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
 
-  // providerName 可选参数：chat 调用时传入会话级 provider，其他调用使用全局默认
+  // providerName 表示会话级 Provider，空值使用全局默认 Provider。
   path(path: string, providerName?: string): string {
     const accessStore = useAccessStore.getState();
     const effectiveProvider =
@@ -89,7 +89,7 @@ export class ChatGPTApi implements LLMApi {
       ServiceProvider.CSGPT;
     const isApp = !!getClientConfig()?.isApp;
 
-    // 根据当前选中的 Provider 获取对应的 API 基础路径
+    // 当前 Provider 的 API 基础路径
     let baseUrl = this.getProviderBaseUrl(
       effectiveProvider,
       accessStore,
@@ -114,7 +114,7 @@ export class ChatGPTApi implements LLMApi {
     return path;
   }
 
-  // 根据 Provider 获取对应的 API 基础 URL
+  // Provider API 基础 URL
   private getProviderBaseUrl(
     providerName: string,
     accessStore: ReturnType<typeof useAccessStore.getState>,
@@ -128,7 +128,7 @@ export class ChatGPTApi implements LLMApi {
       return customProviderUrl;
     }
 
-    // 各 Provider 的默认 API 路径（非 APP 模式走服务端代理，APP 模式走远程地址）
+    // Provider 默认 API 路径；非 APP 模式走服务端代理，APP 模式走远程地址。
     const urlMap: Record<string, string> = {
       [ServiceProvider.CSGPT]: CSGPT_BASE_URL,
       [ServiceProvider.OpenAI]: ApiPath.OpenAI,
@@ -152,11 +152,11 @@ export class ChatGPTApi implements LLMApi {
     const baseUrl = urlMap[providerName];
     if (baseUrl) return baseUrl;
 
-    // 使用 CSGPT 默认路径
+    // 未匹配 Provider 使用内置 CSGPT 路径。
     return CSGPT_BASE_URL;
   }
 
-  // 获取用户自定义的 Provider URL
+  // 用户自定义 Provider URL
   private getCustomProviderUrl(
     accessStore: ReturnType<typeof useAccessStore.getState>,
     providerName: string,
@@ -241,7 +241,7 @@ export class ChatGPTApi implements LLMApi {
       requestPayload = {
         model: options.config.model,
         prompt,
-        // dall-e-3 生成的图片 URL 仅 60 分钟内有效，使用 b64_json 写入服务端文件表保证持久访问。
+        // DALL-E 3 图片使用 b64_json，生成结果写入服务端文件表。
         response_format: "b64_json",
         n: 1,
         size: options.config?.size ?? "1024x1024",
@@ -249,34 +249,25 @@ export class ChatGPTApi implements LLMApi {
         style: options.config?.style ?? "vivid",
       };
     } else {
-      const isCSGPTProvider =
-        modelConfig.providerName === ServiceProvider.CSGPT;
       const messages: ChatOptions["messages"] = [];
       for (const v of options.messages) {
-        // 上传阶段生成的解析文本仅进入模型请求体。
         let fileContent = (v as ChatMessage).fileContent;
+        const standardContent = Array.isArray(v.content)
+          ? v.content.filter((part) => part.type !== "file_url")
+          : v.content;
 
-        const providerContent =
-          !isCSGPTProvider && Array.isArray(v.content)
-            ? v.content.filter((part) => part.type !== "file_url")
-            : v.content;
-        let content = isCSGPTProvider
-          ? v.content
-          : await preProcessImageContent(providerContent);
+        let content = await preProcessImageContent(standardContent);
         if (fileContent) {
           content =
             typeof content === "string"
               ? fileContent + "\n\n" + content
               : [{ type: "text", text: fileContent }, ...content];
         }
-        if (!isCSGPTProvider && Array.isArray(content)) {
-          content = content.filter((part) => part.type !== "file_url");
-        }
         if (!(isO1OrO3 && v.role === "system"))
           messages.push({ role: v.role, content });
       }
 
-      // O1 系列模型不支持图片、工具调用、system 角色、流式、temperature 等参数。
+      // O1 系列模型的协议不包含图片、工具调用、system 角色、流式和 temperature 等参数。
       requestPayload = {
         messages,
         stream: options.config.stream,
@@ -289,18 +280,18 @@ export class ChatGPTApi implements LLMApi {
       };
 
       if (isGpt5) {
-        // GPT-5 使用 max_completion_tokens 替代 max_tokens
+        // GPT-5 的输出预算字段是 max_completion_tokens。
         delete requestPayload.max_tokens;
         requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       } else if (isO1OrO3) {
-        // o1/o3 默认不输出 markdown，手动添加 developer 消息启用格式化
-        // 参见: https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
+        // o1/o3 使用 developer 消息启用格式化输出。
+        // 参考: https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/reasoning
         requestPayload["messages"].unshift({
           role: "developer",
           content: "Formatting re-enabled",
         });
 
-        // o1/o3 使用 max_completion_tokens 控制输出 token 数
+        // o1/o3 的输出预算字段是 max_completion_tokens。
         requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
       }
     }

@@ -27,6 +27,7 @@ import { useAppConfig } from "./config";
 import { getModelProvider } from "../utils/model";
 
 let fetchState = 0; // 0 not fetch, 1 fetching, 2 done
+const STORE_SCHEMA_VERSION = 1;
 
 const isApp = getClientConfig()?.buildMode === "export";
 
@@ -153,6 +154,20 @@ const DEFAULT_ACCESS_STATE = {
   defaultModel: "",
 };
 
+type AccessState = typeof DEFAULT_ACCESS_STATE;
+
+function normalizeAccessState(
+  state?: Partial<AccessState> & { token?: string },
+): AccessState {
+  return {
+    ...DEFAULT_ACCESS_STATE,
+    ...(state || {}),
+    openaiApiKey: state?.openaiApiKey || state?.token || "",
+    azureApiVersion:
+      state?.azureApiVersion || DEFAULT_ACCESS_STATE.azureApiVersion,
+  };
+}
+
 export const useAccessStore = createPersistStore(
   { ...DEFAULT_ACCESS_STATE },
 
@@ -268,7 +283,7 @@ export const useAccessStore = createPersistStore(
           const defaultModel = res.defaultModel ?? "";
           if (defaultModel !== "") {
             const [model, providerName] = getModelProvider(defaultModel);
-            // 通过 config store 更新全局默认模型，避免直接突变 DEFAULT_CONFIG 常量
+            // 全局默认模型写入 config store。
             useAppConfig.getState().update((config) => {
               config.modelConfig.model = model;
               if (providerName) {
@@ -293,20 +308,9 @@ export const useAccessStore = createPersistStore(
   }),
   {
     name: StoreKey.Access,
-    version: 2,
-    migrate(persistedState, version) {
-      if (version < 2) {
-        const state = persistedState as {
-          token: string;
-          openaiApiKey: string;
-          azureApiVersion: string;
-          googleApiKey: string;
-        };
-        state.openaiApiKey = state.token;
-        state.azureApiVersion = "2023-08-01-preview";
-      }
-
-      return persistedState as any;
+    version: STORE_SCHEMA_VERSION,
+    migrate(persistedState) {
+      return normalizeAccessState(persistedState as any) as any;
     },
     // 服务端配置字段不在 localStorage 中持久化
     merge(persistedState, currentState) {
@@ -314,15 +318,18 @@ export const useAccessStore = createPersistStore(
       if (!state) return { ...currentState };
       return {
         ...currentState,
-        ...state,
-        // 服务端控制的配置字段始终以 currentState（服务端配置）为准
-        customModels: currentState.customModels,
-        defaultModel: currentState.defaultModel,
-        needCode: currentState.needCode,
-        hideUserApiKey: currentState.hideUserApiKey,
-        hideBalanceQuery: currentState.hideBalanceQuery,
-        disableGPT4: currentState.disableGPT4,
-        disableFastLink: currentState.disableFastLink,
+        ...normalizeAccessState({
+          ...currentState,
+          ...state,
+          // 服务端控制的配置字段始终以 currentState（服务端配置）为准
+          customModels: currentState.customModels,
+          defaultModel: currentState.defaultModel,
+          needCode: currentState.needCode,
+          hideUserApiKey: currentState.hideUserApiKey,
+          hideBalanceQuery: currentState.hideBalanceQuery,
+          disableGPT4: currentState.disableGPT4,
+          disableFastLink: currentState.disableFastLink,
+        }),
       };
     },
   },

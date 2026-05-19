@@ -216,7 +216,7 @@ function cleanText(text: string): string {
       .replace(/­/g, "")
       // 控制字符
       .replace(/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, " ")
-      // PDF 编码噪声修复
+      // PDF 编码噪声处理
       .replace(/Â±/g, "±")
       .replace(/Â°/g, "°")
       .replace(/Âµ/g, "µ")
@@ -235,9 +235,9 @@ function cleanText(text: string): string {
       // 换行符统一
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
-      // 跨行断词修复（含拉丁扩展字符和希腊字母）
+      // 跨行断词处理（含拉丁扩展字符和希腊字母）
       .replace(/([A-Za-zÀ-ɏα-ωΑ-Ω])-\s*\n\s*([A-Za-zÀ-ɏα-ωΑ-Ω])/g, "$1$2")
-      // 行尾空白清理
+      // 行尾空白去除
       .replace(/[ \t]+\n/g, "\n")
       // 多余空行压缩
       .replace(/\n{3,}/g, "\n\n")

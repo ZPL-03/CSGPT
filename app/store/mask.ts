@@ -5,7 +5,6 @@ import { ModelConfig, useAppConfig } from "./config";
 import { ServiceProvider, StoreKey } from "../constant";
 import { nanoid } from "nanoid";
 import { createPersistStore } from "../utils/store";
-import { normalizeCSGPTModelConfig } from "../utils/model";
 
 export type Mask = {
   id: string;
@@ -28,6 +27,7 @@ export const DEFAULT_MASK_STATE = {
 export type MaskState = typeof DEFAULT_MASK_STATE;
 
 export const DEFAULT_MASK_AVATAR = "gpt-bot";
+const STORE_SCHEMA_VERSION = 1;
 
 export const createEmptyMask = () =>
   ({
@@ -41,6 +41,27 @@ export const createEmptyMask = () =>
     builtin: false,
     createdAt: Date.now(),
   }) as Mask;
+
+function normalizeMaskState(state?: Partial<MaskState>): MaskState {
+  const source = JSON.parse(JSON.stringify(state || {})) as Partial<MaskState>;
+  const masks: Record<string, Mask> = {};
+
+  Object.values(source.masks || {}).forEach((mask) => {
+    const id = mask.id || nanoid();
+    const modelConfig = {
+      ...useAppConfig.getState().modelConfig,
+      ...(mask.modelConfig || {}),
+    };
+    masks[id] = {
+      ...createEmptyMask(),
+      ...mask,
+      id,
+      modelConfig,
+    } as Mask;
+  });
+
+  return { masks };
+}
 
 export const useMaskStore = createPersistStore(
   { ...DEFAULT_MASK_STATE },
@@ -102,31 +123,10 @@ export const useMaskStore = createPersistStore(
   }),
   {
     name: StoreKey.Mask,
-    version: 3.2,
+    version: STORE_SCHEMA_VERSION,
 
-    migrate(state, version) {
-      const newState = JSON.parse(JSON.stringify(state)) as MaskState;
-
-      // 迁移面具 ID 到 nanoid
-      if (version < 3) {
-        Object.values(newState.masks).forEach((m) => (m.id = nanoid()));
-      }
-
-      if (version < 3.1) {
-        const updatedMasks: Record<string, Mask> = {};
-        Object.values(newState.masks).forEach((m) => {
-          updatedMasks[m.id] = m;
-        });
-        newState.masks = updatedMasks;
-      }
-
-      if (version < 3.2) {
-        Object.values(newState.masks).forEach((m) => {
-          normalizeCSGPTModelConfig(m.modelConfig);
-        });
-      }
-
-      return newState as any;
+    migrate(state) {
+      return normalizeMaskState(state as Partial<MaskState>) as any;
     },
   },
 );

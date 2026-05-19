@@ -22,7 +22,6 @@ import { getClientApi } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { showToast } from "../components/ui-lib";
 import {
-  CSGPT_DEFAULT_MODEL,
   DEFAULT_INPUT_TEMPLATE,
   DEFAULT_MODELS,
   DEFAULT_SYSTEM_TEMPLATE,
@@ -41,10 +40,7 @@ import { createPersistStore } from "../utils/store";
 import { estimateTokenLength } from "../utils/token";
 import { ModelConfig, ModelType, useAppConfig } from "./config";
 import { useAccessStore } from "./access";
-import {
-  collectModelsWithDefaultModel,
-  normalizeCSGPTModelConfig,
-} from "../utils/model";
+import { collectModelsWithDefaultModel } from "../utils/model";
 import { createEmptyMask, Mask } from "./mask";
 import { executeMcpAction, getAllTools, isMcpEnabled } from "../mcp/actions";
 import { extractMcpJson, isMcpJson } from "../mcp/utils";
@@ -107,7 +103,9 @@ export interface ChatSession {
 }
 
 export const DEFAULT_TOPIC = Locale.Store.DefaultTopic;
-const CSGPT_LOCAL_TOPIC_MIN_LENGTH = 4;
+const TOPIC_MIN_LENGTH = 4;
+const TOPIC_MAX_LENGTH = 24;
+const STORE_SCHEMA_VERSION = 1;
 export const BOT_HELLO: ChatMessage = createMessage({
   role: "assistant",
   content: Locale.Store.BotHello,
@@ -135,11 +133,8 @@ function getSummarizeModel(
   currentModel: string,
   providerName: string,
 ): string[] {
-  // GPT 系列模型强制使用 4o-mini 执行摘要
-  if (
-    providerName !== ServiceProvider.CSGPT &&
-    (currentModel.startsWith("gpt") || currentModel.startsWith("chatgpt"))
-  ) {
+  // GPT 系列摘要使用 4o-mini。
+  if (currentModel.startsWith("gpt") || currentModel.startsWith("chatgpt")) {
     const configStore = useAppConfig.getState();
     const accessStore = useAccessStore.getState();
     const allModel = collectModelsWithDefaultModel(
@@ -173,15 +168,125 @@ function countMessages(msgs: ChatMessage[]) {
   );
 }
 
-function buildLocalCSGPTTopic(messages: ChatMessage[]) {
+function normalizeTopicTitle(topic: string, minLength = 1) {
+  const title = trimTopic(topic.replace(/\s+/g, " ").trim()).slice(
+    0,
+    TOPIC_MAX_LENGTH,
+  );
+  return title.length >= minLength ? title : DEFAULT_TOPIC;
+}
+
+function getAttachmentNames(content: ChatMessage["content"]) {
+  if (typeof content === "string") return [];
+
+  return content
+    .map((item) => item.file_url?.name || item.image_url?.name || "")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+function cleanUserTitleText(text: string) {
+  let normalized = text.replace(/\s+/g, " ").trim();
+  const actionMatch = normalized.match(
+    /^(?:请你|请|麻烦你|麻烦|帮我|帮忙)?(?:先)?(分析|解释|总结|概括|说明|阅读|查看|看看|看一下)(?:一下|下)?\s*(.+)$/u,
+  );
+  if (actionMatch?.[2]) {
+    return `${actionMatch[2].trim()}${actionMatch[1]}`;
+  }
+
+  normalized = normalized.replace(
+    /^(?:请你|请|麻烦你|麻烦|帮我|帮忙|请问|能否|能不能|可以)?\s*/u,
+    "",
+  );
+  return normalized;
+}
+
+function chooseTitleSegment(text: string) {
+  const sentence =
+    text
+      .split(/[。！？!?；;\n\r]+/u)
+      .map((part) => part.trim())
+      .find((part) => part.length >= TOPIC_MIN_LENGTH) || text;
+
+  if (sentence.length <= TOPIC_MAX_LENGTH) return sentence;
+
+  return (
+    sentence
+      .split(/[，,：:、]+/u)
+      .map((part) => part.trim())
+      .find((part) => part.length >= TOPIC_MIN_LENGTH) || sentence
+  );
+}
+
+function buildConversationTopic(messages: ChatMessage[]) {
   for (const message of messages) {
     if (message.role !== "user" || message.isError) continue;
-    const text = getMessageTextContent(message).replace(/\s+/g, " ").trim();
-    if (text.length >= CSGPT_LOCAL_TOPIC_MIN_LENGTH) {
-      return trimTopic(text).slice(0, 24) || DEFAULT_TOPIC;
+
+    const text = getMessageTextContent(message);
+    const titleSource = chooseTitleSegment(cleanUserTitleText(text));
+    const title = normalizeTopicTitle(titleSource, TOPIC_MIN_LENGTH);
+    if (title !== DEFAULT_TOPIC) {
+      return title;
+    }
+
+    const attachmentName = getAttachmentNames(message.content)[0];
+    if (attachmentName) {
+      return normalizeTopicTitle(`文件：${attachmentName}`, TOPIC_MIN_LENGTH);
     }
   }
   return DEFAULT_TOPIC;
+}
+
+function normalizeChatMessage(message: Partial<ChatMessage>): ChatMessage {
+  return {
+    ...createMessage({
+      role: message.role ?? "user",
+      content: message.content ?? "",
+    }),
+    ...message,
+    id: message.id || nanoid(),
+    role: message.role ?? "user",
+    content: message.content ?? "",
+    date: message.date || new Date().toLocaleString(),
+    streaming: false,
+  } as ChatMessage;
+}
+
+function normalizeSessionModelConfig(modelConfig: any) {
+  const normalized = {
+    ...useAppConfig.getState().modelConfig,
+    ...(modelConfig || {}),
+  };
+  if (typeof normalized.max_tokens !== "number") {
+    normalized.max_tokens = useAppConfig.getState().modelConfig.max_tokens;
+  }
+  return normalized;
+}
+
+function normalizeChatSession(session: Partial<ChatSession>): ChatSession {
+  const base = createEmptySession();
+  const mask = {
+    ...base.mask,
+    ...(session.mask || {}),
+    modelConfig: normalizeSessionModelConfig(session.mask?.modelConfig),
+    context: (session.mask?.context || []).map((message) =>
+      normalizeChatMessage(message as Partial<ChatMessage>),
+    ),
+  };
+
+  return {
+    ...base,
+    ...session,
+    id: session.id || nanoid(),
+    topic: session.topic || DEFAULT_TOPIC,
+    messages: (session.messages || []).map((message) =>
+      normalizeChatMessage(message),
+    ),
+    stat: session.stat || base.stat,
+    lastUpdate: session.lastUpdate || Date.now(),
+    lastSummarizeIndex: session.lastSummarizeIndex || 0,
+    mask,
+  };
 }
 
 function fillTemplateWith(input: string, modelConfig: ModelConfig) {
@@ -207,7 +312,7 @@ function fillTemplateWith(input: string, modelConfig: ModelConfig) {
 
   let output = modelConfig.template ?? DEFAULT_INPUT_TEMPLATE;
 
-  // 去重：如果输入已以模板开头则清空模板
+  // 输入包含完整模板前缀时使用原始输入。
   if (input.startsWith(output)) {
     output = "";
   }
@@ -265,7 +370,7 @@ export const useChatStore = createPersistStore(
 
     const methods = {
       forkSession() {
-        // 获取当前会话
+        // 当前会话引用
         const currentSession = get().currentSession();
         if (!currentSession) return;
 
@@ -349,7 +454,7 @@ export const useChatStore = createPersistStore(
           newSessions.splice(from, 1);
           newSessions.splice(to, 0, session);
 
-          // 更新当前会话索引
+          // 当前会话索引
           let newIndex = oldIndex === from ? to : oldIndex;
           if (oldIndex > from && oldIndex <= to) {
             newIndex -= 1;
@@ -424,7 +529,7 @@ export const useChatStore = createPersistStore(
           sessions.push(createEmptySession());
         }
 
-        // 保存状态以便撤销删除操作
+        // 撤销删除操作所需的会话状态
         const restoreState = {
           currentSessionIndex: get().currentSessionIndex,
           sessions: get().sessions.slice(),
@@ -533,7 +638,11 @@ export const useChatStore = createPersistStore(
         const attachmentFileContent =
           fileContentOverride ||
           (attachments || [])
-            .map((att) => att.extractedText || "")
+            .map((att) =>
+              att.extractedText
+                ? `【文件：${att.name}】\n${att.extractedText}`
+                : "",
+            )
             .filter(Boolean)
             .join("\n\n") ||
           undefined;
@@ -559,6 +668,18 @@ export const useChatStore = createPersistStore(
           session.messages = session.messages.concat([userMessage, botMessage]);
           session.lastUpdate = Date.now();
         });
+        if (
+          useAppConfig.getState().enableAutoGenerateTitle &&
+          session.topic === DEFAULT_TOPIC
+        ) {
+          const topic = buildConversationTopic(session.messages);
+          if (topic !== DEFAULT_TOPIC) {
+            get().updateTargetSession(session, (session) => {
+              session.topic = topic;
+              session.lastUpdate = Date.now();
+            });
+          }
+        }
         await syncConversationToDB(session);
 
         try {
@@ -634,7 +755,7 @@ export const useChatStore = createPersistStore(
               console.error("[Chat] 请求异常", error);
             },
             onController(controller) {
-              // 保存控制器用于停止或重试。
+              // 控制器用于停止或重试。
               ChatControllerPool.addController(
                 session.id,
                 botMessage.id ?? messageIndex,
@@ -689,7 +810,6 @@ export const useChatStore = createPersistStore(
         // 系统提示词，用于模拟 ChatGPT Web 体验
         const shouldInjectSystemPrompts =
           modelConfig.enableInjectSystemPrompts &&
-          modelConfig.providerName !== ServiceProvider.CSGPT &&
           (session.mask.modelConfig.model.startsWith("gpt-") ||
             session.mask.modelConfig.model.startsWith("chatgpt-"));
 
@@ -811,68 +931,25 @@ export const useChatStore = createPersistStore(
             );
         const api: ClientApi = getClientApi(providerName as ServiceProvider);
 
-        // 移除错误消息
+        // 错误消息过滤
         const messages = session.messages;
 
-        // 对话超过 50 词后自动生成标题摘要
-        const SUMMARIZE_MIN_LEN = 50;
         const shouldGenerateTitle =
-          (config.enableAutoGenerateTitle &&
-            session.topic === DEFAULT_TOPIC &&
-            countMessages(messages) >= SUMMARIZE_MIN_LEN) ||
-          refreshTitle;
-        if (
-          shouldGenerateTitle &&
-          modelConfig.providerName === ServiceProvider.CSGPT
-        ) {
-          const topic = buildLocalCSGPTTopic(messages);
-          get().updateTargetSession(session, (session) => {
-            session.topic = topic;
-            session.lastUpdate = Date.now();
-          });
-          const updated = get().sessions.find(
-            (s: ChatSession) => s.id === session.id,
-          );
-          if (updated) syncConversationToDB(updated);
-        } else if (shouldGenerateTitle) {
-          const startIndex = Math.max(
-            0,
-            messages.length - modelConfig.historyMessageCount,
-          );
-          const topicMessages = messages
-            .slice(
-              startIndex < messages.length ? startIndex : messages.length - 1,
-              messages.length,
-            )
-            .concat(
-              createMessage({
-                role: "user",
-                content: Locale.Store.Prompt.Topic,
-              }),
+          refreshTitle ||
+          (config.enableAutoGenerateTitle && session.topic === DEFAULT_TOPIC);
+
+        if (shouldGenerateTitle) {
+          const topic = buildConversationTopic(messages);
+          if (topic !== DEFAULT_TOPIC || refreshTitle) {
+            get().updateTargetSession(session, (session) => {
+              session.topic = topic;
+              session.lastUpdate = Date.now();
+            });
+            const updated = get().sessions.find(
+              (s: ChatSession) => s.id === session.id,
             );
-          api.llm.chat({
-            messages: topicMessages,
-            config: {
-              model,
-              stream: false,
-              providerName,
-            },
-            onFinish(message, responseRes) {
-              if (responseRes?.status === 200) {
-                get().updateTargetSession(
-                  session,
-                  (session) =>
-                    (session.topic =
-                      message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC),
-                );
-                // 标题更新后同步到数据库
-                const updated = get().sessions.find(
-                  (s: ChatSession) => s.id === session.id,
-                );
-                if (updated) syncConversationToDB(updated);
-              }
-            },
-          });
+            if (updated) syncConversationToDB(updated);
+          }
         }
         const summarizeIndex = Math.max(
           session.lastSummarizeIndex,
@@ -906,7 +983,7 @@ export const useChatStore = createPersistStore(
           historyMsgLength > modelConfig.compressMessageLengthThreshold &&
           modelConfig.sendMemory
         ) {
-          // 摘要时移除 max_tokens 参数
+          // 摘要请求不携带 max_tokens 参数。
           const { max_tokens, ...modelcfg } = modelConfig;
           api.llm.chat({
             messages: toBeSummarizedMsgs.concat(
@@ -931,7 +1008,7 @@ export const useChatStore = createPersistStore(
                   session.lastSummarizeIndex = lastSummarizeIndex;
                   session.memoryPrompt = message;
                 });
-                // 记忆更新后同步到数据库
+                // 记忆内容写入数据库。
                 const updated = get().sessions.find(
                   (s: ChatSession) => s.id === session.id,
                 );
@@ -961,7 +1038,7 @@ export const useChatStore = createPersistStore(
         set(() => ({ sessions }));
       },
       async clearAllData() {
-        // 先删除服务端所有对话和文件
+        // 服务端对话和文件数据
         const token = useUserStore.getState().token;
         if (token) {
           try {
@@ -970,11 +1047,11 @@ export const useChatStore = createPersistStore(
               headers: { Authorization: `Bearer ${token}` },
             });
           } catch {
-            // 服务端删除失败也继续清理本地数据
+            // 本地数据处理不依赖服务端响应。
           }
         }
         await indexedDBStorage.clear();
-        // 只清理对话数据，保留登录令牌和配置
+        // 对话数据独立于登录令牌和配置。
         const preservedKeys = [StoreKey.User, StoreKey.Access, StoreKey.Config];
         const preserved: Record<string, string | null> = {};
         for (const key of preservedKeys) {
@@ -1028,89 +1105,22 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.8,
-    migrate(persistedState, version) {
-      const state = persistedState as any;
-      const newState = JSON.parse(
-        JSON.stringify(state),
-      ) as typeof DEFAULT_CHAT_STATE;
+    version: STORE_SCHEMA_VERSION,
+    migrate(persistedState) {
+      const state = persistedState as Partial<typeof DEFAULT_CHAT_STATE>;
+      const newState = {
+        ...DEFAULT_CHAT_STATE,
+        ...JSON.parse(JSON.stringify(state || {})),
+      } as typeof DEFAULT_CHAT_STATE;
 
-      if (version < 2) {
-        newState.sessions = [];
-
-        const oldSessions = state.sessions;
-        for (const oldSession of oldSessions) {
-          const newSession = createEmptySession();
-          newSession.topic = oldSession.topic;
-          newSession.messages = [...oldSession.messages];
-          newSession.mask.modelConfig.sendMemory = true;
-          newSession.mask.modelConfig.historyMessageCount = 4;
-          newSession.mask.modelConfig.compressMessageLengthThreshold = 1000;
-          newState.sessions.push(newSession);
-        }
-      }
-
-      if (version < 3) {
-        // 迁移历史 ID 到 nanoid
-        newState.sessions.forEach((s) => {
-          s.id = nanoid();
-          s.messages.forEach((m) => (m.id = nanoid()));
-        });
-      }
-
-      // 会话数据迁移：启用 enableInjectSystemPrompts 属性
-      if (version < 3.1) {
-        newState.sessions.forEach((s) => {
-          if (
-            // 不覆盖用户已自行设置的配置
-            !Object.hasOwn(s.mask.modelConfig, "enableInjectSystemPrompts")
-          ) {
-            // 用户可能已修改过配置，使用当前配置而不是默认值
-            const config = useAppConfig.getState();
-            s.mask.modelConfig.enableInjectSystemPrompts =
-              config.modelConfig.enableInjectSystemPrompts;
-          }
-        });
-      }
-
-      // 为所有会话添加默认摘要模型
-      if (version < 3.2) {
-        newState.sessions.forEach((s) => {
-          const config = useAppConfig.getState();
-          s.mask.modelConfig.compressModel = config.modelConfig.compressModel;
-          s.mask.modelConfig.compressProviderName =
-            config.modelConfig.compressProviderName;
-        });
-      }
-      // 每个会话恢复默认摘要模型
-      if (version < 3.3) {
-        newState.sessions.forEach((s) => {
-          const config = useAppConfig.getState();
-          s.mask.modelConfig.compressModel = "";
-          s.mask.modelConfig.compressProviderName = "";
-        });
-      }
-
-      // 版本 3.8：补齐 CSGPT 会话缺失的输出预算
-      if (version < 3.8) {
-        newState.sessions.forEach((s) => {
-          normalizeCSGPTModelConfig(s.mask.modelConfig);
-          if (
-            s.mask.modelConfig.providerName === ServiceProvider.CSGPT &&
-            typeof s.mask.modelConfig.max_tokens !== "number"
-          ) {
-            s.mask.modelConfig.max_tokens =
-              useAppConfig.getState().modelConfig.max_tokens;
-          }
-          if (
-            s.mask.modelConfig.providerName &&
-            s.mask.modelConfig.providerName !== ServiceProvider.CSGPT &&
-            s.mask.modelConfig.model === CSGPT_DEFAULT_MODEL
-          ) {
-            s.mask.modelConfig.providerName = ServiceProvider.CSGPT;
-          }
-        });
-      }
+      newState.sessions = (newState.sessions || []).map(
+        (session: Partial<ChatSession>) => normalizeChatSession(session),
+      );
+      newState.currentSessionIndex = Math.min(
+        Math.max(Number(newState.currentSessionIndex) || 0, 0),
+        Math.max(newState.sessions.length - 1, 0),
+      );
+      newState.lastInput = newState.lastInput || "";
 
       return newState as any;
     },

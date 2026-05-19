@@ -1,12 +1,12 @@
 // 单个对话操作 API
 // GET    /api/conversations/[id] - 获取对话详情（含消息）
-// PUT    /api/conversations/[id] - 更新对话
 // DELETE /api/conversations/[id] - 删除对话
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
 import {
+  buildFileContentFromMessage,
   collectFileIdsFromMessageContent,
   deleteUnreferencedFiles,
 } from "../file-refs";
@@ -30,7 +30,7 @@ export async function GET(
       where: { id: params.id, userId },
       include: {
         messages: {
-          orderBy: { date: "asc" },
+          orderBy: { createdAt: "asc" },
         },
       },
     });
@@ -49,12 +49,10 @@ export async function GET(
       allFileIds.size > 0
         ? await prisma.uploadedFile.findMany({
             where: { id: { in: Array.from(allFileIds) }, userId },
-            select: { id: true, extractedText: true },
+            select: { id: true, originalName: true, extractedText: true },
           })
         : [];
-    const extractedTextMap = new Map(
-      fileRecords.map((f) => [f.id, f.extractedText]),
-    );
+    const filesById = new Map(fileRecords.map((file) => [file.id, file]));
 
     const res = NextResponse.json({
       conversation: {
@@ -68,12 +66,6 @@ export async function GET(
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         messages: conversation.messages.map((m: any) => {
-          // 从消息内容中提取文件 ID，从数据库取回解析文本
-          const msgFileIds = collectFileIdsFromMessageContent(m.content);
-          const reconstitutedFileContent = msgFileIds
-            .map((fid: string) => extractedTextMap.get(fid))
-            .filter(Boolean)
-            .join("\n\n");
           return {
             id: m.id,
             role: m.role,
@@ -82,7 +74,9 @@ export async function GET(
             isError: m.isError,
             model: m.model,
             tools: m.tools,
-            fileContent: reconstitutedFileContent || m.fileContent,
+            fileContent:
+              m.fileContent ||
+              buildFileContentFromMessage(m.content, filesById),
           };
         }),
       },

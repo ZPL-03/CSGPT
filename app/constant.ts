@@ -379,10 +379,6 @@ export const CSGPT_MODEL_2 = "QWen3-14B-CS2";
 export const CSGPT_MODEL_2_DISPLAY_NAME = "QWen3-14B-CS2";
 export const CSGPT_MODEL_3 = "QWen3-14B-CS3";
 export const CSGPT_MODEL_3_DISPLAY_NAME = "QWen3-14B-CS3";
-export function isLegacyCSGPTModelName(model?: string) {
-  if (!model) return false;
-  return model.startsWith("gpt-") || model.startsWith("chatgpt-");
-}
 
 export const SUMMARIZE_MODEL = "gpt-4o-mini";
 export const GEMINI_SUMMARIZE_MODEL = "gemini-pro";
@@ -428,7 +424,7 @@ export const KnowledgeCutOffDate: Record<string, string> = {
 };
 
 const openaiModels = [
-  // gpt-4o-mini 已替代 gpt-3.5-turbo，更便宜、功能更强、支持多模态且速度相当。
+  // gpt-4o-mini 是默认摘要模型，支持多模态且成本较低。
   "gpt-3.5-turbo",
   "gpt-3.5-turbo-1106",
   "gpt-3.5-turbo-0125",
@@ -716,7 +712,7 @@ export const DEFAULT_MODELS = [
       id: "openai",
       providerName: "OpenAI",
       providerType: "openai",
-      sorted: 1, // 这里是固定的，确保顺序与之前内置的版本一致
+      sorted: 1, // 内置模型排序序号
     },
   })),
   ...openaiModels.map((name) => ({

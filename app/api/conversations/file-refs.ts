@@ -27,6 +27,33 @@ export function collectFileIdsFromMessageContent(content: any) {
   return Array.from(ids);
 }
 
+export type ExtractedFileRecord = {
+  id: string;
+  originalName?: string | null;
+  extractedText?: string | null;
+};
+
+function formatExtractedFileContent(file: ExtractedFileRecord) {
+  const text = file.extractedText?.trim();
+  if (!text) return "";
+
+  const name = file.originalName?.trim();
+  return name ? `【文件：${name}】\n${text}` : text;
+}
+
+export function buildFileContentFromMessage(
+  content: any,
+  filesById: Map<string, ExtractedFileRecord>,
+) {
+  const sections = collectFileIdsFromMessageContent(content)
+    .map((fileId) => filesById.get(fileId))
+    .filter((file): file is ExtractedFileRecord => Boolean(file))
+    .map(formatExtractedFileContent)
+    .filter(Boolean);
+
+  return sections.length > 0 ? sections.join("\n\n") : null;
+}
+
 export async function deleteUnreferencedFiles(
   tx: any,
   fileIds: string[],

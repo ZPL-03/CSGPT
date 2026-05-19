@@ -1,9 +1,4 @@
-import {
-  CSGPT_DEFAULT_MODEL,
-  DEFAULT_MODELS,
-  isLegacyCSGPTModelName,
-  ServiceProvider,
-} from "../constant";
+import { DEFAULT_MODELS, ServiceProvider } from "../constant";
 import { LLMModel } from "../client/api";
 
 const CustomSeq = {
@@ -221,21 +216,6 @@ export function isGPT4Model(modelName: string): boolean {
       modelName.startsWith("o1")) &&
     !modelName.startsWith("gpt-4o-mini")
   );
-}
-
-// 将历史模型名映射到 CSGPT 默认模型
-export function normalizeCSGPTModelConfig(modelConfig: {
-  model?: string;
-  providerName?: string;
-}) {
-  if (
-    (!modelConfig.providerName ||
-      modelConfig.providerName === ServiceProvider.CSGPT) &&
-    isLegacyCSGPTModelName(modelConfig.model)
-  ) {
-    modelConfig.model = CSGPT_DEFAULT_MODEL;
-    modelConfig.providerName = ServiceProvider.CSGPT;
-  }
 }
 
 // 检查模型在所有指定 Provider 上是否均不可用

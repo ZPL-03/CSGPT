@@ -14,6 +14,7 @@ import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
 
 const MODEL_IMAGE_DATA_URL_LIMIT = 2 * 1024 * 1024;
+const EXTRACTED_TEXT_CHUNK_SIZE = 512 * 1024;
 
 export function compressImage(file: Blob, maxSize: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -262,25 +263,47 @@ export async function uploadFile(
   }
 }
 
-// 将文件解析结果保存到服务端 UploadedFile 表
 export async function saveExtractedText(
   fileUrl: string,
   extractedText: string,
 ) {
-  if (!extractedText || !fileUrl?.startsWith("/api/files/")) return;
+  if (!fileUrl?.startsWith("/api/files/")) {
+    throw new Error("文件地址无效");
+  }
+  if (typeof extractedText !== "string") {
+    throw new Error("文件解析内容无效");
+  }
   const token = useUserStore.getState().token;
-  if (!token) return;
-  await fetch(fileUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ action: "setExtractedText", extractedText }),
-  }).catch(() => {});
+  if (!token) {
+    throw new Error("用户未登录");
+  }
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  const postAction = async (body: Record<string, unknown>) => {
+    const response = await fetch(fileUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    await parseFileUploadResponse(response);
+  };
+
+  await postAction({ action: "beginExtractedText" });
+  for (
+    let offset = 0;
+    offset < extractedText.length;
+    offset += EXTRACTED_TEXT_CHUNK_SIZE
+  ) {
+    await postAction({
+      action: "appendExtractedText",
+      chunk: extractedText.slice(offset, offset + EXTRACTED_TEXT_CHUNK_SIZE),
+    });
+  }
 }
 
-// 服务端重解析：对已上传文件重新执行完整解析管线获取增强文本
+// 服务端文件解析：读取文件表数据并执行完整解析管线。
 export async function reparseFileOnServer(fileId: string): Promise<{
   text: string;
   originalFormat: string;

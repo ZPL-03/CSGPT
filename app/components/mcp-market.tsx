@@ -166,7 +166,7 @@ export function McpMarketPage() {
     return null;
   }
 
-  // 检查服务器是否已添加
+  // 服务器添加状态
   const isServerAdded = (id: string) => {
     return id in (config?.mcpServers ?? {});
   };
@@ -263,7 +263,7 @@ export function McpMarketPage() {
         const newConfig = await addMcpServer(preset.id, serverConfig);
         setConfig(newConfig);
 
-        // 更新状态
+        // 服务器状态
         const statuses = await getClientsStatus();
         setClientStatuses(statuses);
       } finally {
@@ -486,7 +486,7 @@ export function McpMarketPage() {
           initializing: 2, // 初始化中
           starting: 3, // 启动中
           stopping: 4, // 停止中
-          paused: 5, // 已暂停
+          paused: 5, // 暂停状态
           undefined: 6, // 未定义最低优先级
         };
 

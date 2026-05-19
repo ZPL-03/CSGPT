@@ -10,7 +10,6 @@ import {
   ServiceProvider,
 } from "../constant";
 import { createPersistStore } from "../utils/store";
-import { normalizeCSGPTModelConfig } from "../utils/model";
 
 export type ModelType = (typeof DEFAULT_MODELS)[number]["name"];
 
@@ -29,9 +28,10 @@ export enum Theme {
 }
 
 const config = getClientConfig();
+const STORE_SCHEMA_VERSION = 1;
 
 export const DEFAULT_CONFIG = {
-  lastUpdate: Date.now(), // 时间戳，用于状态合并
+  lastUpdate: Date.now(), // 状态合并时间戳
 
   submitKey: SubmitKey.Enter,
   avatar: "1f603",
@@ -77,13 +77,30 @@ export type ChatConfig = typeof DEFAULT_CONFIG;
 
 export type ModelConfig = ChatConfig["modelConfig"];
 
-function normalizeCSGPTDefaultMaxTokens(modelConfig: ModelConfig) {
-  const isCSGPTConfig =
-    modelConfig.providerName === ServiceProvider.CSGPT ||
-    modelConfig.model === CSGPT_DEFAULT_MODEL;
-  if (isCSGPTConfig && typeof modelConfig.max_tokens !== "number") {
+function normalizeConfigState(state?: Partial<ChatConfig>): ChatConfig {
+  const stateModels = state?.models;
+  const modelConfig = {
+    ...DEFAULT_CONFIG.modelConfig,
+    ...(state?.modelConfig || {}),
+  } as ModelConfig;
+
+  if (!modelConfig.template) {
+    modelConfig.template = config?.template ?? DEFAULT_INPUT_TEMPLATE;
+  }
+
+  if (typeof modelConfig.max_tokens !== "number") {
     modelConfig.max_tokens = DEFAULT_CONFIG.modelConfig.max_tokens;
   }
+
+  return {
+    ...DEFAULT_CONFIG,
+    ...(state || {}),
+    lastUpdate:
+      typeof state?.lastUpdate === "number" ? state.lastUpdate : Date.now(),
+    customModels: state?.customModels ?? DEFAULT_CONFIG.customModels,
+    models: Array.isArray(stateModels) ? stateModels : DEFAULT_CONFIG.models,
+    modelConfig,
+  } as ChatConfig;
 }
 
 export function limitNumber(
@@ -152,107 +169,38 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.7,
+    version: STORE_SCHEMA_VERSION,
 
     merge(persistedState, currentState) {
-      const state = persistedState as ChatConfig | undefined;
-      if (!state) return { ...currentState };
+      const state = persistedState as Partial<ChatConfig> | undefined;
+      if (!state) {
+        return {
+          ...currentState,
+          ...normalizeConfigState(currentState),
+        };
+      }
       const models = currentState.models.slice();
-      state.models.forEach((pModel) => {
+      const persistedModels = Array.isArray(state.models) ? state.models : [];
+      persistedModels.forEach((pModel) => {
         const idx = models.findIndex(
           (v) =>
             v.name === pModel.name && v.provider?.id === pModel.provider?.id,
         );
         if (idx !== -1) models[idx] = pModel;
-        // 不在当前列表中的模型不追加
       });
-      // customModels 由服务端控制
-      const merged = {
+      return {
         ...currentState,
-        ...state,
-        models: models,
-        customModels: currentState.customModels,
+        ...normalizeConfigState({
+          ...currentState,
+          ...state,
+          models: models,
+          customModels: currentState.customModels,
+        }),
       };
-      // localStorage 数据与代码默认值合并后，统一规范化关键字段
-      normalizeCSGPTModelConfig(merged.modelConfig);
-      if (
-        merged.modelConfig.providerName &&
-        merged.modelConfig.providerName !== ServiceProvider.CSGPT &&
-        merged.modelConfig.model === CSGPT_DEFAULT_MODEL
-      ) {
-        merged.modelConfig.providerName = ServiceProvider.CSGPT;
-      }
-      normalizeCSGPTDefaultMaxTokens(merged.modelConfig);
-      return merged;
     },
 
-    migrate(persistedState, version) {
-      const state = persistedState as ChatConfig;
-
-      if (version < 3.4) {
-        state.modelConfig.sendMemory = true;
-        state.modelConfig.historyMessageCount = 4;
-        state.modelConfig.compressMessageLengthThreshold = 1000;
-        state.modelConfig.frequency_penalty = 0;
-        state.modelConfig.top_p = 1;
-        state.modelConfig.template = DEFAULT_INPUT_TEMPLATE;
-        state.dontShowMaskSplashScreen = false;
-        state.hideBuiltinMasks = false;
-      }
-
-      if (version < 3.5) {
-        state.customModels = "claude,claude-100k";
-      }
-
-      if (version < 3.6) {
-        state.modelConfig.enableInjectSystemPrompts = true;
-      }
-
-      if (version < 3.7) {
-        state.enableAutoGenerateTitle = true;
-      }
-
-      if (version < 3.8) {
-        state.lastUpdate = Date.now();
-      }
-
-      if (version < 3.9) {
-        state.modelConfig.template =
-          state.modelConfig.template !== DEFAULT_INPUT_TEMPLATE
-            ? state.modelConfig.template
-            : config?.template ?? DEFAULT_INPUT_TEMPLATE;
-      }
-
-      if (version < 4.1) {
-        state.modelConfig.compressModel =
-          DEFAULT_CONFIG.modelConfig.compressModel;
-        state.modelConfig.compressProviderName =
-          DEFAULT_CONFIG.modelConfig.compressProviderName;
-      }
-
-      if (version < 4.3) {
-        normalizeCSGPTModelConfig(state.modelConfig);
-      }
-
-      // 版本 4.4：统一 CSGPT 模型配置规范化
-      if (version < 4.4) {
-        normalizeCSGPTModelConfig(state.modelConfig);
-      }
-
-      // 版本 4.7：补齐 CSGPT 缺失的输出预算
-      if (version < 4.7) {
-        normalizeCSGPTModelConfig(state.modelConfig);
-        if (
-          state.modelConfig.providerName &&
-          state.modelConfig.providerName !== ServiceProvider.CSGPT
-        ) {
-          state.modelConfig.providerName = ServiceProvider.CSGPT;
-          state.modelConfig.model = CSGPT_DEFAULT_MODEL;
-        }
-        normalizeCSGPTDefaultMaxTokens(state.modelConfig);
-      }
-
-      return state as any;
+    migrate(persistedState) {
+      return normalizeConfigState(persistedState as Partial<ChatConfig>) as any;
     },
   },
 );

@@ -12,6 +12,37 @@ export interface Prompt {
   createdAt: number;
 }
 
+const STORE_SCHEMA_VERSION = 1;
+const DEFAULT_PROMPT_STATE = {
+  counter: 0,
+  prompts: {} as Record<string, Prompt>,
+};
+
+function normalizePromptState(
+  state?: Partial<typeof DEFAULT_PROMPT_STATE>,
+): typeof DEFAULT_PROMPT_STATE {
+  const source = JSON.parse(JSON.stringify(state || {})) as Partial<
+    typeof DEFAULT_PROMPT_STATE
+  >;
+  const prompts: Record<string, Prompt> = {};
+
+  Object.values(source.prompts || {}).forEach((prompt) => {
+    const id = prompt.id || nanoid();
+    prompts[id] = {
+      ...prompt,
+      id,
+      createdAt: prompt.createdAt || Date.now(),
+    } as Prompt;
+  });
+
+  return {
+    ...DEFAULT_PROMPT_STATE,
+    ...source,
+    counter: Number(source.counter) || 0,
+    prompts,
+  };
+}
+
 export const SearchService = {
   ready: false,
   builtinEngine: new Fuse<Prompt>([], { keys: ["title"] }),
@@ -49,10 +80,7 @@ export const SearchService = {
 };
 
 export const usePromptStore = createPersistStore(
-  {
-    counter: 0,
-    prompts: {} as Record<string, Prompt>,
-  },
+  { ...DEFAULT_PROMPT_STATE },
 
   (set, get) => ({
     add(prompt: Prompt) {
@@ -132,18 +160,12 @@ export const usePromptStore = createPersistStore(
   }),
   {
     name: StoreKey.Prompt,
-    version: 3,
+    version: STORE_SCHEMA_VERSION,
 
-    migrate(state, version) {
-      const newState = JSON.parse(JSON.stringify(state)) as {
-        prompts: Record<string, Prompt>;
-      };
-
-      if (version < 3) {
-        Object.values(newState.prompts).forEach((p) => (p.id = nanoid()));
-      }
-
-      return newState as any;
+    migrate(state) {
+      return normalizePromptState(
+        state as Partial<typeof DEFAULT_PROMPT_STATE>,
+      ) as any;
     },
 
     onRehydrateStorage(state) {

@@ -1,5 +1,5 @@
 // 文件重解析端点：POST /api/files/[filename]/parse
-// 读取数据库中已上传的文件数据，使用完整解析管线重新提取文本和公式记录。
+// 读取数据库中的文件数据，使用完整解析管线提取文本和公式记录。
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";

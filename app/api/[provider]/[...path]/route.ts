@@ -281,7 +281,7 @@ async function handleModelsRequest(
         parent: null,
       },
     ];
-    // CS2 上游已配置时，返回 CS2 模型
+    // CS2 上游配置存在时返回 CS2 模型。
     if (config.csgptCs2BaseUrl || config.csgptCs2ApiKey) {
       data.push({
         id: CSGPT_MODEL_2,
@@ -293,7 +293,7 @@ async function handleModelsRequest(
         parent: null,
       });
     }
-    // CS3 上游已配置时，返回 CS3 模型
+    // CS3 上游配置存在时返回 CS3 模型。
     if (config.csgptCs3BaseUrl || config.csgptCs3ApiKey) {
       data.push({
         id: CSGPT_MODEL_3,
