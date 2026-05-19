@@ -126,6 +126,17 @@ const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
 });
 
+function areModelConfigsEqual(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+) {
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    if (left[key] !== right[key]) return false;
+  }
+  return true;
+}
+
 const MCPAction = () => {
   const navigate = useNavigate();
   const [count, setCount] = useState<number>(0);
@@ -160,6 +171,15 @@ export function SessionConfigModel(props: { onClose: () => void }) {
   const maskStore = useMaskStore();
   const navigate = useNavigate();
 
+  const syncCurrentSessionSettings = async (failureMessage: string) => {
+    const current = chatStore.currentSession();
+    if (!current.messages?.length) return;
+    const userStore = useUserStore.getState();
+    if (!userStore.isLoggedIn) return;
+    const synced = await syncConversationToDB(current);
+    if (!synced) showToast(failureMessage);
+  };
+
   return (
     <div className="modal-mask">
       <Modal
@@ -173,10 +193,11 @@ export function SessionConfigModel(props: { onClose: () => void }) {
             text={Locale.Chat.Config.Reset}
             onClick={async () => {
               if (await showConfirm(Locale.Memory.ResetConfirm)) {
-                chatStore.updateTargetSession(
-                  session,
-                  (session) => (session.memoryPrompt = ""),
-                );
+                chatStore.updateTargetSession(session, (session) => {
+                  session.memoryPrompt = "";
+                  session.lastUpdate = Date.now();
+                });
+                void syncCurrentSessionSettings("保存会话设置失败");
               }
             }}
           />,
@@ -203,10 +224,11 @@ export function SessionConfigModel(props: { onClose: () => void }) {
           updateMask={(updater) => {
             const mask = { ...session.mask };
             updater(mask);
-            chatStore.updateTargetSession(
-              session,
-              (session) => (session.mask = mask),
-            );
+            chatStore.updateTargetSession(session, (session) => {
+              session.mask = mask;
+              session.lastUpdate = Date.now();
+            });
+            void syncCurrentSessionSettings("保存会话设置失败");
           }}
           shouldSyncFromGlobal
           extraListItems={
@@ -596,6 +618,15 @@ export function ChatActions(props: {
 
   const isMobileScreen = useMobileScreen();
 
+  const syncExistingSessionSettings = useCallback(async () => {
+    const current = chatStore.currentSession();
+    if (!current.messages?.length) return;
+    const userStore = useUserStore.getState();
+    if (!userStore.isLoggedIn) return;
+    const synced = await syncConversationToDB(current);
+    if (!synced) showToast("保存会话设置失败");
+  }, [chatStore]);
+
   useEffect(() => {
     // 所有模型均支持文件上传
     setShowUploadFile(true);
@@ -615,14 +646,23 @@ export function ChatActions(props: {
         session.mask.modelConfig.providerName = nextModel?.provider
           ?.providerName as ServiceProvider;
         session.mask.syncGlobalConfig = false;
+        session.lastUpdate = Date.now();
       });
+      void syncExistingSessionSettings();
       showToast(
         nextModel?.provider?.providerName == "ByteDance"
           ? nextModel.displayName
           : nextModel.name,
       );
     }
-  }, [chatStore, currentModel, currentProviderName, models, session]);
+  }, [
+    chatStore,
+    currentModel,
+    currentProviderName,
+    models,
+    session,
+    syncExistingSessionSettings,
+  ]);
 
   async function clearSessionMessages() {
     chatStore.updateTargetSession(session, (session) => {
@@ -733,7 +773,9 @@ export function ChatActions(props: {
                 session.mask.modelConfig.providerName =
                   providerName as ServiceProvider;
                 session.mask.syncGlobalConfig = false;
+                session.lastUpdate = Date.now();
               });
+              void syncExistingSessionSettings();
               if (providerName == "ByteDance") {
                 const selectedModel = models.find(
                   (m) =>
@@ -770,7 +812,9 @@ export function ChatActions(props: {
               chatStore.updateTargetSession(session, (session) => {
                 session.mask.modelConfig.size = size;
                 session.mask.syncGlobalConfig = false;
+                session.lastUpdate = Date.now();
               });
+              void syncExistingSessionSettings();
               showToast(size);
             }}
           />
@@ -798,7 +842,9 @@ export function ChatActions(props: {
               chatStore.updateTargetSession(session, (session) => {
                 session.mask.modelConfig.quality = quality;
                 session.mask.syncGlobalConfig = false;
+                session.lastUpdate = Date.now();
               });
+              void syncExistingSessionSettings();
               showToast(quality);
             }}
           />
@@ -826,7 +872,9 @@ export function ChatActions(props: {
               chatStore.updateTargetSession(session, (session) => {
                 session.mask.modelConfig.style = style;
                 session.mask.syncGlobalConfig = false;
+                session.lastUpdate = Date.now();
               });
+              void syncExistingSessionSettings();
               showToast(style);
             }}
           />
@@ -851,6 +899,14 @@ export function EditMessageModal(props: { onClose: () => void }) {
   const session = chatStore.currentSession();
   const [messages, setMessages] = useState(session.messages.slice());
 
+  const syncEditedSession = async () => {
+    const userStore = useUserStore.getState();
+    if (!userStore.isLoggedIn) return true;
+    const synced = await syncConversationToDB(chatStore.currentSession());
+    if (!synced) showToast("保存消息编辑失败");
+    return synced;
+  };
+
   return (
     <div className="modal-mask">
       <Modal
@@ -870,11 +926,12 @@ export function EditMessageModal(props: { onClose: () => void }) {
             text={Locale.UI.Confirm}
             icon={<ConfirmIcon />}
             key="ok"
-            onClick={() => {
-              chatStore.updateTargetSession(
-                session,
-                (session) => (session.messages = messages),
-              );
+            onClick={async () => {
+              chatStore.updateTargetSession(session, (session) => {
+                session.messages = messages;
+                session.lastUpdate = Date.now();
+              });
+              await syncEditedSession();
               props.onClose();
             }}
           />,
@@ -888,12 +945,12 @@ export function EditMessageModal(props: { onClose: () => void }) {
             <input
               type="text"
               value={session.topic}
-              onInput={(e) =>
-                chatStore.updateTargetSession(
-                  session,
-                  (session) => (session.topic = e.currentTarget.value),
-                )
-              }
+              onInput={(e) => {
+                chatStore.updateTargetSession(session, (session) => {
+                  session.topic = e.currentTarget.value;
+                  session.lastUpdate = Date.now();
+                });
+              }}
             ></input>
           </ListItem>
         </List>
@@ -1308,12 +1365,21 @@ function _Chat() {
     }, 30);
   };
 
+  const syncCurrentSessionState = async (failureMessage: string) => {
+    const userStore = useUserStore.getState();
+    if (!userStore.isLoggedIn) return true;
+    const synced = await syncConversationToDB(chatStore.currentSession());
+    if (!synced) showToast(failureMessage);
+    return synced;
+  };
+
   // 停止响应
   const onUserStop = (messageId: string) => {
     ChatControllerPool.stop(session.id, messageId);
   };
 
   useEffect(() => {
+    let syncedFromGlobal = false;
     chatStore.updateTargetSession(session, (session) => {
       const stopTiming = Date.now() - REQUEST_TIMEOUT_MS;
       session.messages.forEach((m) => {
@@ -1335,9 +1401,17 @@ function _Chat() {
 
       // 自动同步 mask 配置到全局配置
       if (session.mask.syncGlobalConfig) {
-        session.mask.modelConfig = { ...config.modelConfig };
+        const nextModelConfig = { ...config.modelConfig };
+        if (!areModelConfigsEqual(session.mask.modelConfig, nextModelConfig)) {
+          session.mask.modelConfig = nextModelConfig;
+          session.lastUpdate = Date.now();
+          syncedFromGlobal = true;
+        }
       }
     });
+    if (syncedFromGlobal && session.messages.length > 0) {
+      void syncCurrentSessionState("保存会话设置失败");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.modelConfig, session]);
 
@@ -1369,16 +1443,17 @@ function _Chat() {
     }
   };
 
-  const deleteMessage = (msgId?: string) => {
-    chatStore.updateTargetSession(
-      session,
-      (session) =>
-        (session.messages = session.messages.filter((m) => m.id !== msgId)),
-    );
+  const deleteMessage = async (msgId?: string, shouldSync = true) => {
+    if (!msgId) return;
+    chatStore.updateTargetSession(session, (session) => {
+      session.messages = session.messages.filter((m) => m.id !== msgId);
+      session.lastUpdate = Date.now();
+    });
+    if (shouldSync) await syncCurrentSessionState("删除消息失败");
   };
 
   const onDelete = (msgId: string) => {
-    deleteMessage(msgId);
+    void deleteMessage(msgId);
   };
 
   const onResend = (message: ChatMessage) => {
@@ -1426,8 +1501,8 @@ function _Chat() {
     }
 
     // 删除原始消息
-    deleteMessage(userMessage.id);
-    deleteMessage(botMessage?.id);
+    void deleteMessage(userMessage.id, false);
+    void deleteMessage(botMessage?.id, false);
 
     // 重新发送消息
     const textContent = getMessageTextContent(userMessage);
@@ -1463,9 +1538,11 @@ function _Chat() {
   };
 
   const onPinMessage = (message: ChatMessage) => {
-    chatStore.updateTargetSession(session, (session) =>
-      session.mask.context.push(message),
-    );
+    chatStore.updateTargetSession(session, (session) => {
+      session.mask.context.push(message);
+      session.lastUpdate = Date.now();
+    });
+    void syncCurrentSessionState("保存置顶消息失败");
 
     showToast(Locale.Chat.Actions.PinToastContent, {
       text: Locale.Chat.Actions.PinToastAction,
@@ -1922,7 +1999,11 @@ function _Chat() {
                                       if (m) {
                                         m.content = newContent;
                                       }
+                                      session.lastUpdate = Date.now();
                                     },
+                                  );
+                                  void syncCurrentSessionState(
+                                    "保存消息编辑失败",
                                   );
                                 }}
                               ></IconButton>
