@@ -383,6 +383,8 @@ export const CSGPT_MODEL_4 = "QWen3-14B-CS4";
 export const CSGPT_MODEL_4_DISPLAY_NAME = "QWen3-14B-CS4";
 export const CSGPT_MODEL_5 = "QWen3-14B-CS5";
 export const CSGPT_MODEL_5_DISPLAY_NAME = "QWen3-14B-CS5";
+export const CSGPT_MODEL_6 = "QWen3-14B-CS6";
+export const CSGPT_MODEL_6_DISPLAY_NAME = "QWen3-14B-CS6";
 
 export const SUMMARIZE_MODEL = "gpt-4o-mini";
 export const GEMINI_SUMMARIZE_MODEL = "gemini-pro";
@@ -395,6 +397,7 @@ export const KnowledgeCutOffDate: Record<string, string> = {
   [CSGPT_MODEL_3]: "2025-05",
   [CSGPT_MODEL_4]: "2025-05",
   [CSGPT_MODEL_5]: "2025-05",
+  [CSGPT_MODEL_6]: "2025-05",
   "gpt-4-turbo": "2023-12",
   "gpt-4-turbo-2024-04-09": "2023-12",
   "gpt-4-turbo-preview": "2023-12",
@@ -725,6 +728,18 @@ export const DEFAULT_MODELS = [
   {
     name: CSGPT_MODEL_5,
     displayName: CSGPT_MODEL_5_DISPLAY_NAME,
+    available: true,
+    sorted: seq++,
+    provider: {
+      id: "csgpt",
+      providerName: "CSGPT",
+      providerType: "csgpt",
+      sorted: 0,
+    },
+  },
+  {
+    name: CSGPT_MODEL_6,
+    displayName: CSGPT_MODEL_6_DISPLAY_NAME,
     available: true,
     sorted: seq++,
     provider: {

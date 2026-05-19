@@ -6,6 +6,7 @@ import {
   CSGPT_MODEL_3,
   CSGPT_MODEL_4,
   CSGPT_MODEL_5,
+  CSGPT_MODEL_6,
 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 
@@ -73,6 +74,13 @@ function getDedicatedCSGPTUpstream(
       apiKey: config.csgptCs5ApiKey,
       upstreamModelName: config.csgptCs5UpstreamModelName,
     },
+    [CSGPT_MODEL_6]: {
+      label: "CS6",
+      model: CSGPT_MODEL_6,
+      baseUrl: config.csgptCs6BaseUrl,
+      apiKey: config.csgptCs6ApiKey,
+      upstreamModelName: config.csgptCs6UpstreamModelName,
+    },
   };
 
   return upstreams[model] ?? null;
@@ -81,7 +89,13 @@ function getDedicatedCSGPTUpstream(
 function getVisibleDedicatedCSGPTUpstreams(
   config: ReturnType<typeof getServerSideConfig>,
 ) {
-  return [CSGPT_MODEL_2, CSGPT_MODEL_3, CSGPT_MODEL_4, CSGPT_MODEL_5]
+  return [
+    CSGPT_MODEL_2,
+    CSGPT_MODEL_3,
+    CSGPT_MODEL_4,
+    CSGPT_MODEL_5,
+    CSGPT_MODEL_6,
+  ]
     .map((model) => getDedicatedCSGPTUpstream(model, config))
     .filter(
       (upstream): upstream is CSGPTUpstream => !!upstream && !!upstream.baseUrl,
