@@ -617,7 +617,7 @@ const en: LocaleType = {
       History: (content: string) =>
         "This is a summary of the chat history as a recap: " + content,
       Topic:
-        'Generate a short conversation title. Summarize only the core topic or key task type, keeping the object and task when possible, for example "deep sea pressure hull design". The title must be a complete noun phrase or task phrase, not a partial sentence, answer body, or truncated sentence. Do not copy text verbatim, and do not include specific numbers, parameters, page numbers, file-name details, long noun strings, or filler openings. Use the same language as the main user content. Output only the title, with no explanation, punctuation, quotation marks, bold text, or extra text. Use 4 to 12 Chinese characters or 3 to 6 English words. Use generic wording for personal identity information.',
+        "Generate a short conversation title. Summarize only the core topic or key task type, keeping the object and task when possible. The title must be a complete noun phrase or task phrase, not a partial sentence, answer body, or truncated sentence. Do not copy text verbatim, and do not include specific numbers, parameters, page numbers, file-name details, long noun strings, or filler openings. Use the same language as the main user content. Output only the title, with no explanation, punctuation, quotation marks, bold text, or extra text. Use 4 to 12 Chinese characters or 3 to 6 English words. Use generic wording for personal identity information.",
       Summarize:
         "Summarize the discussion briefly in 200 words or less to use as a prompt for future context.",
     },
