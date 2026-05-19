@@ -994,7 +994,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.6,
+    version: 3.7,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -1057,12 +1057,15 @@ export const useChatStore = createPersistStore(
         });
       }
 
-      // 版本 3.6：统一会话中模型配置的关键字段与全局默认值一致
-      if (version < 3.6) {
+      // 版本 3.7：统一会话中模型配置的关键字段与全局默认值一致
+      if (version < 3.7) {
         newState.sessions.forEach((s) => {
           normalizeCSGPTModelConfig(s.mask.modelConfig);
-          if (s.mask.modelConfig.max_tokens === 4000) {
-            s.mask.modelConfig.max_tokens = 4096;
+          if (
+            s.mask.modelConfig.max_tokens === 4000 ||
+            s.mask.modelConfig.max_tokens === 4096
+          ) {
+            s.mask.modelConfig.max_tokens = 8192;
           }
           if (
             s.mask.modelConfig.providerName &&

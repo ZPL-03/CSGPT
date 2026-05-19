@@ -57,7 +57,7 @@ export const DEFAULT_CONFIG = {
     providerName: ServiceProvider.CSGPT,
     temperature: 0.5,
     top_p: 1,
-    max_tokens: 4096,
+    max_tokens: 8192,
     presence_penalty: 0,
     frequency_penalty: 0,
     sendMemory: true,
@@ -143,7 +143,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.5,
+    version: 4.6,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -166,7 +166,10 @@ export const useAppConfig = createPersistStore(
       };
       // localStorage 数据与代码默认值合并后，统一规范化关键字段
       normalizeCSGPTModelConfig(merged.modelConfig);
-      if (merged.modelConfig.max_tokens === 4000) {
+      if (
+        merged.modelConfig.max_tokens === 4000 ||
+        merged.modelConfig.max_tokens === 4096
+      ) {
         merged.modelConfig.max_tokens = currentState.modelConfig.max_tokens;
       }
       if (
@@ -232,11 +235,14 @@ export const useAppConfig = createPersistStore(
         normalizeCSGPTModelConfig(state.modelConfig);
       }
 
-      // 版本 4.5：将历史默认值同步到当前版本默认值
-      if (version < 4.5) {
+      // 版本 4.6：将历史默认值同步到当前版本默认值
+      if (version < 4.6) {
         normalizeCSGPTModelConfig(state.modelConfig);
-        if (state.modelConfig.max_tokens === 4000) {
-          state.modelConfig.max_tokens = 4096;
+        if (
+          state.modelConfig.max_tokens === 4000 ||
+          state.modelConfig.max_tokens === 4096
+        ) {
+          state.modelConfig.max_tokens = 8192;
         }
         if (
           state.modelConfig.providerName &&
