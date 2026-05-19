@@ -64,18 +64,26 @@ export async function syncConversationToDB(session: any) {
 // 删除数据库中的对话
 export async function deleteConversationFromDB(sessionId: string) {
   const userStore = useUserStore.getState();
-  if (!userStore.isLoggedIn || !userStore.token) return;
+  if (!userStore.isLoggedIn || !userStore.token) return true;
 
   try {
-    await fetch(`/api/conversations/${sessionId}`, {
+    const response = await fetch(`/api/conversations/${sessionId}`, {
       method: "DELETE",
       cache: "no-store",
       headers: {
         Authorization: `Bearer ${userStore.token}`,
       },
     });
+    if (response.ok || response.status === 404) return true;
+    const detail = await response.text().catch(() => "");
+    console.error("[Sync] Conversation delete rejected:", {
+      status: response.status,
+      detail,
+    });
+    return false;
   } catch (error) {
     console.error("[Sync] Failed to delete conversation:", error);
+    return false;
   }
 }
 

@@ -77,6 +77,15 @@ export type ChatConfig = typeof DEFAULT_CONFIG;
 
 export type ModelConfig = ChatConfig["modelConfig"];
 
+function normalizeCSGPTDefaultMaxTokens(modelConfig: ModelConfig) {
+  const isCSGPTConfig =
+    modelConfig.providerName === ServiceProvider.CSGPT ||
+    modelConfig.model === CSGPT_DEFAULT_MODEL;
+  if (isCSGPTConfig && typeof modelConfig.max_tokens !== "number") {
+    modelConfig.max_tokens = DEFAULT_CONFIG.modelConfig.max_tokens;
+  }
+}
+
 export function limitNumber(
   x: number,
   min: number,
@@ -95,7 +104,7 @@ export const ModalConfigValidator = {
     return x as ModelType;
   },
   max_tokens(x: number) {
-    return limitNumber(x, 0, 512000, 1024);
+    return limitNumber(x, 1, 512000, DEFAULT_CONFIG.modelConfig.max_tokens);
   },
   presence_penalty(x: number) {
     return limitNumber(x, -2, 2, 0);
@@ -143,7 +152,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.6,
+    version: 4.7,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -167,18 +176,13 @@ export const useAppConfig = createPersistStore(
       // localStorage 数据与代码默认值合并后，统一规范化关键字段
       normalizeCSGPTModelConfig(merged.modelConfig);
       if (
-        merged.modelConfig.max_tokens === 4000 ||
-        merged.modelConfig.max_tokens === 4096
-      ) {
-        merged.modelConfig.max_tokens = currentState.modelConfig.max_tokens;
-      }
-      if (
         merged.modelConfig.providerName &&
         merged.modelConfig.providerName !== ServiceProvider.CSGPT &&
         merged.modelConfig.model === CSGPT_DEFAULT_MODEL
       ) {
         merged.modelConfig.providerName = ServiceProvider.CSGPT;
       }
+      normalizeCSGPTDefaultMaxTokens(merged.modelConfig);
       return merged;
     },
 
@@ -235,15 +239,9 @@ export const useAppConfig = createPersistStore(
         normalizeCSGPTModelConfig(state.modelConfig);
       }
 
-      // 版本 4.6：将历史默认值同步到当前版本默认值
-      if (version < 4.6) {
+      // 版本 4.7：补齐 CSGPT 缺失的输出预算
+      if (version < 4.7) {
         normalizeCSGPTModelConfig(state.modelConfig);
-        if (
-          state.modelConfig.max_tokens === 4000 ||
-          state.modelConfig.max_tokens === 4096
-        ) {
-          state.modelConfig.max_tokens = 8192;
-        }
         if (
           state.modelConfig.providerName &&
           state.modelConfig.providerName !== ServiceProvider.CSGPT
@@ -251,6 +249,7 @@ export const useAppConfig = createPersistStore(
           state.modelConfig.providerName = ServiceProvider.CSGPT;
           state.modelConfig.model = CSGPT_DEFAULT_MODEL;
         }
+        normalizeCSGPTDefaultMaxTokens(state.modelConfig);
       }
 
       return state as any;

@@ -623,7 +623,7 @@ export function ChatActions(props: {
     }
   }, [chatStore, currentModel, currentProviderName, models, session]);
 
-  function clearSessionMessages() {
+  async function clearSessionMessages() {
     chatStore.updateTargetSession(session, (session) => {
       session.messages = [];
       session.memoryPrompt = "";
@@ -631,7 +631,11 @@ export function ChatActions(props: {
       session.lastSummarizeIndex = 0;
       session.lastUpdate = Date.now();
     });
-    syncConversationToDB(chatStore.currentSession());
+    const userStore = useUserStore.getState();
+    if (userStore.isLoggedIn) {
+      const synced = await syncConversationToDB(chatStore.currentSession());
+      if (!synced) showToast("清除聊天记录失败");
+    }
   }
 
   return (
@@ -1212,7 +1216,7 @@ function _Chat() {
     newm: () => navigate(Path.NewChat),
     prev: () => chatStore.nextSession(-1),
     next: () => chatStore.nextSession(1),
-    clear: () => {
+    clear: async () => {
       chatStore.updateTargetSession(session, (session) => {
         session.messages = [];
         session.memoryPrompt = "";
@@ -1220,7 +1224,11 @@ function _Chat() {
         session.lastSummarizeIndex = 0;
         session.lastUpdate = Date.now();
       });
-      syncConversationToDB(chatStore.currentSession());
+      const userStore = useUserStore.getState();
+      if (userStore.isLoggedIn) {
+        const synced = await syncConversationToDB(chatStore.currentSession());
+        if (!synced) showToast("清除聊天记录失败");
+      }
     },
     fork: () => chatStore.forkSession(),
     del: () => chatStore.deleteSession(chatStore.currentSessionIndex),
@@ -1327,7 +1335,7 @@ function _Chat() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [config.modelConfig, session]);
 
   // 检查是否应该发送消息
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1661,7 +1669,7 @@ function _Chat() {
   const [showShortcutKeyModal, setShowShortcutKeyModal] = useState(false);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
       // 打开新聊天 command + shift + o
       if (
         (event.metaKey || event.ctrlKey) &&
@@ -1726,7 +1734,10 @@ function _Chat() {
             session.clearContextIndex = session.messages.length;
             session.memoryPrompt = ""; // 清空记忆
           }
+          session.lastUpdate = Date.now();
         });
+        const synced = await syncConversationToDB(chatStore.currentSession());
+        if (!synced) showToast("清除上下文失败");
       }
     };
 

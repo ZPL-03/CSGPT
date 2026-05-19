@@ -107,6 +107,7 @@ export interface ChatSession {
 }
 
 export const DEFAULT_TOPIC = Locale.Store.DefaultTopic;
+const CSGPT_LOCAL_TOPIC_MIN_LENGTH = 4;
 export const BOT_HELLO: ChatMessage = createMessage({
   role: "assistant",
   content: Locale.Store.BotHello,
@@ -170,6 +171,17 @@ function countMessages(msgs: ChatMessage[]) {
     (pre, cur) => pre + estimateTokenLength(getMessageTextContent(cur)),
     0,
   );
+}
+
+function buildLocalCSGPTTopic(messages: ChatMessage[]) {
+  for (const message of messages) {
+    if (message.role !== "user" || message.isError) continue;
+    const text = getMessageTextContent(message).replace(/\s+/g, " ").trim();
+    if (text.length >= CSGPT_LOCAL_TOPIC_MIN_LENGTH) {
+      return trimTopic(text).slice(0, 24) || DEFAULT_TOPIC;
+    }
+  }
+  return DEFAULT_TOPIC;
 }
 
 function fillTemplateWith(input: string, modelConfig: ModelConfig) {
@@ -373,9 +385,6 @@ export const useChatStore = createPersistStore(
           currentSessionIndex: 0,
           sessions: [session].concat(state.sessions),
         }));
-
-        // 同步到数据库
-        syncConversationToDB(session);
       },
 
       nextSession(delta: number) {
@@ -385,21 +394,28 @@ export const useChatStore = createPersistStore(
         get().selectSession(limit(i + delta));
       },
 
-      deleteSession(index: number) {
+      async deleteSession(index: number) {
         const deletingLastSession = get().sessions.length === 1;
         const deletedSession = get().sessions.at(index);
 
         if (!deletedSession) return;
 
-        // 从数据库删除
-        deleteConversationFromDB(deletedSession.id);
+        const deleted = await deleteConversationFromDB(deletedSession.id);
+        if (!deleted) {
+          showToast("删除会话失败");
+          return;
+        }
 
         const sessions = get().sessions.slice();
-        sessions.splice(index, 1);
+        const deleteIndex = sessions.findIndex(
+          (session) => session.id === deletedSession.id,
+        );
+        if (deleteIndex < 0) return;
+        sessions.splice(deleteIndex, 1);
 
         const currentIndex = get().currentSessionIndex;
         let nextIndex = Math.min(
-          currentIndex - Number(index < currentIndex),
+          currentIndex - Number(deleteIndex < currentIndex),
           sessions.length - 1,
         );
 
@@ -425,6 +441,7 @@ export const useChatStore = createPersistStore(
             text: Locale.Home.Revert,
             onClick() {
               set(() => restoreState);
+              syncConversationToDB(deletedSession);
             },
           },
           5000,
@@ -799,12 +816,25 @@ export const useChatStore = createPersistStore(
 
         // 对话超过 50 词后自动生成标题摘要
         const SUMMARIZE_MIN_LEN = 50;
-        if (
+        const shouldGenerateTitle =
           (config.enableAutoGenerateTitle &&
             session.topic === DEFAULT_TOPIC &&
             countMessages(messages) >= SUMMARIZE_MIN_LEN) ||
-          refreshTitle
+          refreshTitle;
+        if (
+          shouldGenerateTitle &&
+          modelConfig.providerName === ServiceProvider.CSGPT
         ) {
+          const topic = buildLocalCSGPTTopic(messages);
+          get().updateTargetSession(session, (session) => {
+            session.topic = topic;
+            session.lastUpdate = Date.now();
+          });
+          const updated = get().sessions.find(
+            (s: ChatSession) => s.id === session.id,
+          );
+          if (updated) syncConversationToDB(updated);
+        } else if (shouldGenerateTitle) {
           const startIndex = Math.max(
             0,
             messages.length - modelConfig.historyMessageCount,
@@ -854,7 +884,11 @@ export const useChatStore = createPersistStore(
 
         const historyMsgLength = countMessages(toBeSummarizedMsgs);
 
-        if (historyMsgLength > (modelConfig?.max_tokens || 4000)) {
+        if (
+          historyMsgLength >
+          (modelConfig?.max_tokens ||
+            useAppConfig.getState().modelConfig.max_tokens)
+        ) {
           const n = toBeSummarizedMsgs.length;
           toBeSummarizedMsgs = toBeSummarizedMsgs.slice(
             Math.max(0, n - modelConfig.historyMessageCount),
@@ -994,7 +1028,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.7,
+    version: 3.8,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -1017,14 +1051,14 @@ export const useChatStore = createPersistStore(
       }
 
       if (version < 3) {
-        // 迁移旧 ID 到 nanoid
+        // 迁移历史 ID 到 nanoid
         newState.sessions.forEach((s) => {
           s.id = nanoid();
           s.messages.forEach((m) => (m.id = nanoid()));
         });
       }
 
-      // 旧会话迁移：启用 enableInjectSystemPrompts 属性
+      // 会话数据迁移：启用 enableInjectSystemPrompts 属性
       if (version < 3.1) {
         newState.sessions.forEach((s) => {
           if (
@@ -1057,15 +1091,16 @@ export const useChatStore = createPersistStore(
         });
       }
 
-      // 版本 3.7：统一会话中模型配置的关键字段与全局默认值一致
-      if (version < 3.7) {
+      // 版本 3.8：补齐 CSGPT 会话缺失的输出预算
+      if (version < 3.8) {
         newState.sessions.forEach((s) => {
           normalizeCSGPTModelConfig(s.mask.modelConfig);
           if (
-            s.mask.modelConfig.max_tokens === 4000 ||
-            s.mask.modelConfig.max_tokens === 4096
+            s.mask.modelConfig.providerName === ServiceProvider.CSGPT &&
+            typeof s.mask.modelConfig.max_tokens !== "number"
           ) {
-            s.mask.modelConfig.max_tokens = 8192;
+            s.mask.modelConfig.max_tokens =
+              useAppConfig.getState().modelConfig.max_tokens;
           }
           if (
             s.mask.modelConfig.providerName &&
