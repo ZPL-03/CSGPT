@@ -39,7 +39,7 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - **第三模型**：QWen3-14B-CS3（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 - **会话持久化**：用户发送消息后将聊天记录和附件引用写入 PostgreSQL
-- **文件解析**：选择附件时在浏览器内解析文本、图片 OCR、DOCX、PDF、XLSX/XLS、ODS、PPTX，界面显示解析进度
+- **文件解析**：选择附件时在浏览器内解析文本、代码、表格、工作簿、图片 OCR、PDF、Word 文档、演示文稿和 OLE 复合文档可读文本，界面显示解析进度
 
 ### 输出长度与上下文
 
@@ -175,7 +175,7 @@ CSGPT/
 │   ├── components/    # React 组件
 │   ├── config/        # 配置文件
 │   ├── masks/         # 预设模板
-│   ├── prompts/       # 系统提示词
+│   ├── prompts/       # CSGPT 系统提示词
 │   ├── utils/         # 文件解析、请求流、同步工具
 │   └── store/         # 状态管理
 ├── prisma/            # PostgreSQL 数据模型
@@ -213,7 +213,7 @@ npm run lint
 npm run build
 ```
 
-### 自定义系统提示词
+### CSGPT 系统提示词
 
 编辑 `app/prompts/csgpt.ts` 中的 `CSGPT_SYSTEM_PROMPT` 常量。
 

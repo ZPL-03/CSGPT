@@ -616,7 +616,7 @@ const en: LocaleType = {
       History: (content: string) =>
         "This is a summary of the chat history as a recap: " + content,
       Topic:
-        "Please generate a four to five word title summarizing our conversation without any lead-in, punctuation, quotation marks, periods, symbols, bold text, or additional text. Remove enclosing quotation marks.",
+        "Generate a short conversation title. Prefer the topic or task type instead of copying text verbatim. Use the same language as the main user content. Output only the title, with no explanation, punctuation, quotation marks, bold text, or extra text. Use 4 to 12 Chinese characters or 3 to 6 English words. Use generic wording for personal identity information.",
       Summarize:
         "Summarize the discussion briefly in 200 words or less to use as a prompt for future context.",
     },

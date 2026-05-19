@@ -103,9 +103,9 @@ export interface ChatSession {
 }
 
 export const DEFAULT_TOPIC = Locale.Store.DefaultTopic;
-const TOPIC_MIN_LENGTH = 4;
 const TOPIC_MAX_LENGTH = 24;
 const STORE_SCHEMA_VERSION = 1;
+const titleGenerationSessions = new Set<string>();
 export const BOT_HELLO: ChatMessage = createMessage({
   role: "assistant",
   content: Locale.Store.BotHello,
@@ -168,73 +168,47 @@ function countMessages(msgs: ChatMessage[]) {
   );
 }
 
-function normalizeTopicTitle(topic: string, minLength = 1) {
-  const title = trimTopic(topic.replace(/\s+/g, " ").trim()).slice(
+function getTitleSourceMessage(messages: ChatMessage[]) {
+  return messages.find(
+    (message) => message.role === "user" && !message.isError,
+  );
+}
+
+function buildInitialTitleRequestMessages(messages: ChatMessage[]) {
+  const firstUserMessage = getTitleSourceMessage(messages);
+  if (!firstUserMessage) return [];
+
+  return [
+    createMessage({
+      role: "system",
+      content: Locale.Store.Prompt.Topic,
+      date: "",
+    }),
+    firstUserMessage,
+  ];
+}
+
+function buildConversationTitleRequestMessages(messages: ChatMessage[]) {
+  const visibleMessages = messages.filter(
+    (message) => !message.isError && message.role !== "system",
+  );
+  if (visibleMessages.length === 0) return [];
+
+  return visibleMessages.concat(
+    createMessage({
+      role: "system",
+      content: Locale.Store.Prompt.Topic,
+      date: "",
+    }),
+  );
+}
+
+function normalizeGeneratedTitle(title: string) {
+  const normalized = trimTopic(title.replace(/\s+/g, " ").trim()).slice(
     0,
     TOPIC_MAX_LENGTH,
   );
-  return title.length >= minLength ? title : DEFAULT_TOPIC;
-}
-
-function getAttachmentNames(content: ChatMessage["content"]) {
-  if (typeof content === "string") return [];
-
-  return content
-    .map((item) => item.file_url?.name || item.image_url?.name || "")
-    .map((name) => name.trim())
-    .filter(Boolean);
-}
-
-function cleanUserTitleText(text: string) {
-  let normalized = text.replace(/\s+/g, " ").trim();
-  const actionMatch = normalized.match(
-    /^(?:请你|请|麻烦你|麻烦|帮我|帮忙)?(?:先)?(分析|解释|总结|概括|说明|阅读|查看|看看|看一下)(?:一下|下)?\s*(.+)$/u,
-  );
-  if (actionMatch?.[2]) {
-    return `${actionMatch[2].trim()}${actionMatch[1]}`;
-  }
-
-  normalized = normalized.replace(
-    /^(?:请你|请|麻烦你|麻烦|帮我|帮忙|请问|能否|能不能|可以)?\s*/u,
-    "",
-  );
-  return normalized;
-}
-
-function chooseTitleSegment(text: string) {
-  const sentence =
-    text
-      .split(/[。！？!?；;\n\r]+/u)
-      .map((part) => part.trim())
-      .find((part) => part.length >= TOPIC_MIN_LENGTH) || text;
-
-  if (sentence.length <= TOPIC_MAX_LENGTH) return sentence;
-
-  return (
-    sentence
-      .split(/[，,：:、]+/u)
-      .map((part) => part.trim())
-      .find((part) => part.length >= TOPIC_MIN_LENGTH) || sentence
-  );
-}
-
-function buildConversationTopic(messages: ChatMessage[]) {
-  for (const message of messages) {
-    if (message.role !== "user" || message.isError) continue;
-
-    const text = getMessageTextContent(message);
-    const titleSource = chooseTitleSegment(cleanUserTitleText(text));
-    const title = normalizeTopicTitle(titleSource, TOPIC_MIN_LENGTH);
-    if (title !== DEFAULT_TOPIC) {
-      return title;
-    }
-
-    const attachmentName = getAttachmentNames(message.content)[0];
-    if (attachmentName) {
-      return normalizeTopicTitle(`文件：${attachmentName}`, TOPIC_MIN_LENGTH);
-    }
-  }
-  return DEFAULT_TOPIC;
+  return normalized || DEFAULT_TOPIC;
 }
 
 function normalizeChatMessage(message: Partial<ChatMessage>): ChatMessage {
@@ -668,18 +642,7 @@ export const useChatStore = createPersistStore(
           session.messages = session.messages.concat([userMessage, botMessage]);
           session.lastUpdate = Date.now();
         });
-        if (
-          useAppConfig.getState().enableAutoGenerateTitle &&
-          session.topic === DEFAULT_TOPIC
-        ) {
-          const topic = buildConversationTopic(session.messages);
-          if (topic !== DEFAULT_TOPIC) {
-            get().updateTargetSession(session, (session) => {
-              session.topic = topic;
-              session.lastUpdate = Date.now();
-            });
-          }
-        }
+        get().generateSessionTitle(false, session);
         await syncConversationToDB(session);
 
         try {
@@ -910,13 +873,76 @@ export const useChatStore = createPersistStore(
         });
       },
 
-      summarizeSession(
+      generateSessionTitle(
         refreshTitle: boolean = false,
         targetSession: ChatSession,
       ) {
         const config = useAppConfig.getState();
         const session = targetSession;
+        const shouldGenerateTitle =
+          refreshTitle ||
+          (config.enableAutoGenerateTitle && session.topic === DEFAULT_TOPIC);
+        if (!shouldGenerateTitle || titleGenerationSessions.has(session.id)) {
+          return;
+        }
+
         const modelConfig = session.mask.modelConfig;
+        const titleMessages = refreshTitle
+          ? buildConversationTitleRequestMessages(session.messages)
+          : buildInitialTitleRequestMessages(session.messages);
+        if (titleMessages.length === 0 || isDalle3(modelConfig.model)) {
+          return;
+        }
+
+        titleGenerationSessions.add(session.id);
+
+        const [model, providerName] = modelConfig.compressModel
+          ? [modelConfig.compressModel, modelConfig.compressProviderName]
+          : getSummarizeModel(
+              session.mask.modelConfig.model,
+              session.mask.modelConfig.providerName,
+            );
+        const api: ClientApi = getClientApi(providerName as ServiceProvider);
+        const { max_tokens, ...modelcfg } = modelConfig;
+        api.llm.chat({
+          messages: titleMessages,
+          config: {
+            ...modelcfg,
+            stream: false,
+            model,
+            providerName,
+          },
+          onFinish(message, responseRes) {
+            titleGenerationSessions.delete(session.id);
+            if (responseRes?.status !== 200) return;
+
+            const topic = normalizeGeneratedTitle(message);
+            if (topic === DEFAULT_TOPIC && !refreshTitle) return;
+
+            get().updateTargetSession(session, (session) => {
+              session.topic = topic;
+              session.lastUpdate = Date.now();
+            });
+            const updated = get().sessions.find(
+              (s: ChatSession) => s.id === session.id,
+            );
+            if (updated) syncConversationToDB(updated);
+          },
+          onError(err) {
+            titleGenerationSessions.delete(session.id);
+            console.error("[Title] ", err);
+          },
+        });
+      },
+
+      summarizeSession(
+        refreshTitle: boolean = false,
+        targetSession: ChatSession,
+      ) {
+        const session = targetSession;
+        const modelConfig = session.mask.modelConfig;
+        get().generateSessionTitle(refreshTitle, session);
+
         // dall-e-3 模型跳过摘要
         if (isDalle3(modelConfig.model)) {
           return;
@@ -931,26 +957,7 @@ export const useChatStore = createPersistStore(
             );
         const api: ClientApi = getClientApi(providerName as ServiceProvider);
 
-        // 错误消息过滤
         const messages = session.messages;
-
-        const shouldGenerateTitle =
-          refreshTitle ||
-          (config.enableAutoGenerateTitle && session.topic === DEFAULT_TOPIC);
-
-        if (shouldGenerateTitle) {
-          const topic = buildConversationTopic(messages);
-          if (topic !== DEFAULT_TOPIC || refreshTitle) {
-            get().updateTargetSession(session, (session) => {
-              session.topic = topic;
-              session.lastUpdate = Date.now();
-            });
-            const updated = get().sessions.find(
-              (s: ChatSession) => s.id === session.id,
-            );
-            if (updated) syncConversationToDB(updated);
-          }
-        }
         const summarizeIndex = Math.max(
           session.lastSummarizeIndex,
           session.clearContextIndex ?? 0,
