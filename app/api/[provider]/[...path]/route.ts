@@ -4,6 +4,8 @@ import {
   CSGPT_DEFAULT_MODEL,
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
+  CSGPT_MODEL_4,
+  CSGPT_MODEL_5,
 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 
@@ -28,12 +30,62 @@ function getPublicCSGPTModel(config: ReturnType<typeof getServerSideConfig>) {
   return config.csgptModelName || CSGPT_DEFAULT_MODEL;
 }
 
-function isCS2Model(model: string): boolean {
-  return model === CSGPT_MODEL_2;
+type CSGPTUpstream = {
+  label: string;
+  model: string;
+  baseUrl?: string;
+  apiKey?: string;
+  upstreamModelName?: string;
+};
+
+function getDedicatedCSGPTUpstream(
+  model: string | undefined,
+  config: ReturnType<typeof getServerSideConfig>,
+): CSGPTUpstream | null {
+  if (!model) return null;
+
+  const upstreams: Record<string, CSGPTUpstream> = {
+    [CSGPT_MODEL_2]: {
+      label: "CS2",
+      model: CSGPT_MODEL_2,
+      baseUrl: config.csgptCs2BaseUrl,
+      apiKey: config.csgptCs2ApiKey,
+      upstreamModelName: config.csgptCs2UpstreamModelName,
+    },
+    [CSGPT_MODEL_3]: {
+      label: "CS3",
+      model: CSGPT_MODEL_3,
+      baseUrl: config.csgptCs3BaseUrl,
+      apiKey: config.csgptCs3ApiKey,
+      upstreamModelName: config.csgptCs3UpstreamModelName,
+    },
+    [CSGPT_MODEL_4]: {
+      label: "CS4",
+      model: CSGPT_MODEL_4,
+      baseUrl: config.csgptCs4BaseUrl,
+      apiKey: config.csgptCs4ApiKey,
+      upstreamModelName: config.csgptCs4UpstreamModelName,
+    },
+    [CSGPT_MODEL_5]: {
+      label: "CS5",
+      model: CSGPT_MODEL_5,
+      baseUrl: config.csgptCs5BaseUrl,
+      apiKey: config.csgptCs5ApiKey,
+      upstreamModelName: config.csgptCs5UpstreamModelName,
+    },
+  };
+
+  return upstreams[model] ?? null;
 }
 
-function isCS3Model(model: string): boolean {
-  return model === CSGPT_MODEL_3;
+function getVisibleDedicatedCSGPTUpstreams(
+  config: ReturnType<typeof getServerSideConfig>,
+) {
+  return [CSGPT_MODEL_2, CSGPT_MODEL_3, CSGPT_MODEL_4, CSGPT_MODEL_5]
+    .map((model) => getDedicatedCSGPTUpstream(model, config))
+    .filter(
+      (upstream): upstream is CSGPTUpstream => !!upstream && !!upstream.baseUrl,
+    );
 }
 
 function resolveUpstreamCSGPTModel(
@@ -42,14 +94,9 @@ function resolveUpstreamCSGPTModel(
 ) {
   const publicDefaultModel = getPublicCSGPTModel(config);
 
-  // CS2 模型使用独立上游配置
-  if (requestedModel && isCS2Model(requestedModel)) {
-    return config.csgptCs2UpstreamModelName || requestedModel;
-  }
-
-  // CS3 模型使用独立上游配置
-  if (requestedModel && isCS3Model(requestedModel)) {
-    return config.csgptCs3UpstreamModelName || requestedModel;
+  const dedicatedUpstream = getDedicatedCSGPTUpstream(requestedModel, config);
+  if (dedicatedUpstream) {
+    return dedicatedUpstream.upstreamModelName || requestedModel;
   }
 
   if (!requestedModel || requestedModel === publicDefaultModel) {
@@ -281,27 +328,14 @@ async function handleModelsRequest(
         parent: null,
       },
     ];
-    // CS2 上游配置存在时返回 CS2 模型。
-    if (config.csgptCs2BaseUrl || config.csgptCs2ApiKey) {
+    for (const upstream of getVisibleDedicatedCSGPTUpstreams(config)) {
       data.push({
-        id: CSGPT_MODEL_2,
+        id: upstream.model,
         object: "model",
         created: Date.now(),
         owned_by: "csgpt",
         permission: [],
-        root: CSGPT_MODEL_2,
-        parent: null,
-      });
-    }
-    // CS3 上游配置存在时返回 CS3 模型。
-    if (config.csgptCs3BaseUrl || config.csgptCs3ApiKey) {
-      data.push({
-        id: CSGPT_MODEL_3,
-        object: "model",
-        created: Date.now(),
-        owned_by: "csgpt",
-        permission: [],
-        root: CSGPT_MODEL_3,
+        root: upstream.model,
         parent: null,
       });
     }
@@ -327,20 +361,19 @@ async function handleModelsRequest(
   }
 }
 
-// CS2 模型：转发到 OpenAI 格式接口
-async function handleCS2ChatCompletions(
+// CSGPT 独立上游模型转发到 OpenAI 兼容接口。
+async function handleDedicatedCSGPTChatCompletions(
   config: ReturnType<typeof getServerSideConfig>,
+  upstream: CSGPTUpstream,
   bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
 ) {
   const { messages, stream, model, rest } = bodyData;
-  const baseUrl = config.csgptCs2BaseUrl;
-  if (!baseUrl) {
+  if (!upstream.baseUrl) {
     return NextResponse.json(
-      { error: true, message: "CS2 后端地址未配置" },
+      { error: true, message: `${upstream.label} 后端地址未配置` },
       { status: 500 },
     );
   }
-  const apiKey = config.csgptCs2ApiKey || "";
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
 
   const processedMessages = [...messages];
@@ -354,107 +387,22 @@ async function handleCS2ChatCompletions(
     });
   }
 
-  const apiUrl = joinUrl(baseUrl, "chat/completions");
+  const apiUrl = joinUrl(upstream.baseUrl, "chat/completions");
   const upstreamMessages = normalizeMessagesToText(processedMessages);
 
-  const cs2Headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (apiKey) {
-    cs2Headers["Authorization"] = `Bearer ${apiKey}`;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(apiUrl, {
-      method: "POST",
-      headers: cs2Headers,
-      body: JSON.stringify({
-        model: upstreamModel,
-        messages: upstreamMessages,
-        stream,
-        ...rest,
-      }),
-    });
-  } catch (fetchError: any) {
-    console.error("[CS2 API] 网络请求失败:", fetchError.message);
-    return NextResponse.json(
-      { error: true, message: `无法连接到 CS2 后端: ${fetchError.message}` },
-      { status: 502 },
-    );
-  }
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    return NextResponse.json(
-      {
-        error: true,
-        message: `CS2 后端错误: ${response.status}`,
-        detail: errorText,
-      },
-      { status: response.status },
-    );
-  }
-
-  if (stream && response.body) {
-    return new Response(response.body, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
-  }
-
-  const data = await response.json();
-  return NextResponse.json(data);
-}
-
-// CS3 模型：转发到 OpenAI 格式接口
-async function handleCS3ChatCompletions(
-  config: ReturnType<typeof getServerSideConfig>,
-  bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
-) {
-  const { messages, stream, model, rest } = bodyData;
-  const baseUrl = config.csgptCs3BaseUrl;
-  if (!baseUrl) {
-    return NextResponse.json(
-      { error: true, message: "CS3 后端地址未配置" },
-      { status: 500 },
-    );
-  }
-  const apiKey = config.csgptCs3ApiKey || "";
-  const upstreamModel = resolveUpstreamCSGPTModel(model, config);
-
-  const processedMessages = [...messages];
-  const hasSystemMessage = processedMessages.some(
-    (msg: any) => msg.role === "system",
-  );
-  if (!hasSystemMessage) {
-    processedMessages.unshift({
-      role: "system",
-      content: CSGPT_SYSTEM_PROMPT,
-    });
-  }
-
-  const apiUrl = joinUrl(baseUrl, "chat/completions");
-  const upstreamMessages = normalizeMessagesToText(processedMessages);
-
-  const cs3Headers: Record<string, string> = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "User-Agent": "CSGPT/1.0",
   };
-  if (apiKey) {
-    cs3Headers["Authorization"] = `Bearer ${apiKey}`;
+  if (upstream.apiKey) {
+    headers["Authorization"] = `Bearer ${upstream.apiKey}`;
   }
 
   let response: Response;
   try {
     response = await fetch(apiUrl, {
       method: "POST",
-      headers: cs3Headers,
+      headers,
       body: JSON.stringify({
         model: upstreamModel,
         messages: upstreamMessages,
@@ -463,9 +411,12 @@ async function handleCS3ChatCompletions(
       }),
     });
   } catch (fetchError: any) {
-    console.error("[CS3 API] 网络请求失败:", fetchError.message);
+    console.error(`[${upstream.label} API] 网络请求失败:`, fetchError.message);
     return NextResponse.json(
-      { error: true, message: `无法连接到 CS3 后端: ${fetchError.message}` },
+      {
+        error: true,
+        message: `无法连接到 ${upstream.label} 后端: ${fetchError.message}`,
+      },
       { status: 502 },
     );
   }
@@ -475,7 +426,7 @@ async function handleCS3ChatCompletions(
     return NextResponse.json(
       {
         error: true,
-        message: `CS3 后端错误: ${response.status}`,
+        message: `${upstream.label} 后端错误: ${response.status}`,
         detail: errorText,
       },
       { status: response.status },
@@ -508,19 +459,11 @@ async function handleChatCompletions(
   const body = await req.json();
   const { messages, stream = true, model, ...rest } = body;
 
-  // CS2 模型：路由到独立上游
-  if (backend.isCSGPT && model && isCS2Model(model)) {
-    return handleCS2ChatCompletions(config, {
-      messages,
-      stream,
-      model,
-      rest,
-    });
-  }
-
-  // CS3 模型：路由到独立上游
-  if (backend.isCSGPT && model && isCS3Model(model)) {
-    return handleCS3ChatCompletions(config, {
+  const dedicatedUpstream = backend.isCSGPT
+    ? getDedicatedCSGPTUpstream(model, config)
+    : null;
+  if (dedicatedUpstream) {
+    return handleDedicatedCSGPTChatCompletions(config, dedicatedUpstream, {
       messages,
       stream,
       model,
