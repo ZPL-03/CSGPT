@@ -1,0 +1,13 @@
+.git/
+.github/
+.next/
+.logs/
+coverage/
+node_modules/
+
+.env
+.env.local
+.env.*.local
+
+data/csllm_cpv/rag/
+data/csllm_cpv/kg/relations.jsonl
