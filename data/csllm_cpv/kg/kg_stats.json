@@ -1,0 +1,563 @@
+{
+  "total_entities": 1763,
+  "total_relations": 347609,
+  "entity_counts": {
+    "Material": 52,
+    "Structure": 35,
+    "FailureMode": 31,
+    "ManufacturingProcess": 27,
+    "Standard": 19,
+    "Property": 38,
+    "Application": 25,
+    "TaskCategory": 18,
+    "Literature": 1481,
+    "LoadCase": 2,
+    "DesignFormula": 9,
+    "StiffnessCoeff": 12,
+    "DesignVariable": 9,
+    "VerificationMethod": 5
+  },
+  "relation_type_counts": {
+    "CATEGORIZED_AS": 78168,
+    "EXPERIENCES": 79423,
+    "HAS_PROPERTY": 95130,
+    "USED_IN": 7174,
+    "PREDICTED_BY": 29426,
+    "GOVERNED_BY": 4373,
+    "VERIFIED_BY": 14727,
+    "FOLLOWS_STANDARD": 11504,
+    "REQUIRES": 15937,
+    "CONSTRAINS": 3858,
+    "UNDER_LOAD": 7889
+  },
+  "top_entities": {
+    "Material": [
+      {
+        "name": "Composite Material",
+        "count": 5099
+      },
+      {
+        "name": "CFRP",
+        "count": 2194
+      },
+      {
+        "name": "Carbon Fiber",
+        "count": 1973
+      },
+      {
+        "name": "Glass Fiber",
+        "count": 630
+      },
+      {
+        "name": "Epoxy Resin",
+        "count": 629
+      },
+      {
+        "name": "T700",
+        "count": 589
+      },
+      {
+        "name": "GFRP",
+        "count": 450
+      },
+      {
+        "name": "IM7",
+        "count": 431
+      },
+      {
+        "name": "Stainless Steel",
+        "count": 419
+      },
+      {
+        "name": "Aluminum Alloy",
+        "count": 363
+      }
+    ],
+    "Structure": [
+      {
+        "name": "Laminate",
+        "count": 9244
+      },
+      {
+        "name": "Pressure Vessel",
+        "count": 3528
+      },
+      {
+        "name": "Layup",
+        "count": 2503
+      },
+      {
+        "name": "Liner",
+        "count": 1970
+      },
+      {
+        "name": "Composite Pressure Vessel",
+        "count": 1647
+      },
+      {
+        "name": "COPV",
+        "count": 1266
+      },
+      {
+        "name": "Dome",
+        "count": 1256
+      },
+      {
+        "name": "Boss",
+        "count": 1229
+      },
+      {
+        "name": "Composite Overwrap",
+        "count": 1086
+      },
+      {
+        "name": "Cylindrical Shell",
+        "count": 1035
+      }
+    ],
+    "FailureMode": [
+      {
+        "name": "Failure",
+        "count": 9744
+      },
+      {
+        "name": "Damage",
+        "count": 8096
+      },
+      {
+        "name": "Buckling",
+        "count": 6015
+      },
+      {
+        "name": "Crack",
+        "count": 3284
+      },
+      {
+        "name": "Delamination",
+        "count": 3135
+      },
+      {
+        "name": "Fatigue",
+        "count": 1829
+      },
+      {
+        "name": "Burst",
+        "count": 1659
+      },
+      {
+        "name": "Hashin Criterion",
+        "count": 974
+      },
+      {
+        "name": "Debonding",
+        "count": 933
+      },
+      {
+        "name": "Impact Damage",
+        "count": 845
+      }
+    ],
+    "ManufacturingProcess": [
+      {
+        "name": "Curing",
+        "count": 1097
+      },
+      {
+        "name": "Filament Winding",
+        "count": 918
+      },
+      {
+        "name": "Resin Transfer Molding",
+        "count": 801
+      },
+      {
+        "name": "Prepreg",
+        "count": 648
+      },
+      {
+        "name": "Fiber Placement",
+        "count": 526
+      },
+      {
+        "name": "Mandrel",
+        "count": 462
+      },
+      {
+        "name": "Automated Fiber Placement",
+        "count": 406
+      },
+      {
+        "name": "Autoclave",
+        "count": 351
+      },
+      {
+        "name": "Vacuum Bag",
+        "count": 156
+      },
+      {
+        "name": "Curing Temperature",
+        "count": 79
+      }
+    ],
+    "Standard": [
+      {
+        "name": "PED",
+        "count": 6178
+      },
+      {
+        "name": "ADR",
+        "count": 845
+      },
+      {
+        "name": "ASTM D",
+        "count": 298
+      },
+      {
+        "name": "GB/T",
+        "count": 100
+      },
+      {
+        "name": "CGA",
+        "count": 75
+      },
+      {
+        "name": "ASTM D3039",
+        "count": 52
+      },
+      {
+        "name": "ASTM D7136",
+        "count": 27
+      },
+      {
+        "name": "ASTM D5766",
+        "count": 24
+      },
+      {
+        "name": "ASTM D7137",
+        "count": 23
+      },
+      {
+        "name": "ASTM D3518",
+        "count": 17
+      }
+    ],
+    "Property": [
+      {
+        "name": "Thermal Expansion Coefficient",
+        "count": 12757
+      },
+      {
+        "name": "Stress",
+        "count": 9919
+      },
+      {
+        "name": "Strain",
+        "count": 8398
+      },
+      {
+        "name": "Stiffness",
+        "count": 5728
+      },
+      {
+        "name": "Density",
+        "count": 1929
+      },
+      {
+        "name": "Yield",
+        "count": 1630
+      },
+      {
+        "name": "Tensile Strength",
+        "count": 1212
+      },
+      {
+        "name": "Burst Pressure",
+        "count": 1069
+      },
+      {
+        "name": "Compressive Strength",
+        "count": 925
+      },
+      {
+        "name": "Shear Strength",
+        "count": 887
+      }
+    ],
+    "Application": [
+      {
+        "name": "Aerospace",
+        "count": 1691
+      },
+      {
+        "name": "Hydrogen Storage",
+        "count": 1039
+      },
+      {
+        "name": "UAV",
+        "count": 846
+      },
+      {
+        "name": "Aviation",
+        "count": 841
+      },
+      {
+        "name": "Underwater",
+        "count": 690
+      },
+      {
+        "name": "Automotive",
+        "count": 479
+      },
+      {
+        "name": "Fuel Cell",
+        "count": 289
+      },
+      {
+        "name": "Diving",
+        "count": 266
+      },
+      {
+        "name": "Submersible",
+        "count": 223
+      },
+      {
+        "name": "Rocket",
+        "count": 187
+      }
+    ],
+    "TaskCategory": [
+      {
+        "name": "强度刚度校核",
+        "count": 14567
+      },
+      {
+        "name": "铺层与层合优化",
+        "count": 9043
+      },
+      {
+        "name": "屈曲与稳定性",
+        "count": 5982
+      },
+      {
+        "name": "仿真建模",
+        "count": 5484
+      },
+      {
+        "name": "损伤失效",
+        "count": 5413
+      },
+      {
+        "name": "试验验证",
+        "count": 5128
+      },
+      {
+        "name": "数据驱动方法",
+        "count": 5107
+      },
+      {
+        "name": "承压壳/容器设计",
+        "count": 4832
+      },
+      {
+        "name": "材料性能",
+        "count": 4100
+      },
+      {
+        "name": "标准与手册",
+        "count": 3782
+      }
+    ],
+    "Literature": [
+      {
+        "name": "SRC_9f5605a51940481f",
+        "count": 4485
+      },
+      {
+        "name": "SRC_5fdb7fbaaecdb4c1",
+        "count": 3187
+      },
+      {
+        "name": "SRC_7f39b509197a3b60",
+        "count": 1648
+      },
+      {
+        "name": "SRC_f9da7813ddabcd55",
+        "count": 743
+      },
+      {
+        "name": "SRC_8686144f9fdc0b40",
+        "count": 513
+      },
+      {
+        "name": "SRC_abbf0117fd9589f0",
+        "count": 442
+      },
+      {
+        "name": "SRC_8d89b4c6de4ce758",
+        "count": 357
+      },
+      {
+        "name": "SRC_63e4d47fdf882e56",
+        "count": 275
+      },
+      {
+        "name": "LIT_6cb65a5e6629",
+        "count": 179
+      },
+      {
+        "name": "SRC_8b141afd02327758",
+        "count": 131
+      }
+    ],
+    "LoadCase": [
+      {
+        "name": "Internal Pressure",
+        "count": 1922
+      },
+      {
+        "name": "External Pressure",
+        "count": 1088
+      }
+    ],
+    "DesignFormula": [
+      {
+        "name": "Chang Stiffness Degradation",
+        "count": 3661
+      },
+      {
+        "name": "Hashin Criterion",
+        "count": 974
+      },
+      {
+        "name": "Tsai-Wu Criterion",
+        "count": 644
+      },
+      {
+        "name": "Puck Criterion",
+        "count": 382
+      },
+      {
+        "name": "ASME Formula",
+        "count": 222
+      },
+      {
+        "name": "Symbolic Regression Formula",
+        "count": 131
+      },
+      {
+        "name": "SISSO Design Formula",
+        "count": 40
+      },
+      {
+        "name": "NASA SP-8700 Formula",
+        "count": 14
+      },
+      {
+        "name": "Ultimate Strength Formula",
+        "count": 3
+      }
+    ],
+    "StiffnessCoeff": [
+      {
+        "name": "A22",
+        "count": 1211
+      },
+      {
+        "name": "B11",
+        "count": 902
+      },
+      {
+        "name": "B23",
+        "count": 888
+      },
+      {
+        "name": "D22",
+        "count": 844
+      },
+      {
+        "name": "A12",
+        "count": 796
+      },
+      {
+        "name": "D11",
+        "count": 780
+      },
+      {
+        "name": "A11",
+        "count": 726
+      },
+      {
+        "name": "B12",
+        "count": 677
+      },
+      {
+        "name": "D12",
+        "count": 650
+      },
+      {
+        "name": "D33",
+        "count": 560
+      }
+    ],
+    "DesignVariable": [
+      {
+        "name": "Thickness",
+        "count": 7730
+      },
+      {
+        "name": "Length",
+        "count": 4821
+      },
+      {
+        "name": "Radius",
+        "count": 2154
+      },
+      {
+        "name": "Winding Angle",
+        "count": 759
+      },
+      {
+        "name": "Inner Diameter",
+        "count": 133
+      },
+      {
+        "name": "Layup Angle",
+        "count": 80
+      },
+      {
+        "name": "Imperfection",
+        "count": 59
+      },
+      {
+        "name": "Imperfection Ratio",
+        "count": 12
+      },
+      {
+        "name": "Linear Buckling Eigenvalue",
+        "count": 7
+      }
+    ],
+    "VerificationMethod": [
+      {
+        "name": "Finite Element Verification",
+        "count": 7919
+      },
+      {
+        "name": "Abaqus Verification",
+        "count": 1599
+      },
+      {
+        "name": "Progressive Damage Verification",
+        "count": 1075
+      },
+      {
+        "name": "Hydrostatic Test",
+        "count": 149
+      },
+      {
+        "name": "Mesh Convergence",
+        "count": 141
+      }
+    ]
+  }
+}

@@ -575,6 +575,10 @@ const cn = {
     },
 
     Model: "模型 (model)",
+    RagKg: {
+      Title: "外部 RAG/KG 增强",
+      SubTitle: "启用后读取项目内部知识库并拼接检索上下文",
+    },
     CompressModel: {
       Title: "对话摘要模型",
       SubTitle: "用于压缩历史记录、生成对话标题的模型",

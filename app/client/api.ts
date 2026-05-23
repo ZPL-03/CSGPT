@@ -44,6 +44,7 @@ export interface LLMConfig {
   presence_penalty?: number;
   frequency_penalty?: number;
   chat_template_kwargs?: Record<string, unknown>;
+  enableRagKg?: boolean;
   size?: DalleRequestPayload["size"];
   quality?: DalleRequestPayload["quality"];
   style?: DalleRequestPayload["style"];

@@ -582,6 +582,11 @@ const en: LocaleType = {
     },
 
     Model: "Model",
+    RagKg: {
+      Title: "External RAG/KG",
+      SubTitle:
+        "When enabled, the internal knowledge base is searched and injected as retrieved context",
+    },
     CompressModel: {
       Title: "Summary Model",
       SubTitle: "Model used to compress history and generate title",

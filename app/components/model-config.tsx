@@ -50,6 +50,21 @@ export function ModelConfigList(props: {
         </Select>
       </ListItem>
       <ListItem
+        title={Locale.Settings.RagKg.Title}
+        subTitle={Locale.Settings.RagKg.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.RagKg.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableRagKg}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) => (config.enableRagKg = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
         title={Locale.Settings.Temperature.Title}
         subTitle={Locale.Settings.Temperature.SubTitle}
       >

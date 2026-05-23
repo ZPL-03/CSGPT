@@ -60,6 +60,7 @@ export const DEFAULT_CONFIG = {
     max_tokens: 8192,
     presence_penalty: 0,
     frequency_penalty: 0,
+    enableRagKg: false,
     sendMemory: true,
     historyMessageCount: 4,
     compressMessageLengthThreshold: 1000,

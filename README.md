@@ -36,10 +36,9 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - **后端**：Next.js API Routes（SSE 流式代理）
 - **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
 - **第二模型**：QWen3-14B-CS2（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
-- **第三模型**：QWen3-14B-CS3（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
-- **第四模型**：QWen3-14B-CS4（Qwen3-14B 原始基座模型，通过 OpenAI 兼容接口部署）
-- **第五模型**：QWen3-14B-CS5（Qwen3-14B 复合材料领域微调模型，通过 OpenAI 兼容接口部署，不经过 RAG/KG）
-- **第六模型**：QWen3-14B-CS6（Qwen3-14B 原始基座模型，通过 RAG/KG 问答接口部署）
+- **第三模型**：QWen3-14B-CS3（Qwen3-14B 复合材料领域微调模型，通过裸 vLLM OpenAI 兼容接口部署）
+- **第四模型**：QWen3-14B-CS4（Qwen3-14B 原始基座模型，通过裸 vLLM OpenAI 兼容接口部署）
+- **外部 RAG/KG 增强**：网页会话设置中的可选开关，启用后读取项目内部 `data/csllm_cpv` 知识库并拼接检索上下文，裸模型服务器不执行检索；内置模型和经本项目代理的自定义 Provider 均可使用。
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 - **会话持久化**：用户发送消息后将聊天记录和附件引用写入 PostgreSQL
 - **文件解析**：选择附件时在浏览器内解析文本、代码、表格、工作簿、图片 OCR、PDF、Word 文档、演示文稿和 OLE 复合文档可读文本，界面显示解析进度
@@ -49,7 +48,7 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - 前端默认单次回复预算为 `8192`，设置页的“单次回复限制 (max_tokens)”可以由用户改低或改高，输入范围为 `1` 到 `512000`。
 - 设置页中的模型配置是全局默认配置，用于新会话和选择“同步全局配置”的会话。当前会话配置保存在该会话自己的 `mask.modelConfig` 中；当前会话设置中的模型、温度、上下文条数和回复预算优先于全局默认配置。
 - 普通 OpenAI 兼容模型使用 `max_tokens`；GPT-5、o1、o3 系列按接口协议使用 `max_completion_tokens`，数值来自同一项用户设置。
-- CS1、CS2、CS3、CS4、CS5、CS6 服务端代理按当前会话模型配置构造 OpenAI 兼容请求，生成预算随请求发送给对应上游接口。
+- CS1、CS2、CS3、CS4 服务端代理按当前会话模型配置构造 OpenAI 兼容请求，生成预算随请求发送给对应上游接口。
 - 自定义模型和自定义 Provider 使用当前会话的同一套模型配置；上下文窗口、输入长度和可生成长度由上游服务实际能力决定。
 
 ### 文件处理链路
@@ -61,7 +60,7 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - 附件选择后立即解析；解析完成后原始文件按 2MB 分片写入数据库，解析文本写入附件记录。
 - 删除输入框中的附件会删除该附件记录；未发送的附件不会进入当前对话。
 - 聊天消息在发送后保存文件引用、文件名、大小、MIME 类型和本轮模型使用的解析文本快照。
-- CS1、CS2、CS3、CS4、CS5、CS6 当前按上游接口能力发送请求：文本接口接收解析文本，多模态接口接收图片内容和解析文本。
+- CS1、CS2、CS3、CS4 当前按上游接口能力发送请求：文本接口接收解析文本，多模态接口接收图片内容和解析文本。
 - 附件内容通过 `/api/files/{id}` 读取，解析结果通过管理后台对话消息查看。
 - 单个附件上限为 50MB；超过上限会在选择文件后直接提示，不进入解析流程。
 - 长文档按页或按内嵌资源分段解析并刷新进度，避免单个大任务长时间占用浏览器界面。
@@ -144,25 +143,18 @@ CSGPT_CS1_API_KEY=your-api-key
 # CSGPT_CS2_API_KEY=your-api-key
 # CSGPT_CS2_UPSTREAM_MODEL_NAME=
 
-# ===== CS3 上游推理服务（可选）=====
-# CSGPT_CS3_BASE_URL=http://your-server:8000/v1
-# CSGPT_CS3_API_KEY=your-api-key
-# CSGPT_CS3_UPSTREAM_MODEL_NAME=
+# ===== CS3 复合材料领域微调模型裸 vLLM 接口（可选）=====
+# CSGPT_CS3_BASE_URL=https://your-csllm-server/v1
+# CSGPT_CS3_API_KEY=your-vllm-api-key
+# CSGPT_CS3_UPSTREAM_MODEL_NAME=csllm-cpv
 
-# ===== CS4 原始基座模型接口（可选）=====
-# CSGPT_CS4_BASE_URL=https://your-csllm-server/raw-vllm/v1
+# ===== CS4 原始基座模型裸 vLLM 接口（可选）=====
+# CSGPT_CS4_BASE_URL=https://your-csllm-server/v1
 # CSGPT_CS4_API_KEY=your-vllm-api-key
 # CSGPT_CS4_UPSTREAM_MODEL_NAME=qwen3-14b-base
 
-# ===== CS5 微调模型裸接口（可选）=====
-# CSGPT_CS5_BASE_URL=https://your-csllm-server/raw-vllm/v1
-# CSGPT_CS5_API_KEY=your-vllm-api-key
-# CSGPT_CS5_UPSTREAM_MODEL_NAME=csllm-cpv
-
-# ===== CS6 原始基座模型 RAG/KG 问答接口（可选）=====
-# CSGPT_CS6_BASE_URL=https://your-csllm-server/v1
-# CSGPT_CS6_API_KEY=your-qa-api-key
-# CSGPT_CS6_UPSTREAM_MODEL_NAME=qwen3-14b-base
+# 外部 RAG/KG 增强由网页会话设置控制，数据目录为 data/csllm_cpv。
+# data/csllm_cpv/provenance 保存知识库文件清单、记录数量和哈希。
 
 # ===== 前端展示 =====
 CSGPT_MODEL_NAME=QWen3-14B-CS1
@@ -196,6 +188,7 @@ CSGPT/
 │   ├── prompts/       # CSGPT 系统提示词
 │   ├── utils/         # 文件解析、请求流、同步工具
 │   └── store/         # 状态管理
+├── data/csllm_cpv/    # 外部 RAG/KG 增强使用的运行知识库数据和追溯清单
 ├── prisma/            # PostgreSQL 数据模型
 ├── public/            # 静态资源
 └── .env.local         # 环境变量
@@ -221,7 +214,11 @@ CSGPT/
 
 ### 自定义模型和接口
 
-设置页开启"自定义接口"后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部模型`；选择 CSGPT 默认模型时走内置模型，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。
+设置页开启"自定义接口"后，可以为当前服务商填写 API 地址和 Key。自定义模型名支持 `model@Provider=显示名` 语法，例如 `my-model@OpenAI=内部模型`；选择 CSGPT 默认模型时走内置模型，选择其他模型时会按所选模型名请求，不会被内置默认模型覆盖。外部 RAG/KG 增强开启时，自定义接口请求经本项目服务端代理转发，以便服务端注入检索上下文。
+
+### 外部 RAG/KG 数据
+
+运行时读取 `data/csllm_cpv/runtime/rag_chunks.compact.jsonl.gz`、`data/csllm_cpv/runtime/relations.compact.jsonl.gz` 和 `data/csllm_cpv/kg/entities.jsonl`。`data/csllm_cpv/provenance/` 保存数据清单、记录数量、字节大小和 SHA256 哈希。
 
 ### 验证命令
 

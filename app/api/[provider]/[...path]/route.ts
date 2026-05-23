@@ -5,10 +5,9 @@ import {
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
   CSGPT_MODEL_4,
-  CSGPT_MODEL_5,
-  CSGPT_MODEL_6,
 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
+import { buildExternalRagKgSystemMessage } from "@/app/utils/server-rag-kg";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -67,20 +66,6 @@ function getDedicatedCSGPTUpstream(
       apiKey: config.csgptCs4ApiKey,
       upstreamModelName: config.csgptCs4UpstreamModelName,
     },
-    [CSGPT_MODEL_5]: {
-      label: "CS5",
-      model: CSGPT_MODEL_5,
-      baseUrl: config.csgptCs5BaseUrl,
-      apiKey: config.csgptCs5ApiKey,
-      upstreamModelName: config.csgptCs5UpstreamModelName,
-    },
-    [CSGPT_MODEL_6]: {
-      label: "CS6",
-      model: CSGPT_MODEL_6,
-      baseUrl: config.csgptCs6BaseUrl,
-      apiKey: config.csgptCs6ApiKey,
-      upstreamModelName: config.csgptCs6UpstreamModelName,
-    },
   };
 
   return upstreams[model] ?? null;
@@ -89,13 +74,7 @@ function getDedicatedCSGPTUpstream(
 function getVisibleDedicatedCSGPTUpstreams(
   config: ReturnType<typeof getServerSideConfig>,
 ) {
-  return [
-    CSGPT_MODEL_2,
-    CSGPT_MODEL_3,
-    CSGPT_MODEL_4,
-    CSGPT_MODEL_5,
-    CSGPT_MODEL_6,
-  ]
+  return [CSGPT_MODEL_2, CSGPT_MODEL_3, CSGPT_MODEL_4]
     .map((model) => getDedicatedCSGPTUpstream(model, config))
     .filter(
       (upstream): upstream is CSGPTUpstream => !!upstream && !!upstream.baseUrl,
@@ -125,6 +104,27 @@ function resolveUpstreamCSGPTModel(
 function getAuthorizationHeader(req: NextRequest, apiKey: string) {
   if (apiKey) return `Bearer ${apiKey}`;
   return req.headers.get("authorization") || "";
+}
+
+function normalizeCustomUpstreamBaseUrl(baseUrl?: string) {
+  const value = String(baseUrl || "").trim();
+  if (!value) return "";
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("自定义 RAG/KG 上游接口地址不是有效 URL。");
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("自定义 RAG/KG 上游接口地址只支持 HTTP 或 HTTPS。");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("自定义 RAG/KG 上游接口地址不能包含用户名或密码。");
+  }
+
+  return ensureOpenAIBaseUrl(value);
 }
 
 function formatSize(size?: number) {
@@ -375,13 +375,58 @@ async function handleModelsRequest(
   }
 }
 
-// CSGPT 独立上游模型转发到 OpenAI 兼容接口。
+async function prepareProxyMessages(
+  messages: any[],
+  options: { injectCSGPTPrompt: boolean; ragKgEnabled: boolean },
+) {
+  const processedMessages = [...messages];
+  if (
+    options.injectCSGPTPrompt &&
+    !processedMessages.some((msg: any) => msg.role === "system")
+  ) {
+    processedMessages.unshift({
+      role: "system",
+      content: CSGPT_SYSTEM_PROMPT,
+    });
+  }
+
+  if (options.ragKgEnabled) {
+    const ragKgMessage =
+      await buildExternalRagKgSystemMessage(processedMessages);
+    if (ragKgMessage) {
+      let insertIndex = 0;
+      while (
+        insertIndex < processedMessages.length &&
+        ["developer", "system"].includes(processedMessages[insertIndex]?.role)
+      ) {
+        insertIndex += 1;
+      }
+      processedMessages.splice(insertIndex, 0, {
+        role: processedMessages.some(
+          (message: any) => message.role === "developer",
+        )
+          ? "developer"
+          : "system",
+        content: ragKgMessage,
+      });
+    }
+  }
+
+  return processedMessages;
+}
+
 async function handleDedicatedCSGPTChatCompletions(
   config: ReturnType<typeof getServerSideConfig>,
   upstream: CSGPTUpstream,
-  bodyData: { messages: any[]; stream: boolean; model: string; rest: any },
+  bodyData: {
+    messages: any[];
+    stream: boolean;
+    model: string;
+    rest: any;
+    ragKgEnabled: boolean;
+  },
 ) {
-  const { messages, stream, model, rest } = bodyData;
+  const { messages, stream, model, rest, ragKgEnabled } = bodyData;
   if (!upstream.baseUrl) {
     return NextResponse.json(
       { error: true, message: `${upstream.label} 后端地址未配置` },
@@ -390,15 +435,17 @@ async function handleDedicatedCSGPTChatCompletions(
   }
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
 
-  const processedMessages = [...messages];
-  const hasSystemMessage = processedMessages.some(
-    (msg: any) => msg.role === "system",
-  );
-  if (!hasSystemMessage) {
-    processedMessages.unshift({
-      role: "system",
-      content: CSGPT_SYSTEM_PROMPT,
+  let processedMessages: any[];
+  try {
+    processedMessages = await prepareProxyMessages(messages, {
+      injectCSGPTPrompt: true,
+      ragKgEnabled,
     });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: true, message: error?.message || "RAG/KG 检索增强失败" },
+      { status: 500 },
+    );
   }
 
   const apiUrl = joinUrl(upstream.baseUrl, "chat/completions");
@@ -471,7 +518,27 @@ async function handleChatCompletions(
   backend: BackendConfig,
 ) {
   const body = await req.json();
-  const { messages, stream = true, model, ...rest } = body;
+  const {
+    messages,
+    stream = true,
+    model,
+    external_rag_kg_enabled = false,
+    external_rag_kg_upstream_url,
+    ...rest
+  } = body;
+  const ragKgEnabled = !!external_rag_kg_enabled;
+
+  let customUpstreamBaseUrl = "";
+  try {
+    customUpstreamBaseUrl = ragKgEnabled
+      ? normalizeCustomUpstreamBaseUrl(external_rag_kg_upstream_url)
+      : "";
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: true, message: error?.message || "自定义上游接口地址无效" },
+      { status: 400 },
+    );
+  }
 
   const dedicatedUpstream = backend.isCSGPT
     ? getDedicatedCSGPTUpstream(model, config)
@@ -482,20 +549,22 @@ async function handleChatCompletions(
       stream,
       model,
       rest,
+      ragKgEnabled,
     });
   }
 
-  // CSGPT 专用：注入领域 System Prompt
   let processedMessages = [...messages];
-  if (backend.isCSGPT) {
-    const hasSystemMessage = processedMessages.some(
-      (msg: any) => msg.role === "system",
-    );
-    if (!hasSystemMessage) {
-      processedMessages.unshift({
-        role: "system",
-        content: CSGPT_SYSTEM_PROMPT,
+  if (backend.isCSGPT || ragKgEnabled) {
+    try {
+      processedMessages = await prepareProxyMessages(messages, {
+        injectCSGPTPrompt: backend.isCSGPT,
+        ragKgEnabled,
       });
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: true, message: error?.message || "RAG/KG 检索增强失败" },
+        { status: 500 },
+      );
     }
   }
 
@@ -508,16 +577,19 @@ async function handleChatCompletions(
     ...rest,
   };
 
-  if (!backend.baseUrl) {
+  const backendBaseUrl = customUpstreamBaseUrl || backend.baseUrl;
+  if (!backendBaseUrl) {
     return NextResponse.json(
       { error: true, message: `${provider} 后端地址未配置` },
       { status: 500 },
     );
   }
 
-  const apiUrl = joinUrl(backend.baseUrl, "chat/completions");
+  const apiUrl = joinUrl(backendBaseUrl, "chat/completions");
 
-  const authHeader = getAuthorizationHeader(req, backend.apiKey);
+  const authHeader = customUpstreamBaseUrl
+    ? req.headers.get("authorization") || ""
+    : getAuthorizationHeader(req, backend.apiKey);
   const proxyHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };

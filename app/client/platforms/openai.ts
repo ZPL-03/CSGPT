@@ -67,6 +67,8 @@ export interface RequestPayload {
   max_tokens?: number;
   max_completion_tokens?: number;
   chat_template_kwargs?: Record<string, unknown>;
+  external_rag_kg_enabled?: boolean;
+  external_rag_kg_upstream_url?: string;
 }
 
 export interface DalleRequestPayload {
@@ -83,7 +85,7 @@ export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
 
   // providerName 表示会话级 Provider，空值使用全局默认 Provider。
-  path(path: string, providerName?: string): string {
+  path(path: string, providerName?: string, forceServerProxy = false): string {
     const accessStore = useAccessStore.getState();
     const effectiveProvider =
       providerName ||
@@ -96,6 +98,7 @@ export class ChatGPTApi implements LLMApi {
       effectiveProvider,
       accessStore,
       isApp,
+      forceServerProxy,
     );
 
     if (baseUrl.endsWith("/")) {
@@ -121,10 +124,12 @@ export class ChatGPTApi implements LLMApi {
     providerName: string,
     accessStore: ReturnType<typeof useAccessStore.getState>,
     isApp: boolean,
+    forceServerProxy = false,
   ): string {
-    const customProviderUrl = accessStore.useCustomConfig
-      ? this.getCustomProviderUrl(accessStore, providerName)
-      : "";
+    const customProviderUrl =
+      !forceServerProxy && accessStore.useCustomConfig
+        ? this.getCustomProviderUrl(accessStore, providerName)
+        : "";
 
     if (customProviderUrl) {
       return customProviderUrl;
@@ -154,8 +159,8 @@ export class ChatGPTApi implements LLMApi {
     const baseUrl = urlMap[providerName];
     if (baseUrl) return baseUrl;
 
-    // 未匹配 Provider 使用内置 CSGPT 路径。
-    return CSGPT_BASE_URL;
+    // 未匹配 Provider 使用 OpenAI 兼容代理路径。
+    return ApiPath.OpenAI;
   }
 
   // 用户自定义 Provider URL
@@ -222,10 +227,7 @@ export class ChatGPTApi implements LLMApi {
     const modelConfig = {
       ...useAppConfig.getState().modelConfig,
       ...useChatStore.getState().currentSession().mask.modelConfig,
-      ...{
-        model: options.config.model,
-        providerName: options.config.providerName,
-      },
+      ...options.config,
     };
 
     let requestPayload: RequestPayload | DalleRequestPayload;
@@ -287,6 +289,18 @@ export class ChatGPTApi implements LLMApi {
         top_p: !isO1OrO3 ? modelConfig.top_p : 1,
         max_tokens: modelConfig.max_tokens,
       };
+      if (modelConfig.enableRagKg) {
+        requestPayload.external_rag_kg_enabled = true;
+        const customUpstreamUrl = useAccessStore.getState().useCustomConfig
+          ? this.getCustomProviderUrl(
+              useAccessStore.getState(),
+              modelConfig.providerName,
+            )
+          : "";
+        if (customUpstreamUrl) {
+          requestPayload.external_rag_kg_upstream_url = customUpstreamUrl;
+        }
+      }
       if (options.config.chat_template_kwargs) {
         requestPayload.chat_template_kwargs =
           options.config.chat_template_kwargs;
@@ -310,6 +324,7 @@ export class ChatGPTApi implements LLMApi {
     }
 
     const shouldStream = !isDalle3 && !!options.config.stream;
+    const forceServerProxyForRagKg = !isDalle3 && !!modelConfig.enableRagKg;
     const controller = new AbortController();
     options.onController?.(controller);
 
@@ -340,11 +355,13 @@ export class ChatGPTApi implements LLMApi {
             useCustomConfig ? useAccessStore.getState().azureApiVersion : "",
           ),
           modelConfig.providerName,
+          forceServerProxyForRagKg,
         );
       } else {
         chatPath = this.path(
           isDalle3 ? OpenaiPath.ImagePath : OpenaiPath.ChatPath,
           modelConfig.providerName,
+          forceServerProxyForRagKg,
         );
       }
       if (shouldStream) {

@@ -266,6 +266,7 @@ function buildTitleRequestConfig(
     stream: false,
     model,
     providerName,
+    enableRagKg: false,
   };
 
   if (providerName === ServiceProvider.CSGPT) {
@@ -1063,6 +1064,7 @@ export const useChatStore = createPersistStore(
               stream: true,
               model,
               providerName,
+              enableRagKg: false,
             },
             onUpdate(message) {
               session.memoryPrompt = message;
