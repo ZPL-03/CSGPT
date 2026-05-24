@@ -1408,7 +1408,7 @@ function _Chat() {
         }
       });
 
-      // 自动同步 mask 配置到全局配置
+      // 自动把全局模型配置同步到当前会话配置。
       if (session.mask.syncGlobalConfig) {
         const nextModelConfig = { ...config.modelConfig };
         if (!areModelConfigsEqual(session.mask.modelConfig, nextModelConfig)) {
