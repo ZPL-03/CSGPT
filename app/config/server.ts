@@ -106,9 +106,6 @@ declare global {
       CSGPT_CS3_BASE_URL?: string; // CS3 上游服务地址
       CSGPT_CS3_API_KEY?: string; // CS3 上游 API 密钥
       CSGPT_CS3_UPSTREAM_MODEL_NAME?: string; // CS3 上游实际模型名称
-      CSGPT_CS4_BASE_URL?: string; // CS4 上游服务地址
-      CSGPT_CS4_API_KEY?: string; // CS4 上游 API 密钥
-      CSGPT_CS4_UPSTREAM_MODEL_NAME?: string; // CS4 上游实际模型名称
     }
   }
 }
@@ -279,9 +276,6 @@ export const getServerSideConfig = () => {
     csgptCs3BaseUrl: process.env.CSGPT_CS3_BASE_URL,
     csgptCs3ApiKey: process.env.CSGPT_CS3_API_KEY,
     csgptCs3UpstreamModelName: process.env.CSGPT_CS3_UPSTREAM_MODEL_NAME,
-    csgptCs4BaseUrl: process.env.CSGPT_CS4_BASE_URL,
-    csgptCs4ApiKey: process.env.CSGPT_CS4_API_KEY,
-    csgptCs4UpstreamModelName: process.env.CSGPT_CS4_UPSTREAM_MODEL_NAME,
 
     gtmId: process.env.GTM_ID,
     gaId: process.env.GA_ID || DEFAULT_GA_ID,

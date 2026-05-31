@@ -4,7 +4,6 @@ import {
   CSGPT_DEFAULT_MODEL,
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
-  CSGPT_MODEL_4,
 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 import { buildExternalRagKgSystemMessage } from "@/app/utils/server-rag-kg";
@@ -59,13 +58,6 @@ function getDedicatedCSGPTUpstream(
       apiKey: config.csgptCs3ApiKey,
       upstreamModelName: config.csgptCs3UpstreamModelName,
     },
-    [CSGPT_MODEL_4]: {
-      label: "CS4",
-      model: CSGPT_MODEL_4,
-      baseUrl: config.csgptCs4BaseUrl,
-      apiKey: config.csgptCs4ApiKey,
-      upstreamModelName: config.csgptCs4UpstreamModelName,
-    },
   };
 
   return upstreams[model] ?? null;
@@ -74,7 +66,7 @@ function getDedicatedCSGPTUpstream(
 function getVisibleDedicatedCSGPTUpstreams(
   config: ReturnType<typeof getServerSideConfig>,
 ) {
-  return [CSGPT_MODEL_2, CSGPT_MODEL_3, CSGPT_MODEL_4]
+  return [CSGPT_MODEL_2, CSGPT_MODEL_3]
     .map((model) => getDedicatedCSGPTUpstream(model, config))
     .filter(
       (upstream): upstream is CSGPTUpstream => !!upstream && !!upstream.baseUrl,

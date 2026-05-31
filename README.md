@@ -34,10 +34,9 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 
 - **前端**：Next.js 14 + TypeScript + Zustand
 - **后端**：Next.js API Routes（SSE 流式代理）
-- **默认模型**：QWen3-14B-CS1（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
-- **第二模型**：QWen3-14B-CS2（Qwen3-14B 复合材料领域微调模型，通过自训练微调接口部署）
-- **第三模型**：QWen3-14B-CS3（Qwen3-14B 复合材料领域微调模型，通过裸 vLLM OpenAI 兼容接口部署）
-- **第四模型**：QWen3-14B-CS4（Qwen3-14B 原始基座模型，通过裸 vLLM OpenAI 兼容接口部署）
+- **默认模型**：QWen3-14B-CS1（复合材料领域模型，通过 OpenAI 兼容接口部署）
+- **第二模型**：QWen3-14B-CS2（Qwen3-14B 复合材料领域微调模型，通过裸 vLLM OpenAI 兼容接口部署）
+- **第三模型**：QWen3-14B-CS3（Qwen3-14B 原始基座模型，通过裸 vLLM OpenAI 兼容接口部署）
 - **外部 RAG/KG 增强**：网页会话设置中的可选开关，启用后读取项目内部 `data/csllm_cpv` 知识库并拼接检索上下文，裸模型服务器不执行检索；内置模型和经本项目代理的自定义 Provider 均可使用。
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 - **会话持久化**：用户发送消息后将聊天记录和附件引用写入 PostgreSQL
@@ -48,7 +47,7 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - 前端默认单次回复预算为 `8192`，设置页的“单次回复限制 (max_tokens)”可以由用户改低或改高，输入范围为 `1` 到 `512000`。
 - 设置页中的模型配置是全局默认配置，用于新会话和选择“同步全局配置”的会话。当前会话配置保存在该会话自己的 `mask.modelConfig` 中；当前会话设置中的模型、温度、上下文条数和回复预算优先于全局默认配置。
 - 普通 OpenAI 兼容模型使用 `max_tokens`；GPT-5、o1、o3 系列按接口协议使用 `max_completion_tokens`，数值来自同一项用户设置。
-- CS1、CS2、CS3、CS4 服务端代理按当前会话模型配置构造 OpenAI 兼容请求，生成预算随请求发送给对应上游接口。
+- CS1、CS2、CS3 服务端代理按当前会话模型配置构造 OpenAI 兼容请求，生成预算随请求发送给对应上游接口。
 - 自定义模型和自定义 Provider 使用当前会话的同一套模型配置；上下文窗口、输入长度和可生成长度由上游服务实际能力决定。
 
 ### 文件处理链路
@@ -60,7 +59,7 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - 附件选择后立即解析；解析完成后原始文件按 2MB 分片写入数据库，解析文本写入附件记录。
 - 删除输入框中的附件会删除该附件记录；未发送的附件不会进入当前对话。
 - 聊天消息在发送后保存文件引用、文件名、大小、MIME 类型和本轮模型使用的解析文本快照。
-- CS1、CS2、CS3、CS4 当前按上游接口能力发送请求：文本接口接收解析文本，多模态接口接收图片内容和解析文本。
+- CS1、CS2、CS3 当前按上游接口能力发送请求：文本接口接收解析文本，多模态接口接收图片内容和解析文本。
 - 附件内容通过 `/api/files/{id}` 读取，解析结果通过管理后台对话消息查看。
 - 单个附件上限为 50MB；超过上限会在选择文件后直接提示，不进入解析流程。
 - 长文档按页或按内嵌资源分段解析并刷新进度，避免单个大任务长时间占用浏览器界面。
@@ -131,27 +130,22 @@ npm run dev
 在 `.env.local` 文件中配置以下变量：
 
 ```env
-# ===== CS1 上游推理服务（必填）=====
-CSGPT_CS1_BASE_URL=http://your-server:8000/v1
+# ===== CS1 上游 OpenAI 兼容接口（必填）=====
+CSGPT_CS1_BASE_URL=https://your-cs1-server/v1
 CSGPT_CS1_API_KEY=your-api-key
 
 # CS1 上游实际模型名称（可选，不填则使用请求中的模型名）
 # CSGPT_CS1_UPSTREAM_MODEL_NAME=
 
-# ===== CS2 上游推理服务（可选）=====
-# CSGPT_CS2_BASE_URL=http://your-server:8080/v1
-# CSGPT_CS2_API_KEY=your-api-key
-# CSGPT_CS2_UPSTREAM_MODEL_NAME=
+# ===== CS2 复合材料领域微调模型裸 vLLM 接口（可选）=====
+# CSGPT_CS2_BASE_URL=https://your-cs2-server/v1
+# CSGPT_CS2_API_KEY=your-vllm-api-key
+# CSGPT_CS2_UPSTREAM_MODEL_NAME=csllm-cpv
 
-# ===== CS3 复合材料领域微调模型裸 vLLM 接口（可选）=====
-# CSGPT_CS3_BASE_URL=https://your-csllm-server/v1
+# ===== CS3 原始基座模型裸 vLLM 接口（可选）=====
+# CSGPT_CS3_BASE_URL=https://your-cs3-server/v1
 # CSGPT_CS3_API_KEY=your-vllm-api-key
-# CSGPT_CS3_UPSTREAM_MODEL_NAME=csllm-cpv
-
-# ===== CS4 原始基座模型裸 vLLM 接口（可选）=====
-# CSGPT_CS4_BASE_URL=https://your-csllm-server/v1
-# CSGPT_CS4_API_KEY=your-vllm-api-key
-# CSGPT_CS4_UPSTREAM_MODEL_NAME=qwen3-14b-base
+# CSGPT_CS3_UPSTREAM_MODEL_NAME=qwen3-14b-base
 
 # 外部 RAG/KG 增强由网页会话设置控制，数据目录为 data/csllm_cpv。
 # data/csllm_cpv/provenance 保存知识库文件清单、记录数量和哈希。
