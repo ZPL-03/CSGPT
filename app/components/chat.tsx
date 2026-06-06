@@ -32,6 +32,7 @@ import ConfirmIcon from "../icons/confirm.svg";
 import CloseIcon from "../icons/close.svg";
 import CancelIcon from "../icons/cancel.svg";
 import ImageIcon from "../icons/image.svg";
+import GraphIcon from "../icons/graph.svg";
 
 import LightIcon from "../icons/light.svg";
 import DarkIcon from "../icons/dark.svg";
@@ -125,6 +126,30 @@ const localStorage = safeLocalStorage();
 const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
 });
+
+function getKnowledgeGraphQuery(
+  session: { topic?: string; messages?: ChatMessage[] },
+  input = "",
+) {
+  const currentInput = input.trim();
+  if (currentInput) return currentInput;
+  const messages = session.messages || [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "user") continue;
+    const content = getMessageTextContent(message).trim();
+    if (content) return content;
+    if (message.fileContent?.trim()) return message.fileContent.trim();
+  }
+  return session.topic || "";
+}
+
+function buildKnowledgeGraphPath(query: string) {
+  const trimmed = query.trim();
+  return trimmed
+    ? `${Path.KnowledgeGraph}?q=${encodeURIComponent(trimmed)}`
+    : Path.KnowledgeGraph;
+}
 
 function areModelConfigsEqual(
   left: Record<string, unknown>,
@@ -232,15 +257,29 @@ export function SessionConfigModel(props: { onClose: () => void }) {
           }}
           shouldSyncFromGlobal
           extraListItems={
-            session.mask.modelConfig.sendMemory ? (
+            <>
               <ListItem
-                className="copyable"
-                title={`${Locale.Memory.Title} (${session.lastSummarizeIndex} of ${session.messages.length})`}
-                subTitle={session.memoryPrompt || Locale.Memory.EmptyContent}
-              ></ListItem>
-            ) : (
-              <></>
-            )
+                title={Locale.KnowledgeGraph.Title}
+                subTitle={Locale.KnowledgeGraph.EmptySubTitle}
+              >
+                <IconButton
+                  icon={<GraphIcon />}
+                  text={Locale.KnowledgeGraph.Name}
+                  onClick={() => {
+                    navigate(
+                      buildKnowledgeGraphPath(getKnowledgeGraphQuery(session)),
+                    );
+                  }}
+                />
+              </ListItem>
+              {session.mask.modelConfig.sendMemory ? (
+                <ListItem
+                  className="copyable"
+                  title={`${Locale.Memory.Title} (${session.lastSummarizeIndex} of ${session.messages.length})`}
+                  subTitle={session.memoryPrompt || Locale.Memory.EmptyContent}
+                ></ListItem>
+              ) : null}
+            </>
           }
         ></MaskConfig>
       </Modal>
@@ -543,6 +582,7 @@ async function deleteAttachmentRemote(url?: string) {
 
 export function ChatActions(props: {
   uploadFile: () => void;
+  graphQuery: string;
   showPromptModal: () => void;
   scrollToBottom: () => void;
   showPromptHints: () => void;
@@ -711,6 +751,17 @@ export function ChatActions(props: {
             icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
           />
         )}
+        <ChatAction
+          onClick={() => {
+            navigate(
+              buildKnowledgeGraphPath(
+                getKnowledgeGraphQuery(session, props.graphQuery),
+              ),
+            );
+          }}
+          text={Locale.KnowledgeGraph.Name}
+          icon={<GraphIcon />}
+        />
         <ChatAction
           onClick={nextTheme}
           text={Locale.Chat.InputActions.Theme[theme]}
@@ -2243,6 +2294,7 @@ function _Chat() {
 
               <ChatActions
                 uploadFile={selectUploadFiles}
+                graphQuery={userInput}
                 showPromptModal={() => setShowPromptModal(true)}
                 scrollToBottom={scrollToBottom}
                 hitBottom={hitBottom}

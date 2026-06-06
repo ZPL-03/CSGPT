@@ -643,7 +643,27 @@ const en: LocaleType = {
     Revert: "Revert",
   },
   Discovery: {
-    Name: "Discovery",
+    Name: "Search",
+  },
+  KnowledgeGraph: {
+    Name: "Knowledge Graph",
+    Title: "Knowledge Graph",
+    EmptySubTitle: "Search internal graph relations",
+    SubTitle: (nodes: number, edges: number) =>
+      `Showing ${nodes} nodes / ${edges} relations`,
+    Search: "Search",
+    SearchPlaceholder:
+      "Enter a material, structure, failure mode, or design task",
+    Loading: "Loading knowledge graph",
+    Error: "Knowledge graph query failed",
+    NoResult: "No related graph relations found",
+    Relations: "Relations",
+    NoRelations: "No relations",
+    TotalEntities: (count: string) => `Entities ${count}`,
+    TotalRelations: (count: string) => `All relations ${count}`,
+    MatchedRelations: (count: string) => `Matched relations ${count}`,
+    Degree: (count: number) => `Degree ${count}`,
+    Count: (count: number) => `Count ${count}`,
   },
   Mcp: {
     Name: "MCP",

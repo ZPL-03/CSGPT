@@ -1,100 +1,89 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { ErrorBoundary } from "./error";
 import styles from "./mask.module.scss";
 import { useNavigate } from "react-router-dom";
 import { IconButton } from "./button";
 import CloseIcon from "../icons/close.svg";
 import EyeIcon from "../icons/eye.svg";
+import SearchIcon from "../icons/search.svg";
 import Locale from "../locales";
 import { Path } from "../constant";
+import { ChatMessage, useChatStore } from "../store";
+import clsx from "clsx";
 
-import { useChatStore } from "../store";
-
-type Item = {
+type SearchItem = {
   id: number;
   name: string;
   content: string;
 };
+
+function messageToSearchText(message: ChatMessage) {
+  const parts: string[] = [];
+  if (typeof message.content === "string") {
+    parts.push(message.content);
+  } else if (Array.isArray(message.content)) {
+    for (const item of message.content) {
+      if (!item || typeof item !== "object") continue;
+      if (item.type === "text") {
+        parts.push(item.text || "");
+      }
+      if (item.type === "file_url") {
+        parts.push(item.file_url?.name || "");
+      }
+      if (item.type === "image_url") {
+        parts.push(item.image_url?.name || "");
+      }
+    }
+  }
+  if (message.fileContent) parts.push(message.fileContent);
+  return parts.filter(Boolean).join("\n");
+}
+
+function findSnippets(content: string, query: string) {
+  const lowerContent = content.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const snippets: string[] = [];
+  let position = lowerContent.indexOf(lowerQuery);
+  while (position !== -1 && snippets.length < 4) {
+    const start = Math.max(0, position - 36);
+    const end = Math.min(content.length, position + query.length + 36);
+    snippets.push(content.substring(start, end).replace(/\s+/g, " ").trim());
+    position = lowerContent.indexOf(lowerQuery, position + lowerQuery.length);
+  }
+  return snippets;
+}
+
 export function SearchChatPage() {
   const navigate = useNavigate();
-
   const chatStore = useChatStore();
-
   const sessions = chatStore.sessions;
   const selectSession = chatStore.selectSession;
+  const [searchText, setSearchText] = useState("");
 
-  const [searchResults, setSearchResults] = useState<Item[]>([]);
+  const searchResults = useMemo(() => {
+    const query = searchText.trim();
+    if (!query) return [];
 
-  const previousValueRef = useRef<string>("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const doSearch = useCallback(
-    (text: string) => {
-      const lowerCaseText = text.toLowerCase();
-      const results: Item[] = [];
-
-      sessions.forEach((session, index) => {
-        const fullTextContents: string[] = [];
-
-        session.messages.forEach((message) => {
-          const content = message.content as string;
-          if (!content.toLowerCase || content === "") return;
-          const lowerCaseContent = content.toLowerCase();
-
-          // 全文搜索
-          let pos = lowerCaseContent.indexOf(lowerCaseText);
-          while (pos !== -1) {
-            const start = Math.max(0, pos - 35);
-            const end = Math.min(
-              content.length,
-              pos + lowerCaseText.length + 35,
-            );
-            fullTextContents.push(content.substring(start, end));
-            pos = lowerCaseContent.indexOf(
-              lowerCaseText,
-              pos + lowerCaseText.length,
-            );
-          }
+    const results: SearchItem[] = [];
+    sessions.forEach((session, index) => {
+      const snippets = session.messages.flatMap((message) =>
+        findSnippets(messageToSearchText(message), query),
+      );
+      if (snippets.length > 0) {
+        results.push({
+          id: index,
+          name: session.topic,
+          content: snippets.join(" ... "),
         });
-
-        if (fullTextContents.length > 0) {
-          results.push({
-            id: index,
-            name: session.topic,
-            content: fullTextContents.join("... "), // 拼接完整内容
-          });
-        }
-      });
-
-      // 按匹配内容长度排序
-      results.sort((a, b) => b.content.length - a.content.length);
-
-      return results;
-    },
-    [sessions],
-  );
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (searchInputRef.current) {
-        const currentValue = searchInputRef.current.value;
-        if (currentValue !== previousValueRef.current) {
-          if (currentValue.length > 0) {
-            const result = doSearch(currentValue);
-            setSearchResults(result);
-          }
-          previousValueRef.current = currentValue;
-        }
       }
-    }, 1000);
+    });
 
-    // 组件卸载时清理定时器
-    return () => clearInterval(intervalId);
-  }, [doSearch]);
+    return results.sort((a, b) => b.content.length - a.content.length);
+  }, [searchText, sessions]);
 
   return (
     <ErrorBoundary>
       <div className={styles["mask-page"]}>
-        {/* header */}
         <div className="window-header">
           <div className="window-header-title">
             <div className="window-header-main-title">
@@ -118,27 +107,23 @@ export function SearchChatPage() {
 
         <div className={styles["mask-page-body"]}>
           <div className={styles["mask-filter"]}>
-            {/**搜索输入框 */}
             <input
               type="text"
               className={styles["search-bar"]}
               placeholder={Locale.SearchChat.Page.Search}
               autoFocus
-              ref={searchInputRef}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  const searchText = e.currentTarget.value;
-                  if (searchText.length > 0) {
-                    const result = doSearch(searchText);
-                    setSearchResults(result);
-                  }
-                }
-              }}
+              value={searchText}
+              onInput={(event) => setSearchText(event.currentTarget.value)}
             />
+            <IconButton icon={<SearchIcon />} bordered />
           </div>
 
           <div>
+            {searchText.trim() && searchResults.length === 0 ? (
+              <p className={styles["mask-empty"]}>
+                {Locale.SearchChat.Page.NoResult}
+              </p>
+            ) : null}
             {searchResults.map((item) => (
               <div
                 className={styles["mask-item"]}
@@ -149,14 +134,14 @@ export function SearchChatPage() {
                 }}
                 style={{ cursor: "pointer" }}
               >
-                {/** 搜索匹配的文本 */}
                 <div className={styles["mask-header"]}>
                   <div className={styles["mask-title"]}>
                     <div className={styles["mask-name"]}>{item.name}</div>
-                    {item.content.slice(0, 70)}
+                    <div className={clsx(styles["mask-info"], "one-line")}>
+                      {item.content}
+                    </div>
                   </div>
                 </div>
-                {/** 操作按钮 */}
                 <div className={styles["mask-actions"]}>
                   <IconButton
                     icon={<EyeIcon />}

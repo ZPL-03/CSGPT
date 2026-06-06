@@ -11,7 +11,7 @@ import DeleteIcon from "../icons/delete.svg";
 import MaskIcon from "../icons/mask.svg";
 import McpIcon from "../icons/mcp.svg";
 import DragIcon from "../icons/drag.svg";
-import DiscoveryIcon from "../icons/discovery.svg";
+import SearchIcon from "../icons/search.svg";
 import LogoutIcon from "../icons/power.svg";
 
 import Locale from "../locales";
@@ -37,6 +37,7 @@ import { isMcpEnabled } from "../mcp/actions";
 
 const DISCOVERY = [
   { name: Locale.SearchChat.Page.Title, path: Path.SearchChat },
+  { name: Locale.KnowledgeGraph.Title, path: Path.KnowledgeGraph },
 ];
 
 const ChatList = dynamic(async () => (await import("./chat-list")).ChatList, {
@@ -280,7 +281,7 @@ export function SideBar(props: { className?: string }) {
             />
           )}
           <IconButton
-            icon={<DiscoveryIcon />}
+            icon={<SearchIcon />}
             text={shouldNarrow ? undefined : Locale.Discovery.Name}
             className={styles["sidebar-bar-button"]}
             onClick={() => setshowDiscoverySelector(true)}

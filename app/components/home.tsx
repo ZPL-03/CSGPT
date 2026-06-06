@@ -64,6 +64,13 @@ const SearchChat = dynamic(
   },
 );
 
+const KnowledgeGraphPage = dynamic(
+  async () => (await import("./knowledge-graph")).KnowledgeGraphPage,
+  {
+    loading: () => <Loading noLogo />,
+  },
+);
+
 const McpMarketPage = dynamic(
   async () => (await import("./mcp-market")).McpMarketPage,
   {
@@ -230,6 +237,10 @@ function Screen() {
             <Route path={Path.NewChat} element={<NewChat />} />
             <Route path={Path.Masks} element={<MaskPage />} />
             <Route path={Path.SearchChat} element={<SearchChat />} />
+            <Route
+              path={Path.KnowledgeGraph}
+              element={<KnowledgeGraphPage />}
+            />
             <Route path={Path.Chat} element={<Chat />} />
             <Route path={Path.Settings} element={<Settings />} />
             <Route path={Path.McpMarket} element={<McpMarketPage />} />

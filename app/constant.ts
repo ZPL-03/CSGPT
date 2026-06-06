@@ -43,6 +43,7 @@ export enum Path {
   Masks = "/masks",
   Auth = "/auth",
   SearchChat = "/search-chat",
+  KnowledgeGraph = "/knowledge-graph",
   McpMarket = "/mcp-market",
 }
 

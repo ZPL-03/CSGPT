@@ -632,7 +632,26 @@ const cn = {
     Revert: "恢复上下文",
   },
   Discovery: {
-    Name: "发现",
+    Name: "搜索",
+  },
+  KnowledgeGraph: {
+    Name: "知识图谱",
+    Title: "知识图谱",
+    EmptySubTitle: "检索内部知识图谱关系",
+    SubTitle: (nodes: number, edges: number) =>
+      `显示 ${nodes} 个节点 / ${edges} 条关系`,
+    Search: "检索",
+    SearchPlaceholder: "输入材料、结构、失效模式或设计问题",
+    Loading: "正在加载知识图谱",
+    Error: "知识图谱查询失败",
+    NoResult: "没有找到相关图谱关系",
+    Relations: "关系",
+    NoRelations: "暂无关联关系",
+    TotalEntities: (count: string) => `实体 ${count}`,
+    TotalRelations: (count: string) => `全量关系 ${count}`,
+    MatchedRelations: (count: string) => `命中关系 ${count}`,
+    Degree: (count: number) => `关联度 ${count}`,
+    Count: (count: number) => `出现次数 ${count}`,
   },
   Mcp: {
     Name: "MCP",

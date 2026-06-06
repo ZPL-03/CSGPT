@@ -23,6 +23,13 @@ type ScoredRagRow = RagRow & {
   score: number;
 };
 
+type KgEntity = {
+  type: string;
+  name: string;
+  count: number;
+  sources?: string[];
+};
+
 type KgRelation = {
   source: string;
   sourceType: string;
@@ -33,6 +40,36 @@ type KgRelation = {
   score: number;
 };
 
+export type KnowledgeGraphNode = {
+  id: string;
+  label: string;
+  type: string;
+  count: number;
+  degree: number;
+};
+
+export type KnowledgeGraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  relation: string;
+  recordId: string;
+  score: number;
+};
+
+export type KnowledgeGraphQueryResult = {
+  query: string;
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  stats: {
+    totalEntities: number;
+    totalRelations: number;
+    matchedRelations: number;
+    returnedNodes: number;
+    returnedEdges: number;
+  };
+};
+
 const DATA_ROOT = path.join(process.cwd(), "data", "csllm_cpv");
 const RAG_CHUNKS_FILE = path.join(
   DATA_ROOT,
@@ -40,16 +77,21 @@ const RAG_CHUNKS_FILE = path.join(
   "rag_chunks.compact.jsonl.gz",
 );
 const KG_ENTITIES_FILE = path.join(DATA_ROOT, "kg", "entities.jsonl");
+const KG_STATS_FILE = path.join(DATA_ROOT, "kg", "kg_stats.json");
 const KG_RELATIONS_FILE = path.join(
   DATA_ROOT,
   "runtime",
   "relations.compact.jsonl.gz",
 );
+
 const RAG_TOP_K = 5;
 const KG_TOP_K = 12;
+const GRAPH_EDGE_SCAN_LIMIT = 800;
+const GRAPH_DEFAULT_NODE_LIMIT = 120;
 const MAX_CHUNK_TEXT_CHARS = 1800;
 const MAX_SEARCH_TEXT_CHARS = 7000;
 const MAX_CONTEXT_CHARS = 12000;
+const DEFAULT_GRAPH_QUERY = "复合材料 耐压壳 压力容器 屈曲";
 
 const DOMAIN_TERMS = [
   "composite pressure hull",
@@ -82,9 +124,12 @@ const DOMAIN_TERMS = [
 ];
 
 const QUERY_SYNONYMS: Record<string, string[]> = {
+  复合材料: ["composite material", "CFRP", "GFRP", "carbon fiber"],
   压力壳: ["pressure hull", "composite pressure hull", "hydrostatic pressure"],
   耐压壳: ["pressure hull", "composite pressure hull", "external pressure"],
   压力容器: ["pressure vessel", "composite pressure vessel", "COPV"],
+  碳纤维: ["carbon fiber", "CFRP", "T700", "T800"],
+  玻璃纤维: ["glass fiber", "GFRP"],
   外压: ["external pressure", "hydrostatic pressure"],
   屈曲: ["buckling", "buckling pressure", "critical pressure"],
   极限强度: ["ultimate strength", "failure pressure"],
@@ -97,12 +142,17 @@ const QUERY_SYNONYMS: Record<string, string[]> = {
 };
 
 let ragRowsPromise: Promise<RagRow[]> | null = null;
+let kgEntitiesPromise: Promise<KgEntity[]> | null = null;
 let kgEntityTermsPromise: Promise<string[]> | null = null;
+let kgStatsPromise: Promise<{
+  total_entities?: number;
+  total_relations?: number;
+}> | null = null;
 
 function assertFileExists(filePath: string, label: string) {
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `外部 RAG/KG 数据缺失：${label} 不存在。请把数据迁移到 ${DATA_ROOT} 后再启用 RAG/KG。`,
+      `外部 RAG/KG 数据缺失：${label} 不存在。请将数据放置到 ${DATA_ROOT} 后再启用 RAG/KG。`,
     );
   }
 }
@@ -145,6 +195,12 @@ function trimText(text: string, limit: number) {
     .trim();
   if (normalized.length <= limit) return normalized;
   return normalized.slice(0, limit).trimEnd() + "...";
+}
+
+function normalizeTerm(text: string) {
+  return String(text || "")
+    .trim()
+    .toLowerCase();
 }
 
 function tokenize(text: string): string[] {
@@ -263,23 +319,46 @@ async function getRagRows() {
   return ragRowsPromise;
 }
 
-async function loadKgEntityTerms() {
+async function loadKgEntities() {
   assertFileExists(KG_ENTITIES_FILE, "kg/entities.jsonl");
-  const terms = new Set<string>();
+  const entities: KgEntity[] = [];
   await readJsonl(KG_ENTITIES_FILE, (entity) => {
-    const name = String(entity.name || "")
-      .trim()
-      .toLowerCase();
-    if (name) terms.add(name);
+    const name = String(entity.name || "").trim();
+    if (!name) return;
+    entities.push({
+      type: String(entity.type || "Entity"),
+      name,
+      count: Number(entity.count || 0),
+      sources: Array.isArray(entity.sources) ? entity.sources : [],
+    });
   });
-  return Array.from(terms);
+  return entities;
+}
+
+async function getKgEntities() {
+  if (!kgEntitiesPromise) {
+    kgEntitiesPromise = loadKgEntities();
+  }
+  return kgEntitiesPromise;
 }
 
 async function getKgEntityTerms() {
   if (!kgEntityTermsPromise) {
-    kgEntityTermsPromise = loadKgEntityTerms();
+    kgEntityTermsPromise = getKgEntities().then((entities) =>
+      entities.map((entity) => normalizeTerm(entity.name)),
+    );
   }
   return kgEntityTermsPromise;
+}
+
+async function getKgStats() {
+  if (!kgStatsPromise) {
+    kgStatsPromise = fs.promises
+      .readFile(KG_STATS_FILE, "utf-8")
+      .then((content) => JSON.parse(content))
+      .catch(() => ({}));
+  }
+  return kgStatsPromise;
 }
 
 async function searchRag(query: string, topK = RAG_TOP_K) {
@@ -309,46 +388,173 @@ async function searchKgRelations(
 ) {
   assertFileExists(KG_RELATIONS_FILE, "runtime/relations.compact.jsonl.gz");
   const recordSet = new Set(recordIds.filter(Boolean));
-  const queryLower = query.toLowerCase();
-  const expandedTerms = new Set(expandQueryTerms(query));
-  const entityTerms = await getKgEntityTerms();
-  for (const entity of entityTerms) {
-    if (queryLower.includes(entity)) expandedTerms.add(entity);
-  }
+  const expandedTerms = await getExpandedKgTerms(query);
 
   const results: KgRelation[] = [];
   const seen = new Set<string>();
   await readJsonl(KG_RELATIONS_FILE, (relation) => {
-    const source = String(relation.source || "");
-    const target = String(relation.target || "");
-    const recordId = String(relation.record_id || "");
-    const relationType = String(relation.relation || "");
-    const key = `${source}|${relationType}|${target}|${recordId}`;
+    const scored = scoreRelation(relation, expandedTerms, recordSet);
+    if (!scored || scored.score <= 0) return;
+    const key = `${scored.source}|${scored.relation}|${scored.target}|${scored.recordId}`;
     if (seen.has(key)) return;
-
-    const sourceLower = source.toLowerCase();
-    const targetLower = target.toLowerCase();
-    let score = recordSet.has(recordId) ? 2 : 0;
-    for (const term of expandedTerms) {
-      if (!term || term.length < 2) continue;
-      if (sourceLower.includes(term)) score += 2;
-      if (targetLower.includes(term)) score += 2;
-    }
-    if (score <= 0) return;
-
     seen.add(key);
-    results.push({
-      source,
-      sourceType: String(relation.source_type || ""),
-      relation: relationType,
-      target,
-      targetType: String(relation.target_type || ""),
-      recordId,
-      score,
-    });
+    results.push(scored);
   });
 
   return results.sort((a, b) => b.score - a.score).slice(0, topK);
+}
+
+async function getExpandedKgTerms(query: string) {
+  const queryLower = normalizeTerm(query);
+  const expandedTerms = new Set(expandQueryTerms(query));
+  const entityTerms = await getKgEntityTerms();
+  for (const entity of entityTerms) {
+    if (entity && queryLower.includes(entity)) expandedTerms.add(entity);
+  }
+  return expandedTerms;
+}
+
+function scoreRelation(
+  relation: any,
+  expandedTerms: Set<string>,
+  recordSet: Set<string>,
+): KgRelation | null {
+  const source = String(relation.source || "");
+  const target = String(relation.target || "");
+  const recordId = String(relation.record_id || "");
+  const relationType = String(relation.relation || "");
+  if (!source || !target || !relationType) return null;
+
+  const sourceLower = normalizeTerm(source);
+  const targetLower = normalizeTerm(target);
+  const relationLower = normalizeTerm(relationType);
+  let score = recordSet.has(recordId) ? 2 : 0;
+
+  for (const term of expandedTerms) {
+    if (!term || term.length < 2) continue;
+    if (sourceLower.includes(term)) score += 2;
+    if (targetLower.includes(term)) score += 2;
+    if (relationLower.includes(term)) score += 1;
+  }
+  if (score <= 0) return null;
+
+  return {
+    source,
+    sourceType: String(relation.source_type || ""),
+    relation: relationType,
+    target,
+    targetType: String(relation.target_type || ""),
+    recordId,
+    score,
+  };
+}
+
+function nodeId(type: string, label: string) {
+  return `${type || "Entity"}:${label}`;
+}
+
+export async function queryKnowledgeGraph(
+  rawQuery: string,
+  rawLimit = GRAPH_DEFAULT_NODE_LIMIT,
+): Promise<KnowledgeGraphQueryResult> {
+  assertFileExists(KG_RELATIONS_FILE, "runtime/relations.compact.jsonl.gz");
+  const query = rawQuery.trim() || DEFAULT_GRAPH_QUERY;
+  const nodeLimit = Math.max(20, Math.min(Number(rawLimit) || 120, 240));
+  const edgeScanLimit = Math.max(nodeLimit, Math.min(nodeLimit * 4, 600));
+  const [entities, stats, chunks] = await Promise.all([
+    getKgEntities(),
+    getKgStats(),
+    searchRag(query).catch(() => []),
+  ]);
+  const entityMap = new Map(
+    entities.map((entity) => [normalizeTerm(entity.name), entity]),
+  );
+  const recordSet = new Set(chunks.map((chunk) => chunk.recordId));
+  const expandedTerms = await getExpandedKgTerms(query);
+
+  const matchedRelations: KgRelation[] = [];
+  const seen = new Set<string>();
+  await readJsonl(KG_RELATIONS_FILE, (relation) => {
+    const scored = scoreRelation(relation, expandedTerms, recordSet);
+    if (!scored) return;
+    const key = `${scored.source}|${scored.relation}|${scored.target}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    matchedRelations.push(scored);
+  });
+
+  const rankedRelations = matchedRelations
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.min(GRAPH_EDGE_SCAN_LIMIT, edgeScanLimit));
+  const degree = new Map<string, number>();
+  for (const relation of rankedRelations) {
+    const sourceId = nodeId(relation.sourceType, relation.source);
+    const targetId = nodeId(relation.targetType, relation.target);
+    degree.set(sourceId, (degree.get(sourceId) || 0) + 1);
+    degree.set(targetId, (degree.get(targetId) || 0) + 1);
+  }
+
+  const candidateNodes = new Map<string, KnowledgeGraphNode>();
+  for (const relation of rankedRelations) {
+    for (const item of [
+      { label: relation.source, type: relation.sourceType },
+      { label: relation.target, type: relation.targetType },
+    ]) {
+      const id = nodeId(item.type, item.label);
+      if (candidateNodes.has(id)) continue;
+      const entity = entityMap.get(normalizeTerm(item.label));
+      candidateNodes.set(id, {
+        id,
+        label: item.label,
+        type: item.type || entity?.type || "Entity",
+        count: entity?.count || 0,
+        degree: degree.get(id) || 0,
+      });
+    }
+  }
+
+  const selectedNodeIds = new Set(
+    Array.from(candidateNodes.values())
+      .sort((a, b) => b.degree - a.degree || b.count - a.count)
+      .slice(0, nodeLimit)
+      .map((node) => node.id),
+  );
+  const nodes = Array.from(candidateNodes.values())
+    .filter((node) => selectedNodeIds.has(node.id))
+    .sort((a, b) => b.degree - a.degree || b.count - a.count);
+  const edges: KnowledgeGraphEdge[] = [];
+  const edgeSeen = new Set<string>();
+  for (const relation of rankedRelations) {
+    const sourceId = nodeId(relation.sourceType, relation.source);
+    const targetId = nodeId(relation.targetType, relation.target);
+    if (!selectedNodeIds.has(sourceId) || !selectedNodeIds.has(targetId)) {
+      continue;
+    }
+    const id = `${sourceId}|${relation.relation}|${targetId}`;
+    if (edgeSeen.has(id)) continue;
+    edgeSeen.add(id);
+    edges.push({
+      id,
+      source: sourceId,
+      target: targetId,
+      relation: relation.relation,
+      recordId: relation.recordId,
+      score: relation.score,
+    });
+  }
+
+  return {
+    query,
+    nodes,
+    edges,
+    stats: {
+      totalEntities: Number(stats.total_entities || entities.length),
+      totalRelations: Number(stats.total_relations || 0),
+      matchedRelations: matchedRelations.length,
+      returnedNodes: nodes.length,
+      returnedEdges: edges.length,
+    },
+  };
 }
 
 export async function buildExternalRagKgSystemMessage(
@@ -396,7 +602,7 @@ export async function buildExternalRagKgSystemMessage(
 
   return [
     "本轮已启用外部 RAG/KG 增强。",
-    "以下检索内容来自本项目内部数据，仅作为回答依据，不要在正文输出 chunk_id、record_id、内部路径或来源清单。",
+    "以下检索内容来自本项目内部数据，仅作为回答依据。正文不要输出 chunk_id、record_id、内部路径或来源清单。",
     "如果检索内容不足，应说明缺少的工程参数，并给出可验证的设计、制造、仿真或试验分析路径。",
     "",
     `用户问题：${query}`,
