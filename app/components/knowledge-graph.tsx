@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Path } from "../constant";
+import { buildKnowledgeGraphPath } from "../utils/knowledge-graph";
 import CloseIcon from "../icons/close.svg";
 import SearchIcon from "../icons/search.svg";
 import GraphIcon from "../icons/graph.svg";
@@ -104,9 +106,12 @@ function formatCount(value: number) {
 
 export function KnowledgeGraphPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = searchParams.get("q") || "";
-  const [query, setQuery] = useState(initialQuery);
+  const location = useLocation();
+  const queryFromUrl = useMemo(
+    () => new URLSearchParams(location.search).get("q") || "",
+    [location.search],
+  );
+  const [query, setQuery] = useState(queryFromUrl);
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -132,20 +137,19 @@ export function KnowledgeGraphPage() {
         const result = (await response.json()) as GraphData;
         setData(result);
         setSelectedNodeId(result.nodes[0]?.id || "");
-        setSearchParams(nextQuery.trim() ? { q: nextQuery.trim() } : {});
       } catch (err: any) {
         setError(err?.message || Locale.KnowledgeGraph.Error);
       } finally {
         setLoading(false);
       }
     },
-    [setSearchParams, token],
+    [token],
   );
 
   useEffect(() => {
-    void loadGraph(initialQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setQuery(queryFromUrl);
+    void loadGraph(queryFromUrl);
+  }, [loadGraph, queryFromUrl]);
 
   const layout = useMemo(() => layoutNodes(data?.nodes || []), [data?.nodes]);
   const nodesById = useMemo(
@@ -162,7 +166,13 @@ export function KnowledgeGraphPage() {
     : visibleEdges.slice(0, 12);
 
   const submit = () => {
-    void loadGraph(query);
+    const nextPath = buildKnowledgeGraphPath(query);
+    const currentPath = `${location.pathname}${location.search}`;
+    if (nextPath === currentPath) {
+      void loadGraph(query);
+    } else {
+      navigate(nextPath, { replace: true });
+    }
   };
 
   return (
@@ -187,7 +197,7 @@ export function KnowledgeGraphPage() {
               <IconButton
                 icon={<CloseIcon />}
                 bordered
-                onClick={() => navigate(-1)}
+                onClick={() => navigate(Path.Chat, { replace: true })}
               />
             </div>
           </div>
@@ -298,6 +308,7 @@ export function KnowledgeGraphPage() {
                           className={styles["graph-node"]}
                           transform={`translate(${node.x} ${node.y})`}
                           onClick={() => setSelectedNodeId(node.id)}
+                          aria-label={`${node.label} / ${node.type}`}
                         >
                           <circle
                             r={radius}
@@ -309,7 +320,6 @@ export function KnowledgeGraphPage() {
                           <text y={radius + 17}>
                             {truncateLabel(node.label)}
                           </text>
-                          <title>{`${node.label} / ${node.type}`}</title>
                         </g>
                       );
                     })}

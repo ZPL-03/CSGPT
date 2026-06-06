@@ -36,8 +36,8 @@ import clsx from "clsx";
 import { isMcpEnabled } from "../mcp/actions";
 
 const DISCOVERY = [
-  { name: Locale.SearchChat.Page.Title, path: Path.SearchChat },
-  { name: Locale.KnowledgeGraph.Title, path: Path.KnowledgeGraph },
+  { name: Locale.SearchChat.Page.Title, path: Path.SearchChat, icon: null },
+  { name: Locale.KnowledgeGraph.Title, path: Path.KnowledgeGraph, icon: null },
 ];
 
 const ChatList = dynamic(async () => (await import("./chat-list")).ChatList, {
@@ -295,6 +295,7 @@ export function SideBar(props: { className?: string }) {
                 return {
                   title: item.name,
                   value: item.path,
+                  icon: item.icon,
                 };
               }),
             ]}

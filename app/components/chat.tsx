@@ -117,6 +117,7 @@ import { ClientApi, MultimodalContent } from "../client/api";
 import { useUserStore } from "../store/user";
 
 import { isEmpty } from "lodash-es";
+import { buildKnowledgeGraphPath } from "../utils/knowledge-graph";
 import { getModelProvider } from "../utils/model";
 import clsx from "clsx";
 import { getAvailableClientsCount, isMcpEnabled } from "../mcp/actions";
@@ -142,13 +143,6 @@ function getKnowledgeGraphQuery(
     if (message.fileContent?.trim()) return message.fileContent.trim();
   }
   return session.topic || "";
-}
-
-function buildKnowledgeGraphPath(query: string) {
-  const trimmed = query.trim();
-  return trimmed
-    ? `${Path.KnowledgeGraph}?q=${encodeURIComponent(trimmed)}`
-    : Path.KnowledgeGraph;
 }
 
 function areModelConfigsEqual(
@@ -752,17 +746,6 @@ export function ChatActions(props: {
           />
         )}
         <ChatAction
-          onClick={() => {
-            navigate(
-              buildKnowledgeGraphPath(
-                getKnowledgeGraphQuery(session, props.graphQuery),
-              ),
-            );
-          }}
-          text={Locale.KnowledgeGraph.Name}
-          icon={<GraphIcon />}
-        />
-        <ChatAction
           onClick={nextTheme}
           text={Locale.Chat.InputActions.Theme[theme]}
           icon={
@@ -939,6 +922,17 @@ export function ChatActions(props: {
           />
         )}
         {!isMobileScreen && <MCPAction />}
+        <ChatAction
+          onClick={() => {
+            navigate(
+              buildKnowledgeGraphPath(
+                getKnowledgeGraphQuery(session, props.graphQuery),
+              ),
+            );
+          }}
+          text={Locale.KnowledgeGraph.Name}
+          icon={<GraphIcon />}
+        />
       </>
       <div className={styles["chat-input-actions-end"]}></div>
     </div>

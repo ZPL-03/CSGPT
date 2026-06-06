@@ -480,6 +480,7 @@ export function Selector<T>(props: {
     subTitle?: string;
     value: T;
     disable?: boolean;
+    icon?: JSX.Element | null;
   }>;
   defaultSelectedValue?: T[] | T;
   onSelection?: (selection: T[]) => void;
@@ -523,7 +524,11 @@ export function Selector<T>(props: {
                 key={i}
                 title={item.title}
                 subTitle={item.subTitle}
-                icon={<Avatar model={item.value as string} />}
+                icon={
+                  item.icon === null
+                    ? undefined
+                    : item.icon ?? <Avatar model={item.value as string} />
+                }
                 onClick={(e) => {
                   if (item.disable) {
                     e.stopPropagation();
