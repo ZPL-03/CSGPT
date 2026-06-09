@@ -42,6 +42,7 @@ export default function RootLayout({
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
+        <meta name="mobile-web-app-capable" content="yes" />
         <link rel="icon" href="/favicon.png" type="image/png" />
         <link rel="icon" href="/favicon-32x32.png" sizes="32x32" />
         <link rel="icon" href="/favicon-16x16.png" sizes="16x16" />
