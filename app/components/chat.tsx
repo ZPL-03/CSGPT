@@ -118,6 +118,7 @@ import { useUserStore } from "../store/user";
 
 import { isEmpty } from "lodash-es";
 import {
+  buildKnowledgeGraphConversationQuery,
   buildKnowledgeGraphPath,
   normalizeKnowledgeGraphQuery,
 } from "../utils/knowledge-graph";
@@ -138,17 +139,23 @@ function getKnowledgeGraphQuery(
   const currentInput = normalizeKnowledgeGraphQuery(input);
   if (currentInput) return currentInput;
   const messages = session.messages || [];
+  const recentUserTexts: string[] = [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message.role !== "user") continue;
     const content = normalizeKnowledgeGraphQuery(
       getMessageTextContent(message),
     );
-    if (content) return content;
+    if (content) recentUserTexts.push(content);
     const fileContent = normalizeKnowledgeGraphQuery(message.fileContent || "");
-    if (fileContent) return fileContent;
+    if (!content && fileContent) recentUserTexts.push(fileContent);
+    if (recentUserTexts.length >= 6) break;
   }
-  return "";
+  if (!recentUserTexts.length) return "";
+  return buildKnowledgeGraphConversationQuery([
+    ...recentUserTexts.reverse(),
+    session.topic || "",
+  ]);
 }
 
 function areModelConfigsEqual(

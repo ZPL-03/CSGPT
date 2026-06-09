@@ -88,9 +88,12 @@ const KG_RELATIONS_FILE = path.join(
 
 const RAG_TOP_K = 5;
 const KG_TOP_K = 12;
-const GRAPH_EDGE_SCAN_LIMIT = 800;
-const GRAPH_DEFAULT_NODE_LIMIT = 120;
-const GRAPH_OVERVIEW_NODE_LIMIT = 72;
+const GRAPH_EDGE_SCAN_LIMIT = 360;
+const GRAPH_DEFAULT_NODE_LIMIT = 56;
+const GRAPH_OVERVIEW_NODE_LIMIT = 48;
+const GRAPH_MAX_QUERY_NODE_LIMIT = 72;
+const GRAPH_MAX_OVERVIEW_NODE_LIMIT = 60;
+const GRAPH_MAX_EDGES_PER_NODE = 4;
 const MAX_CHUNK_TEXT_CHARS = 1800;
 const MAX_SEARCH_TEXT_CHARS = 7000;
 const MAX_CONTEXT_CHARS = 12000;
@@ -493,17 +496,21 @@ function buildGraphResult(
   entities: KgEntity[],
   stats: { total_entities?: number; total_relations?: number },
   nodeLimit: number,
+  edgeLimit: number,
   matchedRelationCount: number,
 ): KnowledgeGraphQueryResult {
   const entityMap = new Map(
     entities.map((entity) => [normalizeTerm(entity.name), entity]),
   );
   const degree = new Map<string, number>();
+  const nodeScores = new Map<string, number>();
   for (const relation of relations) {
     const sourceId = nodeId(relation.sourceType, relation.source);
     const targetId = nodeId(relation.targetType, relation.target);
     degree.set(sourceId, (degree.get(sourceId) || 0) + 1);
     degree.set(targetId, (degree.get(targetId) || 0) + 1);
+    nodeScores.set(sourceId, (nodeScores.get(sourceId) || 0) + relation.score);
+    nodeScores.set(targetId, (nodeScores.get(targetId) || 0) + relation.score);
   }
 
   const candidateNodes = new Map<string, KnowledgeGraphNode>();
@@ -527,16 +534,35 @@ function buildGraphResult(
 
   const selectedNodeIds = new Set(
     Array.from(candidateNodes.values())
-      .sort((a, b) => b.degree - a.degree || b.count - a.count)
+      .sort((a, b) => {
+        const left =
+          (nodeScores.get(a.id) || 0) + a.degree * 2 + Math.log1p(a.count);
+        const right =
+          (nodeScores.get(b.id) || 0) + b.degree * 2 + Math.log1p(b.count);
+        return right - left;
+      })
       .slice(0, nodeLimit)
       .map((node) => node.id),
   );
-  const nodes = Array.from(candidateNodes.values())
+  const rankedNodes = Array.from(candidateNodes.values())
     .filter((node) => selectedNodeIds.has(node.id))
-    .sort((a, b) => b.degree - a.degree || b.count - a.count);
+    .sort((a, b) => {
+      const left =
+        (nodeScores.get(a.id) || 0) + a.degree * 2 + Math.log1p(a.count);
+      const right =
+        (nodeScores.get(b.id) || 0) + b.degree * 2 + Math.log1p(b.count);
+      return right - left;
+    });
   const edges: KnowledgeGraphEdge[] = [];
   const edgeSeen = new Set<string>();
-  for (const relation of relations) {
+  const nodeEdgeCounts = new Map<string, number>();
+  const rankedRelations = relations
+    .slice()
+    .sort(
+      (a, b) =>
+        b.score - a.score || relationKey(a).localeCompare(relationKey(b)),
+    );
+  for (const relation of rankedRelations) {
     const sourceId = nodeId(relation.sourceType, relation.source);
     const targetId = nodeId(relation.targetType, relation.target);
     if (!selectedNodeIds.has(sourceId) || !selectedNodeIds.has(targetId)) {
@@ -544,7 +570,17 @@ function buildGraphResult(
     }
     const id = `${sourceId}|${relation.relation}|${targetId}`;
     if (edgeSeen.has(id)) continue;
+    const sourceEdgeCount = nodeEdgeCounts.get(sourceId) || 0;
+    const targetEdgeCount = nodeEdgeCounts.get(targetId) || 0;
+    if (
+      sourceEdgeCount >= GRAPH_MAX_EDGES_PER_NODE &&
+      targetEdgeCount >= GRAPH_MAX_EDGES_PER_NODE
+    ) {
+      continue;
+    }
     edgeSeen.add(id);
+    nodeEdgeCounts.set(sourceId, sourceEdgeCount + 1);
+    nodeEdgeCounts.set(targetId, targetEdgeCount + 1);
     edges.push({
       id,
       source: sourceId,
@@ -553,7 +589,16 @@ function buildGraphResult(
       recordId: relation.recordId,
       score: relation.score,
     });
+    if (edges.length >= edgeLimit) break;
   }
+  const visibleNodeIds = new Set<string>();
+  for (const edge of edges) {
+    visibleNodeIds.add(edge.source);
+    visibleNodeIds.add(edge.target);
+  }
+  const nodes = rankedNodes.filter(
+    (node) => visibleNodeIds.has(node.id) || edges.length === 0,
+  );
 
   return {
     mode,
@@ -574,8 +619,11 @@ async function queryKnowledgeGraphOverview(
   rawLimit: number,
 ): Promise<KnowledgeGraphQueryResult> {
   const nodeLimit = Math.max(
-    32,
-    Math.min(Number(rawLimit) || GRAPH_OVERVIEW_NODE_LIMIT, 120),
+    28,
+    Math.min(
+      Number(rawLimit) || GRAPH_OVERVIEW_NODE_LIMIT,
+      GRAPH_MAX_OVERVIEW_NODE_LIMIT,
+    ),
   );
   const [entities, stats] = await Promise.all([getKgEntities(), getKgStats()]);
   const entityCounts = new Map(
@@ -623,6 +671,7 @@ async function queryKnowledgeGraphOverview(
     entities,
     stats,
     nodeLimit,
+    Math.round(nodeLimit * 1.15),
     relationScores.size,
   );
 }
@@ -637,8 +686,17 @@ export async function queryKnowledgeGraph(
     return queryKnowledgeGraphOverview(rawLimit);
   }
 
-  const nodeLimit = Math.max(20, Math.min(Number(rawLimit) || 96, 160));
-  const edgeScanLimit = Math.max(nodeLimit, Math.min(nodeLimit * 4, 600));
+  const nodeLimit = Math.max(
+    20,
+    Math.min(
+      Number(rawLimit) || GRAPH_DEFAULT_NODE_LIMIT,
+      GRAPH_MAX_QUERY_NODE_LIMIT,
+    ),
+  );
+  const edgeScanLimit = Math.max(
+    nodeLimit,
+    Math.min(nodeLimit * 3, GRAPH_EDGE_SCAN_LIMIT),
+  );
   const [entities, stats, chunks] = await Promise.all([
     getKgEntities(),
     getKgStats(),
@@ -669,6 +727,7 @@ export async function queryKnowledgeGraph(
     entities,
     stats,
     nodeLimit,
+    Math.round(nodeLimit * 1.15),
     matchedRelations.length,
   );
 }
@@ -717,7 +776,7 @@ export async function buildExternalRagKgSystemMessage(
   }
 
   return [
-    "本轮已启用外部 RAG/KG 增强。",
+    "当前请求启用外部 RAG/KG 增强。",
     "以下检索内容来自本项目内部数据，仅作为回答依据。正文不要输出 chunk_id、record_id、内部路径或来源清单。",
     "如果检索内容不足，应说明缺少的工程参数，并给出可验证的设计、制造、仿真或试验分析路径。",
     "",

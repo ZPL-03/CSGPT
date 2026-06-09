@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q") || "";
-    const limit = Number(searchParams.get("limit") || 120);
+    const limit = Number(searchParams.get("limit") || 56);
     const data = await queryKnowledgeGraph(query, limit);
     const response = NextResponse.json(data);
     response.headers.set(

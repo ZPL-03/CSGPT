@@ -75,33 +75,153 @@ function formatCount(value: number) {
   return value.toLocaleString("zh-CN");
 }
 
+function cssVar(name: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.body).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
 function nodeSize(node: GraphNode) {
-  const weighted = Math.log1p(node.count || 0) + node.degree * 2;
-  return Math.max(26, Math.min(58, 24 + weighted * 2.1));
+  const weighted = Math.log1p(node.count || 0) + node.degree * 1.2;
+  return Math.max(12, Math.min(30, 11 + weighted * 1.1));
+}
+
+function nodeWeight(node: GraphNode) {
+  return Math.log1p(node.count || 0) + node.degree * 2;
+}
+
+function componentRadius(size: number) {
+  if (size <= 2) return 34;
+  if (size <= 6) return 62;
+  if (size <= 14) return 98;
+  return 138 + Math.sqrt(size) * 18;
+}
+
+function positionComponent(
+  nodes: GraphNode[],
+  center: { x: number; y: number },
+) {
+  const positions = new Map<string, { x: number; y: number }>();
+  const sorted = nodes.slice().sort((a, b) => nodeWeight(b) - nodeWeight(a));
+  if (sorted.length === 1) {
+    positions.set(sorted[0].id, center);
+    return positions;
+  }
+
+  positions.set(sorted[0].id, center);
+  const ringSizes = [8, 14, 22, 34];
+  let offset = 1;
+  for (
+    let ring = 0;
+    ring < ringSizes.length && offset < sorted.length;
+    ring += 1
+  ) {
+    const ringCount = Math.min(ringSizes[ring], sorted.length - offset);
+    const radius = 64 + ring * 64 + Math.max(0, sorted.length - 16) * 1.4;
+    for (let item = 0; item < ringCount; item += 1) {
+      const node = sorted[offset + item];
+      const angle =
+        -Math.PI / 2 + (Math.PI * 2 * item) / ringCount + ring * 0.2;
+      positions.set(node.id, {
+        x: center.x + Math.cos(angle) * radius,
+        y: center.y + Math.sin(angle) * radius,
+      });
+    }
+    offset += ringCount;
+  }
+
+  return positions;
+}
+
+function layoutGraph(data: GraphData) {
+  const nodeMap = new Map(data.nodes.map((node) => [node.id, node]));
+  const adjacency = new Map(
+    data.nodes.map((node) => [node.id, new Set<string>()]),
+  );
+  for (const edge of data.edges) {
+    adjacency.get(edge.source)?.add(edge.target);
+    adjacency.get(edge.target)?.add(edge.source);
+  }
+
+  const seen = new Set<string>();
+  const components: GraphNode[][] = [];
+  for (const node of data.nodes) {
+    if (seen.has(node.id)) continue;
+    const stack = [node.id];
+    seen.add(node.id);
+    const component: GraphNode[] = [];
+    while (stack.length) {
+      const id = stack.pop()!;
+      const current = nodeMap.get(id);
+      if (current) component.push(current);
+      for (const next of adjacency.get(id) || []) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          stack.push(next);
+        }
+      }
+    }
+    components.push(component);
+  }
+
+  components.sort((left, right) => right.length - left.length);
+  const positions = new Map<string, { x: number; y: number }>();
+  const main = components[0] || [];
+  for (const [id, position] of positionComponent(main, { x: 0, y: 0 })) {
+    positions.set(id, position);
+  }
+
+  const mainRadius = componentRadius(main.length);
+  const smallComponents = components.slice(1);
+  const columns = Math.max(1, Math.ceil(Math.sqrt(smallComponents.length)));
+  const cellWidth = 125;
+  const cellHeight = 105;
+  const startX = mainRadius + 92;
+  const startY = -Math.max(0, columns - 1) * cellHeight * 0.55;
+  smallComponents.forEach((component, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const center = {
+      x: startX + column * cellWidth,
+      y: startY + row * cellHeight,
+    };
+    for (const [id, position] of positionComponent(component, center)) {
+      positions.set(id, position);
+    }
+  });
+
+  return positions;
 }
 
 function graphElements(
   data: GraphData,
-  showLabels: boolean,
+  showAllLabels: boolean,
 ): CytoscapeElementDefinition[] {
-  const nodes = data.nodes.map((node) => ({
-    data: {
-      id: node.id,
-      label: node.label,
-      displayLabel: showLabels ? node.label : "",
-      type: node.type,
-      count: node.count,
-      degree: node.degree,
-      color: colorForType(node.type),
-      size: nodeSize(node),
-    },
-  }));
+  const coreLabelCount = data.mode === "overview" ? 10 : 8;
+  const positions = layoutGraph(data);
+  const nodes = data.nodes.map((node, index) => {
+    const isCoreNode = index < coreLabelCount || node.degree >= 10;
+    return {
+      data: {
+        id: node.id,
+        label: node.label,
+        displayLabel: showAllLabels || isCoreNode ? node.label : "",
+        type: node.type,
+        count: node.count,
+        degree: node.degree,
+        color: colorForType(node.type),
+        size: nodeSize(node),
+        weight: nodeWeight(node),
+      },
+      position: positions.get(node.id) || { x: 0, y: 0 },
+    };
+  });
   const edges = data.edges.map((edge) => ({
     data: {
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: showLabels ? edge.relation : "",
+      label: showAllLabels ? edge.relation : "",
       relation: edge.relation,
       score: Math.max(1, edge.score || 1),
     },
@@ -113,6 +233,7 @@ export function KnowledgeGraphPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const graphRef = useRef<HTMLDivElement>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
   const cyRef = useRef<CytoscapeCore | null>(null);
   const queryFromUrl = useMemo(
     () => new URLSearchParams(location.search).get("q") || "",
@@ -123,7 +244,7 @@ export function KnowledgeGraphPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
-  const [showLabels, setShowLabels] = useState(true);
+  const [showAllLabels, setShowAllLabels] = useState(false);
   const token = useUserStore((state) => state.token);
 
   const loadGraph = useCallback(
@@ -133,7 +254,7 @@ export function KnowledgeGraphPage() {
       try {
         const params = new URLSearchParams();
         if (nextQuery.trim()) params.set("q", nextQuery.trim());
-        params.set("limit", "96");
+        params.set("limit", "56");
         const response = await fetch(`/api/knowledge-graph?${params}`, {
           cache: "no-store",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -144,7 +265,7 @@ export function KnowledgeGraphPage() {
         }
         const result = (await response.json()) as GraphData;
         setData(result);
-        setSelectedNodeId(result.nodes[0]?.id || "");
+        setSelectedNodeId("");
       } catch (err: any) {
         setError(err?.message || Locale.KnowledgeGraph.Error);
       } finally {
@@ -169,10 +290,11 @@ export function KnowledgeGraphPage() {
 
       cyRef.current?.destroy();
       const cytoscape = cytoscapeModule.default;
+      const themeText = cssVar("--black", "#1f2937");
+      const themeSurface = cssVar("--white", "#ffffff");
       const cy = cytoscape({
         container: graphRef.current,
-        elements: graphElements(data, showLabels),
-        wheelSensitivity: 0.16,
+        elements: graphElements(data, showAllLabels),
         minZoom: 0.18,
         maxZoom: 2.6,
         style: [
@@ -183,64 +305,53 @@ export function KnowledgeGraphPage() {
               width: "data(size)",
               height: "data(size)",
               label: "data(displayLabel)",
-              color: "#1f2937",
+              color: themeText,
               "font-size": 11,
               "font-weight": 600,
               "text-wrap": "wrap",
-              "text-max-width": "96px",
+              "text-max-width": "94px",
               "text-valign": "bottom",
               "text-halign": "center",
-              "text-margin-y": 8,
-              "text-background-color": "#ffffff",
-              "text-background-opacity": 0.82,
+              "text-margin-y": 5,
+              "text-background-color": themeSurface,
+              "text-background-opacity": 0.86,
               "text-background-padding": "2px",
-              "border-width": 2,
-              "border-color": "#ffffff",
+              "border-width": 1.5,
+              "border-color": themeSurface,
               "overlay-opacity": 0,
             },
           },
           {
             selector: "node:selected",
             style: {
-              "border-width": 5,
+              "border-width": 3,
               "border-color": "#10a37f",
+              label: "data(label)",
             },
           },
           {
             selector: "edge",
             style: {
-              width: "mapData(score, 1, 12, 1, 4)",
-              "curve-style": "bezier",
-              "line-color": "rgba(82, 95, 127, 0.34)",
+              width: "mapData(score, 1, 12, 0.7, 2.4)",
+              "curve-style": "unbundled-bezier",
+              "control-point-distances": 22,
+              "control-point-weights": 0.5,
+              "line-color": "rgba(96, 116, 145, 0.28)",
               "target-arrow-shape": "triangle",
-              "target-arrow-color": "rgba(82, 95, 127, 0.44)",
+              "target-arrow-color": "rgba(96, 116, 145, 0.36)",
               label: "data(label)",
-              color: "#64748b",
+              color: themeText,
               "font-size": 8,
               "text-rotation": "autorotate",
               "text-margin-y": -9,
-              "text-background-color": "#ffffff",
-              "text-background-opacity": 0.76,
+              "text-background-color": themeSurface,
+              "text-background-opacity": 0.78,
               "text-background-padding": "2px",
               "overlay-opacity": 0,
             },
           },
         ],
-        layout: {
-          name: "cose",
-          animate: false,
-          fit: true,
-          padding: 42,
-          randomize: true,
-          componentSpacing: 92,
-          nodeRepulsion: () => 9800,
-          nodeOverlap: 12,
-          idealEdgeLength: () => 126,
-          edgeElasticity: () => 0.12,
-          nestingFactor: 1.15,
-          gravity: 0.08,
-          numIter: 1300,
-        },
+        layout: { name: "preset", fit: false },
       });
       cyRef.current = cy;
       cy.on("tap", "node", (event) => {
@@ -249,7 +360,30 @@ export function KnowledgeGraphPage() {
       cy.on("tap", (event) => {
         if (event.target === cy) setSelectedNodeId("");
       });
-      requestAnimationFrame(() => cy.fit(undefined, 42));
+      cy.layout({
+        name: "cose",
+        animate: false,
+        fit: false,
+        randomize: false,
+        idealEdgeLength: 118,
+        nodeOverlap: 14,
+        nodeRepulsion: 280000,
+        edgeElasticity: 90,
+        gravity: 38,
+        numIter: 900,
+        initialTemp: 140,
+        coolingFactor: 0.96,
+      } as any).run();
+      requestAnimationFrame(() => {
+        if (disposed) return;
+        cy.resize();
+        cy.fit(cy.elements(), 36);
+      });
+      window.setTimeout(() => {
+        if (disposed) return;
+        cy.resize();
+        cy.fit(cy.elements(), 36);
+      }, 320);
     };
 
     void renderGraph();
@@ -258,7 +392,7 @@ export function KnowledgeGraphPage() {
       cyRef.current?.destroy();
       cyRef.current = null;
     };
-  }, [data, showLabels]);
+  }, [data, showAllLabels]);
 
   useEffect(() => {
     const cy = cyRef.current;
@@ -302,12 +436,14 @@ export function KnowledgeGraphPage() {
   }, [data?.nodes]);
 
   const submit = () => {
-    const nextPath = buildKnowledgeGraphPath(query);
+    const currentQuery = queryInputRef.current?.value ?? query;
+    setQuery(currentQuery);
+    const nextPath = buildKnowledgeGraphPath(currentQuery);
     const currentPath = `${location.pathname}${location.search}`;
     if (nextPath === currentPath) {
-      void loadGraph(query);
+      void loadGraph(currentQuery);
     } else {
-      navigate(nextPath, { replace: true });
+      navigate(nextPath);
     }
   };
 
@@ -343,7 +479,7 @@ export function KnowledgeGraphPage() {
               <IconButton
                 icon={<CloseIcon />}
                 bordered
-                onClick={() => navigate(Path.Chat, { replace: true })}
+                onClick={() => navigate(Path.Chat)}
               />
             </div>
           </div>
@@ -354,9 +490,10 @@ export function KnowledgeGraphPage() {
             <div className={styles["graph-search"]}>
               <GraphIcon />
               <input
+                ref={queryInputRef}
                 value={query}
                 placeholder={Locale.KnowledgeGraph.SearchPlaceholder}
-                onInput={(event) => setQuery(event.currentTarget.value)}
+                onChange={(event) => setQuery(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -431,14 +568,14 @@ export function KnowledgeGraphPage() {
                   onClick={() => zoomGraph(0.84)}
                 />
                 <IconButton
-                  icon={showLabels ? <EyeIcon /> : <EyeOffIcon />}
+                  icon={showAllLabels ? <EyeIcon /> : <EyeOffIcon />}
                   text={
-                    showLabels
+                    showAllLabels
                       ? Locale.KnowledgeGraph.HideLabels
                       : Locale.KnowledgeGraph.ShowLabels
                   }
                   bordered
-                  onClick={() => setShowLabels((value) => !value)}
+                  onClick={() => setShowAllLabels((value) => !value)}
                 />
               </div>
               {loading && (
