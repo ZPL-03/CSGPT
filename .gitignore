@@ -61,15 +61,15 @@ PROJECT_REPORT.md
 
 # 项目内部知识库运行数据保留；原始大文件和其他本地数据不进入版本库
 /data/*
-!/data/csllm_cpv/
-/data/csllm_cpv/*
-!/data/csllm_cpv/runtime/
-!/data/csllm_cpv/runtime/**
-!/data/csllm_cpv/kg/
-/data/csllm_cpv/kg/*
-!/data/csllm_cpv/kg/entities.jsonl
-!/data/csllm_cpv/kg/kg_stats.json
-!/data/csllm_cpv/provenance/
-!/data/csllm_cpv/provenance/**
+!/data/csllm/
+/data/csllm/*
+!/data/csllm/runtime/
+!/data/csllm/runtime/**
+!/data/csllm/kg/
+/data/csllm/kg/*
+!/data/csllm/kg/entities.jsonl
+!/data/csllm/kg/kg_stats.json
+!/data/csllm/provenance/
+!/data/csllm/provenance/**
 
 /app/generated/prisma

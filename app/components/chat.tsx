@@ -117,7 +117,10 @@ import { ClientApi, MultimodalContent } from "../client/api";
 import { useUserStore } from "../store/user";
 
 import { isEmpty } from "lodash-es";
-import { buildKnowledgeGraphPath } from "../utils/knowledge-graph";
+import {
+  buildKnowledgeGraphPath,
+  normalizeKnowledgeGraphQuery,
+} from "../utils/knowledge-graph";
 import { getModelProvider } from "../utils/model";
 import clsx from "clsx";
 import { getAvailableClientsCount, isMcpEnabled } from "../mcp/actions";
@@ -132,17 +135,20 @@ function getKnowledgeGraphQuery(
   session: { topic?: string; messages?: ChatMessage[] },
   input = "",
 ) {
-  const currentInput = input.trim();
+  const currentInput = normalizeKnowledgeGraphQuery(input);
   if (currentInput) return currentInput;
   const messages = session.messages || [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message.role !== "user") continue;
-    const content = getMessageTextContent(message).trim();
+    const content = normalizeKnowledgeGraphQuery(
+      getMessageTextContent(message),
+    );
     if (content) return content;
-    if (message.fileContent?.trim()) return message.fileContent.trim();
+    const fileContent = normalizeKnowledgeGraphQuery(message.fileContent || "");
+    if (fileContent) return fileContent;
   }
-  return session.topic || "";
+  return "";
 }
 
 function areModelConfigsEqual(

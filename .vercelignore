@@ -9,5 +9,5 @@ node_modules/
 .env.local
 .env.*.local
 
-data/csllm_cpv/rag/
-data/csllm_cpv/kg/relations.jsonl
+data/csllm/rag/
+data/csllm/kg/relations.jsonl

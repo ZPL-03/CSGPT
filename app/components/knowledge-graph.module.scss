@@ -49,10 +49,37 @@
   }
 }
 
+.graph-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+
+  > div:first-child {
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  strong {
+    color: var(--black);
+    font-size: 14px;
+  }
+
+  span {
+    color: var(--black);
+    opacity: 0.72;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+}
+
 .graph-stats {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 
   span {
     padding: 5px 9px;
@@ -60,86 +87,71 @@
     background: var(--gray);
     color: var(--black);
     font-size: 12px;
+    opacity: 1;
   }
 }
 
 .graph-content {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 12px;
   min-height: 0;
 }
 
 .graph-canvas {
   position: relative;
-  min-height: 420px;
+  min-height: 520px;
   border: var(--border);
   border-radius: 8px;
   overflow: hidden;
-  background: linear-gradient(rgba(127, 127, 127, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(127, 127, 127, 0.05) 1px, transparent 1px),
+  background: linear-gradient(rgba(127, 127, 127, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(127, 127, 127, 0.055) 1px, transparent 1px),
     var(--white);
-  background-size: 28px 28px;
+  background-size: 30px 30px;
+}
 
-  svg {
-    width: 100%;
-    height: 100%;
-    min-height: 420px;
-    display: block;
+.graph-viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.graph-controls {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  pointer-events: none;
+
+  button {
+    pointer-events: auto;
+    background: color-mix(in srgb, var(--white) 92%, transparent);
+    backdrop-filter: blur(8px);
   }
 }
 
 .graph-state {
   position: absolute;
   inset: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   text-align: center;
   color: var(--black);
-}
-
-.graph-edges {
-  marker {
-    fill: rgba(82, 95, 127, 0.42);
-  }
-}
-
-.graph-edge {
-  stroke: rgba(82, 95, 127, 0.28);
-  stroke-width: 1.5;
-}
-
-.graph-node {
-  cursor: pointer;
-
-  circle {
-    opacity: 0.92;
-    stroke: var(--white);
-    stroke-width: 2.5;
-    filter: drop-shadow(0 7px 14px rgba(0, 0, 0, 0.18));
-  }
-
-  text {
-    text-anchor: middle;
-    font-size: 12px;
-    fill: var(--black);
-    paint-order: stroke;
-    stroke: var(--white);
-    stroke-width: 4px;
-    stroke-linejoin: round;
-    pointer-events: none;
-  }
-}
-
-.graph-node-active {
-  stroke: var(--primary) !important;
-  stroke-width: 4 !important;
+  background: color-mix(in srgb, var(--white) 78%, transparent);
 }
 
 .graph-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   border: var(--border);
   border-radius: 8px;
   padding: 14px;
@@ -147,12 +159,27 @@
   overflow: auto;
   background: var(--white);
 
-  h3 {
-    margin: 0 0 10px;
-    font-size: 16px;
-    line-height: 1.35;
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  h3,
+  h4 {
+    margin: 0;
     color: var(--black);
+    line-height: 1.35;
     overflow-wrap: anywhere;
+  }
+
+  h3 {
+    font-size: 16px;
+  }
+
+  h4 {
+    font-size: 13px;
+    opacity: 0.82;
   }
 }
 
@@ -160,7 +187,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 12px;
 
   span {
     padding: 4px 7px;
@@ -168,6 +194,35 @@
     background: var(--gray);
     color: var(--black);
     font-size: 12px;
+  }
+}
+
+.legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    background: var(--gray);
+    color: var(--black);
+    font-size: 12px;
+  }
+
+  i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  b {
+    font-weight: 600;
+    opacity: 0.68;
   }
 }
 
@@ -202,6 +257,11 @@
     overflow-wrap: anywhere;
   }
 
+  span {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
   strong {
     color: var(--primary);
     font-size: 12px;
@@ -213,16 +273,25 @@
     padding: 12px;
   }
 
-  .graph-toolbar {
+  .graph-toolbar,
+  .graph-summary {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .graph-stats {
+    justify-content: flex-start;
   }
 
   .graph-content {
     grid-template-columns: 1fr;
   }
 
+  .graph-canvas {
+    min-height: 460px;
+  }
+
   .graph-panel {
-    max-height: 280px;
+    max-height: 320px;
   }
 }

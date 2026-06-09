@@ -637,7 +637,7 @@ const cn = {
   KnowledgeGraph: {
     Name: "知识图谱",
     Title: "知识图谱",
-    EmptySubTitle: "检索内部知识图谱关系",
+    EmptySubTitle: "查看全局领域知识图谱",
     SubTitle: (nodes: number, edges: number) =>
       `显示 ${nodes} 个节点 / ${edges} 条关系`,
     Search: "检索",
@@ -647,6 +647,18 @@ const cn = {
     NoResult: "没有找到相关图谱关系",
     Relations: "关系",
     NoRelations: "暂无关联关系",
+    OverviewMode: "全局概览",
+    QueryMode: (query: string) => `查询子图：${query}`,
+    OverviewDescription:
+      "展示全局领域知识图谱中代表性的高连接实体和关系，不代表屏幕中显示了全部节点。",
+    QueryDescription: "展示全局领域知识图谱中与当前关键词相关的实体和关系。",
+    Fit: "适配",
+    ZoomIn: "放大",
+    ZoomOut: "缩小",
+    ShowLabels: "显示标签",
+    HideLabels: "隐藏标签",
+    Legend: "节点类型",
+    SelectedRelations: "关联关系",
     TotalEntities: (count: string) => `实体 ${count}`,
     TotalRelations: (count: string) => `全量关系 ${count}`,
     MatchedRelations: (count: string) => `命中关系 ${count}`,

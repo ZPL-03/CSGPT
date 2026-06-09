@@ -37,8 +37,8 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 - **默认模型**：QWen3-14B-CS1（复合材料领域模型，通过 OpenAI 兼容接口部署）
 - **第二模型**：QWen3-14B-CS2（Qwen3-14B 复合材料领域微调模型，通过裸 vLLM OpenAI 兼容接口部署）
 - **第三模型**：QWen3-14B-CS3（Qwen3-14B 原始基座模型，通过裸 vLLM OpenAI 兼容接口部署）
-- **外部 RAG/KG 增强**：网页会话设置中的可选开关，启用后读取项目内部 `data/csllm_cpv` 知识库并拼接检索上下文，裸模型服务器不执行检索；内置模型和经本项目代理的自定义 Provider 均可使用。
-- **知识图谱可视化**：对话工具栏和侧边栏检索入口可打开知识图谱页面，按当前输入、最近用户消息或手动查询展示局部实体关系图。
+- **外部 RAG/KG 增强**：网页会话设置中的可选开关，启用后读取项目内部 `data/csllm` 知识库并拼接检索上下文，裸模型服务器不执行检索；内置模型和经本项目代理的自定义 Provider 均可使用。
+- **知识图谱可视化**：对话工具栏和侧边栏检索入口可打开知识图谱页面。页面展示 `data/csllm` 全局领域 KG 的代表性概览，或按当前输入、最近用户消息、手动关键词展示查询子图。
 - **扩展模型**：可在设置中切换 OpenAI、Anthropic 等服务商，也可添加自定义模型名和接口地址
 - **会话持久化**：用户发送消息后将聊天记录和附件引用写入 PostgreSQL
 - **文件解析**：选择附件时在浏览器内解析文本、代码、表格、工作簿、图片 OCR、PDF、Word 文档、演示文稿和 OLE 复合文档可读文本，界面显示解析进度
@@ -95,8 +95,8 @@ CSGPT 是一个专注于复合材料结构设计的智能助手平台，基于�
 ### 搜索与知识图谱
 
 - **搜索聊天记录**：侧边栏检索入口中的“搜索聊天记录”会搜索当前用户已加载的会话消息，搜索范围包含消息文本、多模态文本、附件名称和附件解析文本快照。
-- **知识图谱页面**：侧边栏检索入口中的“知识图谱”和对话输入栏的“知识图谱”按钮会查询 `data/csllm_cpv` 内部 KG 数据，并返回局部实体关系图。
-- **图谱数据形态**：`kg/entities.jsonl` 是实体节点，`runtime/relations.compact.jsonl.gz` 是关系边；前端按查询结果显示局部子图，不一次性渲染全量图谱。
+- **知识图谱页面**：侧边栏检索入口中的“知识图谱”和对话输入栏的“知识图谱”按钮会查询 `data/csllm` 内部 KG 数据。没有关键词时显示全局领域 KG 的代表性概览；有关键词时显示查询相关子图。不同会话只影响进入页面时自动带入的查询词，KG 数据源始终是同一套全局领域图谱。
+- **图谱数据形态**：`kg/entities.jsonl` 是实体节点，`runtime/relations.compact.jsonl.gz` 是关系边；前端使用 Cytoscape.js 渲染可缩放、可拖拽、可选择节点的实体关系图，不一次性渲染全量图谱。
 - **向量库关系**：知识图谱可视化不依赖向量库。向量库用于语义检索，图谱可视化使用实体和关系数据。
 
 ### 管理后台数据口径
@@ -146,17 +146,17 @@ CSGPT_CS1_API_KEY=your-api-key
 # CSGPT_CS1_UPSTREAM_MODEL_NAME=
 
 # ===== CS2 复合材料领域微调模型裸 vLLM 接口（可选）=====
-# CSGPT_CS2_BASE_URL=https://your-cs2-server/v1
+# CSGPT_CS2_BASE_URL=https://csllm.ipen03.com/v1
 # CSGPT_CS2_API_KEY=your-vllm-api-key
-# CSGPT_CS2_UPSTREAM_MODEL_NAME=csllm-cpv
+# CSGPT_CS2_UPSTREAM_MODEL_NAME=csllm
 
 # ===== CS3 原始基座模型裸 vLLM 接口（可选）=====
-# CSGPT_CS3_BASE_URL=https://your-cs3-server/v1
+# CSGPT_CS3_BASE_URL=https://csllm.ipen03.com/v1
 # CSGPT_CS3_API_KEY=your-vllm-api-key
 # CSGPT_CS3_UPSTREAM_MODEL_NAME=qwen3-14b-base
 
-# 外部 RAG/KG 增强由网页会话设置控制，数据目录为 data/csllm_cpv。
-# data/csllm_cpv/provenance 保存知识库文件清单、记录数量和哈希。
+# 外部 RAG/KG 增强由网页会话设置控制，数据目录为 data/csllm。
+# data/csllm/provenance 保存知识库文件清单、记录数量和哈希。
 
 # ===== 前端展示 =====
 CSGPT_MODEL_NAME=QWen3-14B-CS1
@@ -190,7 +190,7 @@ CSGPT/
 │   ├── prompts/       # CSGPT 系统提示词
 │   ├── utils/         # 文件解析、请求流、同步工具
 │   └── store/         # 状态管理
-├── data/csllm_cpv/    # 外部 RAG/KG 增强使用的运行知识库数据和追溯清单
+├── data/csllm/    # 外部 RAG/KG 增强使用的运行知识库数据和追溯清单
 ├── prisma/            # PostgreSQL 数据模型
 ├── public/            # 静态资源
 └── .env.local         # 环境变量
@@ -220,7 +220,7 @@ CSGPT/
 
 ### 外部 RAG/KG 数据
 
-运行时读取 `data/csllm_cpv/runtime/rag_chunks.compact.jsonl.gz`、`data/csllm_cpv/runtime/relations.compact.jsonl.gz` 和 `data/csllm_cpv/kg/entities.jsonl`。`data/csllm_cpv/provenance/` 保存数据清单、记录数量、字节大小和 SHA256 哈希。
+运行时读取 `data/csllm/runtime/rag_chunks.compact.jsonl.gz`、`data/csllm/runtime/relations.compact.jsonl.gz` 和 `data/csllm/kg/entities.jsonl`。`data/csllm/provenance/` 保存数据清单、记录数量、字节大小和 SHA256 哈希。
 
 知识图谱可视化接口读取同一套实体和关系数据，返回查询相关的局部节点与关系边；该接口要求用户登录。
 

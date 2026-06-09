@@ -1,9 +1,9 @@
 {
   "manifest_schema_version": "1.0",
-  "data_package": "csllm_cpv_external_rag_kg",
+  "data_package": "csllm_external_rag_kg",
   "generated_at": "2026-05-23T17:37:10+08:00",
-  "data_root": "data/csllm_cpv",
-  "source_pipeline": "CS_LLM_cpv dataset pipeline",
+  "data_root": "data/csllm",
+  "source_pipeline": "CS_LLM dataset pipeline",
   "runtime_owner": "CS_GPT",
   "path_policy": "All runtime references are relative to this project. No external absolute project path is required.",
   "usage": "Optional external RAG/KG enhancement for proxied chat requests.",

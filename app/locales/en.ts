@@ -648,7 +648,7 @@ const en: LocaleType = {
   KnowledgeGraph: {
     Name: "Knowledge Graph",
     Title: "Knowledge Graph",
-    EmptySubTitle: "Search internal graph relations",
+    EmptySubTitle: "Explore the global domain knowledge graph",
     SubTitle: (nodes: number, edges: number) =>
       `Showing ${nodes} nodes / ${edges} relations`,
     Search: "Search",
@@ -659,6 +659,19 @@ const en: LocaleType = {
     NoResult: "No related graph relations found",
     Relations: "Relations",
     NoRelations: "No relations",
+    OverviewMode: "Global Overview",
+    QueryMode: (query: string) => `Query Subgraph: ${query}`,
+    OverviewDescription:
+      "Shows representative high-connectivity entities and relations from the global domain knowledge graph, not every node on the screen.",
+    QueryDescription:
+      "Shows entities and relations related to the current query in the global domain knowledge graph.",
+    Fit: "Fit",
+    ZoomIn: "Zoom In",
+    ZoomOut: "Zoom Out",
+    ShowLabels: "Show Labels",
+    HideLabels: "Hide Labels",
+    Legend: "Node Types",
+    SelectedRelations: "Relations",
     TotalEntities: (count: string) => `Entities ${count}`,
     TotalRelations: (count: string) => `All relations ${count}`,
     MatchedRelations: (count: string) => `Matched relations ${count}`,
