@@ -74,6 +74,7 @@ export async function GET(
             isError: m.isError,
             model: m.model,
             tools: m.tools,
+            ragKgSources: m.ragKgSources,
             fileContent:
               m.fileContent ||
               buildFileContentFromMessage(m.content, filesById),

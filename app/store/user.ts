@@ -54,7 +54,7 @@ export const useUserStore = create<UserState>()(
           if (res.ok) {
             const data = await res.json();
             set({ user: data.user, isLoggedIn: true });
-          } else {
+          } else if (res.status === 401 || res.status === 404) {
             // 令牌无效，清除登录状态
             set({ token: "", user: null, isLoggedIn: false });
           }

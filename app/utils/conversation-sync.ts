@@ -141,6 +141,7 @@ export async function loadAllConversationsFromDB(): Promise<any[]> {
               model: m.model,
               tools: m.tools,
               fileContent: m.fileContent,
+              ragKgSources: m.ragKgSources,
               streaming: false,
             })),
             stat: { tokenCount: 0, wordCount: 0, charCount: 0 },

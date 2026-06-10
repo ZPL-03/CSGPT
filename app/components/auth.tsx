@@ -52,8 +52,13 @@ export function AuthPage() {
       }
 
       userStore.setAuth(data.token, data.user);
-      // 登录后直接从数据库加载对话，确保数据在导航前就绪
-      await useChatStore.getState().loadSessionsFromServer();
+      // 登录成功后加载服务器会话数据
+      await useChatStore
+        .getState()
+        .loadSessionsFromServer()
+        .catch((error) => {
+          console.error("[Auth] Load sessions error:", error);
+        });
       window.location.hash = "#/";
     } catch (e) {
       setError("网络错误，请稍后重试");

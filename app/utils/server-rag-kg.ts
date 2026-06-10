@@ -3,6 +3,7 @@ import * as path from "path";
 import * as readline from "readline";
 import * as zlib from "zlib";
 import { normalizeKnowledgeGraphQuery } from "./knowledge-graph";
+import type { RagKgSource } from "./rag-kg-sources";
 
 type ChatMessageLike = {
   role?: string;
@@ -10,12 +11,8 @@ type ChatMessageLike = {
 };
 
 type RagRow = {
-  chunkId: string;
   recordId: string;
-  title: string;
-  pageStart?: number;
-  pageEnd?: number;
-  chunkType: string;
+  displayTitle: string;
   searchText: string;
   text: string;
 };
@@ -97,6 +94,8 @@ const GRAPH_MAX_EDGES_PER_NODE = 4;
 const MAX_CHUNK_TEXT_CHARS = 1800;
 const MAX_SEARCH_TEXT_CHARS = 7000;
 const MAX_CONTEXT_CHARS = 12000;
+const MAX_VISIBLE_RAG_SOURCES = 5;
+const MAX_VISIBLE_KG_SOURCES = 8;
 
 const DOMAIN_TERMS = [
   "composite pressure hull",
@@ -202,6 +201,89 @@ function trimText(text: string, limit: number) {
   return normalized.slice(0, limit).trimEnd() + "...";
 }
 
+function cleanRagContent(value: string) {
+  return String(value || "")
+    .replace(
+      /(^|\n)\s*#{1,3}\s*[a-f0-9]{20,}\.(pdf|docx?|pptx?|xlsx?)\s*/gi,
+      "$1",
+    )
+    .replace(/\b[a-f0-9]{20,}\.(pdf|docx?|pptx?|xlsx?)\b/gi, "");
+}
+
+function isHashFileName(text: string) {
+  return /^[a-f0-9]{20,}\.(pdf|docx?|pptx?|xlsx?)$/i.test(
+    String(text || "").trim(),
+  );
+}
+
+function startsWithHashFileName(text: string) {
+  return /^[a-f0-9]{20,}\.(pdf|docx?|pptx?|xlsx?)\b/i.test(
+    String(text || "").trim(),
+  );
+}
+
+function cleanupTitleCandidate(value: string) {
+  let title = String(value || "")
+    .replace(/^#+\s*/, "")
+    .replace(/^[a-f0-9]{20,}\.(pdf|docx?|pptx?|xlsx?)\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/^\d/.test(title)) return "";
+  if (
+    /^(abstract|introduction|conclusion|conclusions|references|keywords|figure|table)\b/i.test(
+      title,
+    )
+  ) {
+    return "";
+  }
+
+  title = title
+    .replace(/\s+Abstract[:：].*$/i, "")
+    .replace(/\s+摘要[:：].*$/i, "")
+    .replace(/\s+###\s+.*$/g, "")
+    .replace(/\s+A Thesis Submitted.*$/i, "")
+    .replace(/\s+Submitted to.*$/i, "")
+    .replace(/\s+Correspondence:.*$/i, "")
+    .replace(/\s+Abstract[:：].*$/i, "")
+    .replace(/\s+摘要[:：].*$/i, "")
+    .replace(/\s+\d+(?:\.\d+)*\.?\s+Introduction.*$/i, "")
+    .replace(
+      /\s+[A-Z][A-Za-z'’.-]+\s+[A-Z][A-Za-z'’.-]+\s+\d(?:,\d+)*(?:,\*)?.*$/,
+      "",
+    )
+    .trim();
+
+  if (!title || isHashFileName(title)) return "";
+  if (/^[a-f0-9]{20,}$/i.test(title)) return "";
+  return trimText(title, 180);
+}
+
+function extractDisplayTitle(rawTitle: string, content: string) {
+  const rawCandidate = cleanupTitleCandidate(rawTitle);
+  if (rawCandidate && !isHashFileName(rawCandidate)) return rawCandidate;
+
+  const headingMatches = Array.from(
+    String(content || "").matchAll(/(#{1,3})\s+([^#\n\r]+)/g),
+  );
+  const rankedHeadings = [
+    ...headingMatches.filter((match) => match[1] === "##"),
+    ...headingMatches.filter((match) => match[1] === "###"),
+    ...headingMatches.filter((match) => match[1] === "#"),
+  ];
+  for (const match of rankedHeadings) {
+    const text = match[2] || "";
+    if (startsWithHashFileName(text)) continue;
+    const candidate = cleanupTitleCandidate(text);
+    if (candidate) return candidate;
+  }
+
+  const rawFirstLine = String(content || "").split(/\r?\n/)[0];
+  if (startsWithHashFileName(rawFirstLine.replace(/^#+\s*/, ""))) return "";
+  const firstLine = cleanupTitleCandidate(rawFirstLine);
+  return firstLine;
+}
+
 function normalizeTerm(text: string) {
   return String(text || "")
     .trim()
@@ -275,7 +357,9 @@ async function loadRagRows() {
     const retrievalScope = String(chunk.retrieval_scope || "main");
     if (!["main", "mixed"].includes(retrievalScope)) return;
 
-    const content = String(chunk.content_markdown || chunk.text || "");
+    const content = cleanRagContent(
+      String(chunk.content_markdown || chunk.text || ""),
+    );
     if (content.trim().length < 80) return;
 
     const title = String(chunk.title || "");
@@ -298,12 +382,8 @@ async function loadRagRows() {
     );
 
     rows.push({
-      chunkId: String(chunk.chunk_id || ""),
       recordId,
-      title,
-      pageStart: Number(chunk.page_start ?? 0),
-      pageEnd: Number(chunk.page_end ?? 0),
-      chunkType: String(chunk.chunk_type || ""),
+      displayTitle: extractDisplayTitle(title, content),
       searchText: `${metadata} ${contentPlain}`
         .toLowerCase()
         .slice(0, MAX_SEARCH_TEXT_CHARS),
@@ -732,11 +812,9 @@ export async function queryKnowledgeGraph(
   );
 }
 
-export async function buildExternalRagKgSystemMessage(
-  messages: ChatMessageLike[],
-) {
+export async function buildExternalRagKgContext(messages: ChatMessageLike[]) {
   const query = lastUserMessage(messages);
-  if (!query) return "";
+  if (!query) return null;
 
   const chunks = await searchRag(query);
   const relations = await searchKgRelations(
@@ -745,18 +823,36 @@ export async function buildExternalRagKgSystemMessage(
   );
 
   if (!chunks.length && !relations.length) {
-    return "";
+    return null;
   }
 
   const contextParts: string[] = [];
+  const sources: RagKgSource[] = [];
+  const documentSourceIds = new Map<string, string>();
   let usedChars = 0;
-  chunks.forEach((chunk, index) => {
+  chunks.forEach((chunk) => {
+    let sourceId = "";
+    const titleKey = normalizeTerm(chunk.displayTitle);
+    if (titleKey) {
+      sourceId = documentSourceIds.get(titleKey) || "";
+      if (!sourceId && documentSourceIds.size < MAX_VISIBLE_RAG_SOURCES) {
+        sourceId = `S${documentSourceIds.size + 1}`;
+        documentSourceIds.set(titleKey, sourceId);
+        sources.push({
+          kind: "document",
+          id: sourceId,
+          title: chunk.displayTitle,
+        });
+      }
+    }
+
     const block = [
-      `资料片段 ${index + 1}`,
-      `标题：${chunk.title || "未命名资料"}`,
-      `页码：${chunk.pageStart ?? ""}-${chunk.pageEnd ?? ""}`,
+      sourceId ? `来源 ${sourceId}` : "内部检索资料",
+      chunk.displayTitle ? `题名：${chunk.displayTitle}` : "",
       `内容：${chunk.text}`,
-    ].join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
     if (usedChars + block.length <= MAX_CONTEXT_CHARS) {
       contextParts.push(block);
       usedChars += block.length;
@@ -764,24 +860,47 @@ export async function buildExternalRagKgSystemMessage(
   });
 
   if (relations.length) {
-    const relationText = relations
+    const visibleRelations: KgRelation[] = [];
+    const visibleRelationKeys = new Set<string>();
+    for (const relation of relations) {
+      const key = relationKey(relation);
+      if (visibleRelationKeys.has(key)) continue;
+      visibleRelationKeys.add(key);
+      visibleRelations.push(relation);
+    }
+
+    const relationText = visibleRelations
       .map(
         (item, index) =>
-          `图谱关系 ${index + 1}：${item.source}(${item.sourceType}) -[${
+          `知识关系 K${index + 1}：${item.source}(${item.sourceType}) -[${
             item.relation
           }]-> ${item.target}(${item.targetType})`,
       )
       .join("\n");
-    contextParts.push(`知识图谱关系\n${relationText}`);
+    contextParts.push(`知识图谱依据\n${relationText}`);
+    visibleRelations.slice(0, MAX_VISIBLE_KG_SOURCES).forEach((item, index) => {
+      sources.push({
+        kind: "graph",
+        id: `K${index + 1}`,
+        source: item.source,
+        sourceType: item.sourceType,
+        relation: item.relation,
+        target: item.target,
+        targetType: item.targetType,
+      });
+    });
   }
 
-  return [
+  const message = [
     "当前请求启用外部 RAG/KG 增强。",
-    "以下检索内容来自本项目内部数据，仅作为回答依据。正文不要输出 chunk_id、record_id、内部路径或来源清单。",
+    "以下检索内容来自本项目内部数据，仅作为回答依据。需要标注依据时，只能使用 [S1]、[S2] 这类已列出的来源编号；不要输出“片段1”“资料片段1”“文献1”“图谱关系1”等不可映射说法。",
+    "正文不要输出 chunk_id、record_id、哈希文件名、内部路径或来源清单；界面会单独显示可核对来源。",
     "如果检索内容不足，应说明缺少的工程参数，并给出可验证的设计、制造、仿真或试验分析路径。",
     "",
     `用户问题：${query}`,
     "",
     contextParts.join("\n\n"),
   ].join("\n");
+
+  return { message, sources };
 }

@@ -169,6 +169,80 @@ function areModelConfigsEqual(
   return true;
 }
 
+function RagKgSourcesView({
+  sources,
+}: {
+  sources?: ChatMessage["ragKgSources"];
+}) {
+  if (!sources?.length) return null;
+
+  type RagKgSourceItem = NonNullable<ChatMessage["ragKgSources"]>[number];
+  type DocumentSource = Extract<RagKgSourceItem, { kind: "document" }>;
+  type GraphSource = Extract<RagKgSourceItem, { kind: "graph" }>;
+  const documentSources = sources.filter(
+    (source): source is DocumentSource => source.kind === "document",
+  );
+  const graphSources = sources.filter(
+    (source): source is GraphSource => source.kind === "graph",
+  );
+  if (!documentSources.length && !graphSources.length) return null;
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>检索来源</div>
+      {documentSources.length > 0 && (
+        <div className={styles["rag-kg-source-list"]}>
+          {documentSources.map((source) =>
+            source.sourceUrl ? (
+              <a
+                key={source.id}
+                className={styles["rag-kg-source-item"]}
+                href={source.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                title={source.title}
+              >
+                <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+                <span className={styles["rag-kg-source-title"]}>
+                  {source.title}
+                </span>
+              </a>
+            ) : (
+              <div
+                key={source.id}
+                className={styles["rag-kg-source-item"]}
+                title={source.title}
+              >
+                <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+                <span className={styles["rag-kg-source-title"]}>
+                  {source.title}
+                </span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+      {graphSources.length > 0 && (
+        <details className={styles["rag-kg-graph-sources"]}>
+          <summary>知识图谱依据 {graphSources.length}</summary>
+          <div className={styles["rag-kg-graph-list"]}>
+            {graphSources.map((source) => (
+              <div key={source.id} className={styles["rag-kg-graph-item"]}>
+                <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+                <span>{source.source}</span>
+                <span className={styles["rag-kg-relation"]}>
+                  {source.relation}
+                </span>
+                <span>{source.target}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 const MCPAction = () => {
   const navigate = useNavigate();
   const [count, setCount] = useState<number>(0);
@@ -2275,6 +2349,9 @@ function _Chat() {
                                 );
                               })}
                             </div>
+                          )}
+                          {!isUser && (
+                            <RagKgSourcesView sources={message.ragKgSources} />
                           )}
                         </div>
                         <div className={styles["chat-message-action-date"]}>

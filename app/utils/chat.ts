@@ -365,8 +365,61 @@ export function streamWithThink(
   let runTools: any[] = [];
   let responseRes: Response;
   let isInThinkingMode = false;
-  let lastIsThinking = false;
-  let lastIsThinkingTagged = false; // 是否在 <think> 标签内
+  let isInThinkTag = false;
+
+  function appendStreamSegment(content: string, isThinking: boolean) {
+    if (!content) return;
+
+    if (isThinking) {
+      if (!isInThinkingMode) {
+        isInThinkingMode = true;
+        if (remainText.length > 0) {
+          remainText += "\n\n";
+        }
+        remainText += THINKING_BLOCK_START;
+      }
+      remainText += content;
+      return;
+    }
+
+    if (isInThinkingMode) {
+      isInThinkingMode = false;
+      remainText += THINKING_BLOCK_END + "\n\n";
+    }
+    remainText += content;
+  }
+
+  function appendStreamChunk(content: string, isThinking: boolean) {
+    if (isThinking) {
+      appendStreamSegment(content, true);
+      return;
+    }
+
+    let cursor = 0;
+    while (cursor < content.length) {
+      if (isInThinkTag) {
+        const endIndex = content.indexOf("</think>", cursor);
+        if (endIndex < 0) {
+          appendStreamSegment(content.slice(cursor), true);
+          return;
+        }
+        appendStreamSegment(content.slice(cursor, endIndex), true);
+        isInThinkTag = false;
+        cursor = endIndex + "</think>".length;
+        continue;
+      }
+
+      const startIndex = content.indexOf("<think>", cursor);
+      if (startIndex < 0) {
+        appendStreamSegment(content.slice(cursor), false);
+        return;
+      }
+
+      appendStreamSegment(content.slice(cursor, startIndex), false);
+      isInThinkTag = true;
+      cursor = startIndex + "<think>".length;
+    }
+  }
 
   // 逐帧动画渲染响应文本
   function animateResponseText() {
@@ -546,45 +599,7 @@ export function streamWithThink(
             return;
           }
 
-          // 处理 <think> 和 </think> 标签
-          if (!chunk.isThinking) {
-            if (chunk.content.startsWith("<think>")) {
-              chunk.isThinking = true;
-              chunk.content = chunk.content.slice(7).trim();
-              lastIsThinkingTagged = true;
-            } else if (chunk.content.endsWith("</think>")) {
-              chunk.isThinking = false;
-              chunk.content = chunk.content.slice(0, -8).trim();
-              lastIsThinkingTagged = false;
-            } else if (lastIsThinkingTagged) {
-              chunk.isThinking = true;
-            }
-          }
-
-          // 检测思考模式切换
-          const isThinkingChanged = lastIsThinking !== chunk.isThinking;
-          lastIsThinking = chunk.isThinking;
-
-          if (chunk.isThinking) {
-            // 思考模式
-            if (!isInThinkingMode || isThinkingChanged) {
-              isInThinkingMode = true;
-              if (remainText.length > 0) {
-                remainText += "\n\n";
-              }
-              remainText += THINKING_BLOCK_START + chunk.content;
-            } else {
-              remainText += chunk.content;
-            }
-          } else {
-            // 普通模式
-            if (isInThinkingMode || isThinkingChanged) {
-              isInThinkingMode = false;
-              remainText += THINKING_BLOCK_END + "\n\n" + chunk.content;
-            } else {
-              remainText += chunk.content;
-            }
-          }
+          appendStreamChunk(chunk.content, chunk.isThinking);
         } catch (e) {
           console.error("[Request] parse error", text, msg, e);
           // 解析失败仅记录日志，不抛出异常

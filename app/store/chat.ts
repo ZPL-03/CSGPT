@@ -46,6 +46,10 @@ import { createEmptyMask, Mask } from "./mask";
 import { executeMcpAction, getAllTools, isMcpEnabled } from "../mcp/actions";
 import { extractMcpJson, isMcpJson } from "../mcp/utils";
 import { stripThinkingContent } from "../utils/thinking";
+import {
+  parseRagKgSourcesHeader,
+  type RagKgSource,
+} from "../utils/rag-kg-sources";
 
 const localStorage = safeLocalStorage();
 
@@ -72,6 +76,7 @@ export type ChatMessage = RequestMessage & {
   isMcpResponse?: boolean;
   /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
   fileContent?: string;
+  ragKgSources?: RagKgSource[];
 };
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -728,8 +733,12 @@ export const useChatStore = createPersistStore(
                 session.messages = session.messages.concat();
               });
             },
-            async onFinish(message) {
+            async onFinish(message, responseRes) {
               botMessage.streaming = false;
+              const ragKgSources = parseRagKgSourcesHeader(responseRes);
+              if (ragKgSources.length) {
+                botMessage.ragKgSources = ragKgSources;
+              }
               if (message) {
                 botMessage.content = message;
                 botMessage.date = new Date().toLocaleString();

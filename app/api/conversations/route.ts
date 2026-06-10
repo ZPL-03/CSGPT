@@ -197,6 +197,7 @@ export async function POST(request: NextRequest) {
                 model: msg.model || null,
                 tools: msg.tools || undefined,
                 fileContent: fileContentFromRefs || existingFileContent,
+                ragKgSources: msg.ragKgSources || undefined,
                 createdAt: new Date(baseCreatedAt + index),
               };
             }),

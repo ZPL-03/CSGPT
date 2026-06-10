@@ -6,7 +6,12 @@ import {
   CSGPT_MODEL_3,
 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
-import { buildExternalRagKgSystemMessage } from "@/app/utils/server-rag-kg";
+import { buildExternalRagKgContext } from "@/app/utils/server-rag-kg";
+import {
+  encodeRagKgSourcesHeader,
+  RAG_KG_SOURCES_HEADER,
+  type RagKgSource,
+} from "@/app/utils/rag-kg-sources";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -158,6 +163,13 @@ function normalizeMessagesToText(messages: any[]) {
     ...message,
     content: normalizeContentToText(message.content),
   }));
+}
+
+function attachRagKgSourcesHeader(headers: Headers, sources: RagKgSource[]) {
+  const encoded = encodeRagKgSourcesHeader(sources);
+  if (encoded) {
+    headers.set(RAG_KG_SOURCES_HEADER, encoded);
+  }
 }
 
 async function handle(req: NextRequest, { params }: { params: RouteParams }) {
@@ -372,6 +384,7 @@ async function prepareProxyMessages(
   options: { injectCSGPTPrompt: boolean; ragKgEnabled: boolean },
 ) {
   const processedMessages = [...messages];
+  let ragKgSources: RagKgSource[] = [];
   if (
     options.injectCSGPTPrompt &&
     !processedMessages.some((msg: any) => msg.role === "system")
@@ -383,9 +396,9 @@ async function prepareProxyMessages(
   }
 
   if (options.ragKgEnabled) {
-    const ragKgMessage =
-      await buildExternalRagKgSystemMessage(processedMessages);
-    if (ragKgMessage) {
+    const ragKgContext = await buildExternalRagKgContext(processedMessages);
+    if (ragKgContext?.message) {
+      ragKgSources = ragKgContext.sources;
       let insertIndex = 0;
       while (
         insertIndex < processedMessages.length &&
@@ -399,12 +412,12 @@ async function prepareProxyMessages(
         )
           ? "developer"
           : "system",
-        content: ragKgMessage,
+        content: ragKgContext.message,
       });
     }
   }
 
-  return processedMessages;
+  return { messages: processedMessages, ragKgSources };
 }
 
 async function handleDedicatedCSGPTChatCompletions(
@@ -427,9 +440,9 @@ async function handleDedicatedCSGPTChatCompletions(
   }
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
 
-  let processedMessages: any[];
+  let preparedMessages: Awaited<ReturnType<typeof prepareProxyMessages>>;
   try {
-    processedMessages = await prepareProxyMessages(messages, {
+    preparedMessages = await prepareProxyMessages(messages, {
       injectCSGPTPrompt: true,
       ragKgEnabled,
     });
@@ -441,7 +454,7 @@ async function handleDedicatedCSGPTChatCompletions(
   }
 
   const apiUrl = joinUrl(upstream.baseUrl, "chat/completions");
-  const upstreamMessages = normalizeMessagesToText(processedMessages);
+  const upstreamMessages = normalizeMessagesToText(preparedMessages.messages);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -487,19 +500,23 @@ async function handleDedicatedCSGPTChatCompletions(
   }
 
   if (stream && response.body) {
+    const responseHeaders = new Headers({
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    attachRagKgSourcesHeader(responseHeaders, preparedMessages.ragKgSources);
     return new Response(response.body, {
       status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
+      headers: responseHeaders,
     });
   }
 
   const data = await response.json();
-  return NextResponse.json(data);
+  const nextResponse = NextResponse.json(data);
+  attachRagKgSourcesHeader(nextResponse.headers, preparedMessages.ragKgSources);
+  return nextResponse;
 }
 
 // 处理聊天补全请求
@@ -546,12 +563,15 @@ async function handleChatCompletions(
   }
 
   let processedMessages = [...messages];
+  let ragKgSources: RagKgSource[] = [];
   if (backend.isCSGPT || ragKgEnabled) {
     try {
-      processedMessages = await prepareProxyMessages(messages, {
+      const preparedMessages = await prepareProxyMessages(messages, {
         injectCSGPTPrompt: backend.isCSGPT,
         ragKgEnabled,
       });
+      processedMessages = preparedMessages.messages;
+      ragKgSources = preparedMessages.ragKgSources;
     } catch (error: any) {
       return NextResponse.json(
         { error: true, message: error?.message || "RAG/KG 检索增强失败" },
@@ -622,18 +642,22 @@ async function handleChatCompletions(
 
   if (stream && response.body) {
     // 直接透传上游 SSE 流，避免 TransformStream 在 Node.js 环境下导致流阻塞
+    const responseHeaders = new Headers({
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    attachRagKgSourcesHeader(responseHeaders, ragKgSources);
     return new Response(response.body, {
       status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
+      headers: responseHeaders,
     });
   } else {
     const data = await response.json();
-    return NextResponse.json(data);
+    const nextResponse = NextResponse.json(data);
+    attachRagKgSourcesHeader(nextResponse.headers, ragKgSources);
+    return nextResponse;
   }
 }
 
