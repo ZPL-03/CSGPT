@@ -137,7 +137,9 @@ function getKnowledgeGraphQuery(
   input = "",
 ) {
   const currentInput = normalizeKnowledgeGraphQuery(input);
-  if (currentInput) return currentInput;
+  if (currentInput) {
+    return buildKnowledgeGraphConversationQuery([currentInput]) || currentInput;
+  }
   const messages = session.messages || [];
   const recentUserTexts: string[] = [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {

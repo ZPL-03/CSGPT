@@ -197,21 +197,24 @@
   }
 }
 
-.legend-list {
+.filter-list {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
 
-  span {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 7px;
-    border-radius: 6px;
-    background: var(--gray);
-    color: var(--black);
-    font-size: 12px;
-  }
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--gray);
+  color: var(--black);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
 
   i {
     width: 8px;
@@ -223,6 +226,12 @@
   b {
     font-weight: 600;
     opacity: 0.68;
+  }
+
+  &:hover,
+  &[data-active="true"] {
+    background: var(--primary);
+    color: var(--white);
   }
 }
 

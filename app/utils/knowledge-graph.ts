@@ -21,32 +21,48 @@ const MEANINGLESS_GRAPH_QUERIES = new Set([
 ]);
 
 const MAX_GRAPH_QUERY_LENGTH = 360;
-const MAX_CONVERSATION_QUERY_TERMS = 12;
+const MAX_CONVERSATION_QUERY_TERMS = 10;
 
 const KNOWLEDGE_GRAPH_QUERY_TERMS = [
   "复合材料",
   "耐压壳",
+  "耐压结构",
   "压力壳",
   "压力容器",
   "深海",
   "外压",
   "静水压力",
   "圆柱壳",
+  "圆柱",
+  "球壳",
   "层合壳",
+  "层合板",
   "屈曲",
   "极限强度",
+  "强度",
+  "刚度",
+  "稳定性",
   "安全系数",
   "铺层",
+  "铺层角",
+  "厚度",
+  "质量",
   "缠绕",
   "缠绕角",
+  "材料选择",
   "设计方案",
   "设计变量",
+  "优化",
   "工艺",
   "制造",
   "约束",
   "有限元",
   "仿真",
   "试验",
+  "失效准则",
+  "失效",
+  "Tsai-Wu",
+  "Hashin",
   "碳纤维",
   "玻璃纤维",
   "树脂",
@@ -62,8 +78,11 @@ const KNOWLEDGE_GRAPH_QUERY_TERMS = [
   "hydrostatic pressure",
   "buckling",
   "laminate",
+  "laminated plate",
   "filament winding",
   "winding angle",
+  "failure criterion",
+  "material selection",
   "finite element",
 ];
 
@@ -95,13 +114,32 @@ export function normalizeKnowledgeGraphQuery(query: string) {
   return normalized.slice(0, MAX_GRAPH_QUERY_LENGTH);
 }
 
-function addQueryTerm(terms: string[], seen: Set<string>, term: string) {
+type QueryTermScore = {
+  term: string;
+  score: number;
+  order: number;
+};
+
+function addQueryTerm(
+  scores: Map<string, QueryTermScore>,
+  term: string,
+  score: number,
+  order: number,
+) {
   const normalized = term.trim();
   if (!normalized) return;
   const key = normalized.toLowerCase();
-  if (seen.has(key) || GENERIC_GRAPH_QUERY_WORDS.has(key)) return;
-  seen.add(key);
-  terms.push(normalized);
+  if (GENERIC_GRAPH_QUERY_WORDS.has(key)) return;
+  for (const existingKey of scores.keys()) {
+    if (existingKey !== key && existingKey.includes(key)) return;
+  }
+  const previous = scores.get(key);
+  if (previous) {
+    previous.score += score;
+    previous.order = Math.min(previous.order, order);
+    return;
+  }
+  scores.set(key, { term: normalized, score, order });
 }
 
 export function buildKnowledgeGraphConversationQuery(parts: string[]) {
@@ -110,22 +148,29 @@ export function buildKnowledgeGraphConversationQuery(parts: string[]) {
     .filter(Boolean);
   if (!normalizedParts.length) return "";
 
-  const joined = normalizedParts.join(" ");
-  const joinedLower = joined.toLowerCase();
-  const terms: string[] = [];
-  const seen = new Set<string>();
+  const scores = new Map<string, QueryTermScore>();
+  let order = 0;
 
-  for (const term of KNOWLEDGE_GRAPH_QUERY_TERMS) {
-    if (joinedLower.includes(term.toLowerCase())) {
-      addQueryTerm(terms, seen, term);
+  normalizedParts.forEach((part, index) => {
+    const partLower = part.toLowerCase();
+    const recencyWeight = 1 + index / Math.max(1, normalizedParts.length);
+    for (const term of KNOWLEDGE_GRAPH_QUERY_TERMS) {
+      if (partLower.includes(term.toLowerCase())) {
+        addQueryTerm(scores, term, 3 * recencyWeight, order);
+        order += 1;
+      }
     }
-  }
 
-  const englishTokens = joined.match(/[A-Za-z][A-Za-z0-9_+./-]{2,}/g) || [];
-  for (const token of englishTokens) {
-    addQueryTerm(terms, seen, token);
-    if (terms.length >= MAX_CONVERSATION_QUERY_TERMS) break;
-  }
+    const englishTokens = part.match(/[A-Za-z][A-Za-z0-9_+./-]{2,}/g) || [];
+    for (const token of englishTokens) {
+      addQueryTerm(scores, token, recencyWeight, order);
+      order += 1;
+    }
+  });
+
+  const terms = Array.from(scores.values())
+    .sort((left, right) => right.score - left.score || left.order - right.order)
+    .map((item) => item.term);
 
   if (terms.length) {
     return normalizeKnowledgeGraphQuery(
