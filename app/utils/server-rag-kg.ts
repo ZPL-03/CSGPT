@@ -13,6 +13,7 @@ type ChatMessageLike = {
 type RagRow = {
   recordId: string;
   displayTitle: string;
+  sourceUrl?: string;
   searchText: string;
   text: string;
 };
@@ -35,6 +36,8 @@ type KgRelation = {
   target: string;
   targetType: string;
   recordId: string;
+  evidenceTitle?: string;
+  evidenceUrl?: string;
   score: number;
 };
 
@@ -384,6 +387,7 @@ async function loadRagRows() {
     rows.push({
       recordId,
       displayTitle: extractDisplayTitle(title, content),
+      sourceUrl: String(chunk.source_url || ""),
       searchText: `${metadata} ${contentPlain}`
         .toLowerCase()
         .slice(0, MAX_SEARCH_TEXT_CHARS),
@@ -531,6 +535,8 @@ function scoreRelation(
     target,
     targetType: String(relation.target_type || ""),
     recordId,
+    evidenceTitle: String(relation.evidence_document_title || ""),
+    evidenceUrl: String(relation.evidence_source_url || ""),
     score,
   };
 }
@@ -565,6 +571,8 @@ function relationToKgRelation(relation: any, score: number): KgRelation | null {
     target,
     targetType: String(relation.target_type || "Entity"),
     recordId: String(relation.record_id || ""),
+    evidenceTitle: String(relation.evidence_document_title || ""),
+    evidenceUrl: String(relation.evidence_source_url || ""),
     score,
   };
 }
@@ -829,22 +837,26 @@ export async function buildExternalRagKgContext(messages: ChatMessageLike[]) {
   const contextParts: string[] = [];
   const sources: RagKgSource[] = [];
   const documentSourceIds = new Map<string, string>();
+  const addDocumentSource = (title: string, sourceUrl?: string) => {
+    const normalizedTitle = normalizeTerm(title);
+    if (!normalizedTitle) return "";
+    const existingId = documentSourceIds.get(normalizedTitle);
+    if (existingId) return existingId;
+    if (documentSourceIds.size >= MAX_VISIBLE_RAG_SOURCES) return "";
+
+    const sourceId = `S${documentSourceIds.size + 1}`;
+    documentSourceIds.set(normalizedTitle, sourceId);
+    sources.push({
+      kind: "document",
+      id: sourceId,
+      title,
+      sourceUrl: sourceUrl || undefined,
+    });
+    return sourceId;
+  };
   let usedChars = 0;
   chunks.forEach((chunk) => {
-    let sourceId = "";
-    const titleKey = normalizeTerm(chunk.displayTitle);
-    if (titleKey) {
-      sourceId = documentSourceIds.get(titleKey) || "";
-      if (!sourceId && documentSourceIds.size < MAX_VISIBLE_RAG_SOURCES) {
-        sourceId = `S${documentSourceIds.size + 1}`;
-        documentSourceIds.set(titleKey, sourceId);
-        sources.push({
-          kind: "document",
-          id: sourceId,
-          title: chunk.displayTitle,
-        });
-      }
-    }
+    const sourceId = addDocumentSource(chunk.displayTitle, chunk.sourceUrl);
 
     const block = [
       sourceId ? `来源 ${sourceId}` : "内部检索资料",
@@ -870,12 +882,18 @@ export async function buildExternalRagKgContext(messages: ChatMessageLike[]) {
     }
 
     const relationText = visibleRelations
-      .map(
-        (item, index) =>
-          `知识关系 K${index + 1}：${item.source}(${item.sourceType}) -[${
-            item.relation
-          }]-> ${item.target}(${item.targetType})`,
-      )
+      .map((item, index) => {
+        const evidenceSourceId = addDocumentSource(
+          item.evidenceTitle || "",
+          item.evidenceUrl,
+        );
+        const evidenceText = evidenceSourceId
+          ? `（依据 ${evidenceSourceId}）`
+          : "";
+        return `知识关系 K${index + 1}${evidenceText}：${item.source}(${
+          item.sourceType
+        }) -[${item.relation}]-> ${item.target}(${item.targetType})`;
+      })
       .join("\n");
     contextParts.push(`知识图谱依据\n${relationText}`);
     visibleRelations.slice(0, MAX_VISIBLE_KG_SOURCES).forEach((item, index) => {

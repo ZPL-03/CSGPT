@@ -1,5 +1,6 @@
-# 外部 RAG/KG 数据追溯
+# CSGPT 运行数据包
 
-本目录记录 `data/csllm` 中外部 RAG/KG 数据包的文件清单、记录数量、字节大小和 SHA256 哈希。
-
-运行时只读取本项目内部的 `data/csllm` 数据，不依赖其他项目目录。`manifest.json` 用于整体数据包追溯，`file_manifest.jsonl` 用于逐文件校验。
+`runtime/rag_chunks.compact.jsonl.gz` 保存 RAG 检索文本块。
+`runtime/relations.compact.jsonl.gz` 保存知识图谱关系及其 RAG 证据来源。
+`kg/entities.jsonl` 和 `kg/kg_stats.json` 保存知识图谱实体与统计信息。
+`provenance/manifest.json` 和 `provenance/file_manifest.jsonl` 保存记录数、字节数和 SHA256。

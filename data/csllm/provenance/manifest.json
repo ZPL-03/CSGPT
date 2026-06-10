@@ -1,49 +1,101 @@
 {
-  "manifest_schema_version": "1.0",
-  "data_package": "csllm_external_rag_kg",
-  "generated_at": "2026-05-23T17:37:10+08:00",
-  "data_root": "data/csllm",
-  "source_pipeline": "CS_LLM dataset pipeline",
-  "runtime_owner": "CS_GPT",
-  "path_policy": "All runtime references are relative to this project. No external absolute project path is required.",
-  "usage": "Optional external RAG/KG enhancement for proxied chat requests.",
-  "total_bytes": 18041133,
-  "artifacts": [
+  "package": "csllm",
+  "generated_at": "2026-06-10T17:39:48.615493+00:00",
+  "source_files": {
+    "rag_chunks": "dataset/processed/rag/rag_chunks.jsonl",
+    "relations": "dataset/processed/kg/relations.jsonl",
+    "entities": "dataset/processed/kg/entities.jsonl",
+    "kg_stats": "dataset/processed/kg/kg_stats.json"
+  },
+  "record_counts": {
+    "rag_chunks": 51788,
+    "relations": 480899,
+    "entities": 2214
+  },
+  "schemas": {
+    "rag_chunks": [
+      "chunk_id",
+      "chunk_fingerprint",
+      "content_hash",
+      "record_id",
+      "source_id",
+      "title",
+      "document_title",
+      "section_title",
+      "title_path",
+      "section_path",
+      "doi",
+      "source_url",
+      "year",
+      "venue",
+      "source_type",
+      "chunk_type",
+      "block_types",
+      "block_ids",
+      "page_start",
+      "page_end",
+      "parse_quality_score",
+      "load_case_tag",
+      "physics_quantities_mentioned",
+      "contains_explicit_formula",
+      "design_platform_scope",
+      "content_markdown",
+      "content_plain"
+    ],
+    "relations": [
+      "source_type",
+      "source",
+      "relation",
+      "target",
+      "target_type",
+      "record_id",
+      "evidence_chunk_id",
+      "evidence_chunk_fingerprint",
+      "evidence_source_id",
+      "evidence_document_title",
+      "evidence_source_url",
+      "evidence_doi",
+      "page_start",
+      "page_end",
+      "section_path"
+    ]
+  },
+  "files": [
     {
-      "role": "rag_chunks_runtime",
-      "relative_path": "runtime/rag_chunks.compact.jsonl.gz",
-      "format": "jsonl.gz",
-      "bytes": 16401299,
-      "record_count": 43651,
-      "sha256": "c739e5b683a58b5ef44583b5e73d7b9567c12c53e0b44924684b016286ff7f4e",
-      "description": "Compressed RAG text chunks used by the external RAG/KG enhancement layer."
+      "path": "runtime/rag_chunks.compact.jsonl.gz",
+      "bytes": 50573944,
+      "sha256": "aef4e23f9d5468d2789d78bec6a7199a4c6f54c8c56d9585fc51ffacabb25285",
+      "records": 51788
     },
     {
-      "role": "kg_relations_runtime",
-      "relative_path": "runtime/relations.compact.jsonl.gz",
-      "format": "jsonl.gz",
-      "bytes": 1486112,
-      "record_count": 347609,
-      "sha256": "8484e339420a474749c3077ff63dfbdacd86be641609dab9b59da95ce77bb4d3",
-      "description": "Compressed knowledge graph relation triples used by the external RAG/KG enhancement layer."
+      "path": "runtime/relations.compact.jsonl.gz",
+      "bytes": 10754411,
+      "sha256": "d20405ae5d13808de03e3ac13f4ba34d3db539f311f76c24394f00d7058fdc23",
+      "records": 480899
     },
     {
-      "role": "kg_entities",
-      "relative_path": "kg/entities.jsonl",
-      "format": "jsonl",
-      "bytes": 143201,
-      "record_count": 1763,
-      "sha256": "604bb00923d65b035df075ac42590959c85eaf450d330b2651f5129f6bfc725e",
-      "description": "Knowledge graph entity records used for query expansion and KG lookup."
+      "path": "kg/entities.jsonl",
+      "bytes": 180093,
+      "sha256": "669a6c0480013dd405f2f34439343034c423115935e885e2380867e815e2c651",
+      "records": 2214
     },
     {
-      "role": "kg_stats",
-      "relative_path": "kg/kg_stats.json",
-      "format": "json",
-      "bytes": 10521,
-      "record_count": null,
-      "sha256": "e1916364c5ef7d36846f6d25b43fad9e9cfc7e92de0e6c0550dec402cb6f08b8",
-      "description": "Knowledge graph statistics produced by the source data pipeline."
+      "path": "kg/kg_stats.json",
+      "bytes": 10535,
+      "sha256": "107e0fab3c26e7742a7a5f8b91a389506a25b1164ee5890d0aa076c8da0ffad8",
+      "records": null
+    },
+    {
+      "path": "provenance/README.md",
+      "bytes": 378,
+      "sha256": "efacf56c1c2b55f6f9e9af3dee38b41f5fa097adbb93969897850834db63d3a1",
+      "records": null
+    },
+    {
+      "path": "provenance/file_manifest.jsonl",
+      "bytes": 720,
+      "sha256": "170c6b4c5a946e05c9a83d85c66f4d1795e9f6c628a2fca78168391b47cc36d1",
+      "records": 5
     }
   ]
 }

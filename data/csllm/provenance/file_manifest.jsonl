@@ -1,4 +1,5 @@
-{"role":"rag_chunks_runtime","relative_path":"runtime/rag_chunks.compact.jsonl.gz","format":"jsonl.gz","bytes":16401299,"record_count":43651,"sha256":"c739e5b683a58b5ef44583b5e73d7b9567c12c53e0b44924684b016286ff7f4e","description":"Compressed RAG text chunks used by the external RAG/KG enhancement layer."}
-{"role":"kg_relations_runtime","relative_path":"runtime/relations.compact.jsonl.gz","format":"jsonl.gz","bytes":1486112,"record_count":347609,"sha256":"8484e339420a474749c3077ff63dfbdacd86be641609dab9b59da95ce77bb4d3","description":"Compressed knowledge graph relation triples used by the external RAG/KG enhancement layer."}
-{"role":"kg_entities","relative_path":"kg/entities.jsonl","format":"jsonl","bytes":143201,"record_count":1763,"sha256":"604bb00923d65b035df075ac42590959c85eaf450d330b2651f5129f6bfc725e","description":"Knowledge graph entity records used for query expansion and KG lookup."}
-{"role":"kg_stats","relative_path":"kg/kg_stats.json","format":"json","bytes":10521,"record_count":null,"sha256":"e1916364c5ef7d36846f6d25b43fad9e9cfc7e92de0e6c0550dec402cb6f08b8","description":"Knowledge graph statistics produced by the source data pipeline."}
+{"path":"runtime/rag_chunks.compact.jsonl.gz","bytes":50573944,"sha256":"aef4e23f9d5468d2789d78bec6a7199a4c6f54c8c56d9585fc51ffacabb25285","records":51788}
+{"path":"runtime/relations.compact.jsonl.gz","bytes":10754411,"sha256":"d20405ae5d13808de03e3ac13f4ba34d3db539f311f76c24394f00d7058fdc23","records":480899}
+{"path":"kg/entities.jsonl","bytes":180093,"sha256":"669a6c0480013dd405f2f34439343034c423115935e885e2380867e815e2c651","records":2214}
+{"path":"kg/kg_stats.json","bytes":10535,"sha256":"107e0fab3c26e7742a7a5f8b91a389506a25b1164ee5890d0aa076c8da0ffad8","records":null}
+{"path":"provenance/README.md","bytes":378,"sha256":"efacf56c1c2b55f6f9e9af3dee38b41f5fa097adbb93969897850834db63d3a1","records":null}
