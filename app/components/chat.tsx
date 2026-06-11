@@ -49,6 +49,7 @@ import McpToolIcon from "../icons/tool.svg";
 import {
   BOT_HELLO,
   ChatMessage,
+  ChatSession,
   DEFAULT_TOPIC,
   ModelType,
   SubmitKey,
@@ -1266,18 +1267,29 @@ export function ChatActions(props: {
   ]);
 
   async function clearSessionMessages() {
-    chatStore.updateTargetSession(session, (session) => {
-      session.messages = [];
-      session.memoryPrompt = "";
-      session.clearContextIndex = undefined;
-      session.lastSummarizeIndex = 0;
-      session.lastUpdate = Date.now();
-    });
+    const nextSession = {
+      ...session,
+      messages: [],
+      memoryPrompt: "",
+      clearContextIndex: undefined,
+      lastSummarizeIndex: 0,
+      lastUpdate: Date.now(),
+    };
     const userStore = useUserStore.getState();
     if (userStore.isLoggedIn) {
-      const synced = await syncConversationToDB(chatStore.currentSession());
-      if (!synced) showToast("清除聊天记录失败");
+      const synced = await syncConversationToDB(nextSession);
+      if (!synced) {
+        showToast("清除聊天记录失败");
+        return;
+      }
     }
+    chatStore.updateTargetSession(session, (session) => {
+      session.messages = nextSession.messages;
+      session.memoryPrompt = nextSession.memoryPrompt;
+      session.clearContextIndex = nextSession.clearContextIndex;
+      session.lastSummarizeIndex = nextSession.lastSummarizeIndex;
+      session.lastUpdate = nextSession.lastUpdate;
+    });
   }
 
   return (
@@ -1986,10 +1998,15 @@ function _Chat() {
     }, 30);
   };
 
-  const syncCurrentSessionState = async (failureMessage: string) => {
+  const syncCurrentSessionState = async (
+    failureMessage: string,
+    sessionToSync?: ChatSession,
+  ) => {
     const userStore = useUserStore.getState();
     if (!userStore.isLoggedIn) return true;
-    const synced = await syncConversationToDB(chatStore.currentSession());
+    const synced = await syncConversationToDB(
+      sessionToSync ?? chatStore.currentSession(),
+    );
     if (!synced) showToast(failureMessage);
     return synced;
   };
@@ -2066,11 +2083,19 @@ function _Chat() {
 
   const deleteMessage = async (msgId?: string, shouldSync = true) => {
     if (!msgId) return;
+    const nextSession = {
+      ...session,
+      messages: session.messages.filter((m) => m.id !== msgId),
+      lastUpdate: Date.now(),
+    };
+    if (shouldSync) {
+      const synced = await syncCurrentSessionState("删除消息失败", nextSession);
+      if (!synced) return;
+    }
     chatStore.updateTargetSession(session, (session) => {
-      session.messages = session.messages.filter((m) => m.id !== msgId);
-      session.lastUpdate = Date.now();
+      session.messages = nextSession.messages;
+      session.lastUpdate = nextSession.lastUpdate;
     });
-    if (shouldSync) await syncCurrentSessionState("删除消息失败");
   };
 
   const onDelete = (msgId: string) => {

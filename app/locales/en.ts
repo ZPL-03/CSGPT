@@ -583,42 +583,42 @@ const en: LocaleType = {
 
     Model: "Model",
     RagKg: {
-      Title: "External RAG/KG",
+      Title: "Allow RAG/KG",
       SubTitle:
         "Allows the server to search the internal knowledge base when the current question needs it",
     },
     WebSearch: {
-      Title: "Web Search",
+      Title: "Allow Web Search",
       SubTitle:
         "Allows the server to run web, standards, or patent search for the current question and return sources",
     },
     AcademicSearch: {
-      Title: "Academic Search",
+      Title: "Allow Academic Search",
       SubTitle:
         "Allows the server to run academic search for the current question and return sources",
     },
     DesignCalculation: {
-      Title: "Design Calculation",
+      Title: "Allow Design Calculation",
       SubTitle:
         "Allows the server to run controlled deterministic calculations from engineering parameters in the current question",
     },
     StructureVisualization: {
-      Title: "Structure Visualization",
+      Title: "Allow Structure Visualization",
       SubTitle:
         "Allows the server to generate structure sketches from dimensions and layup data in the current question",
     },
     SimulationJob: {
-      Title: "Simulation Job",
+      Title: "Allow Simulation Job",
       SubTitle:
         "Allows the server to plan real solver jobs for finite-element or simulation requests",
     },
     SessionFileRag: {
-      Title: "Session File Knowledge",
+      Title: "Allow Session File Knowledge",
       SubTitle:
         "Allows the server to retrieve parsed attachments from the current conversation when relevant",
     },
     UserFileRag: {
-      Title: "User File Knowledge",
+      Title: "Allow User File Knowledge",
       SubTitle:
         "Allows the server to retrieve indexed attachments from the current user when relevant",
     },

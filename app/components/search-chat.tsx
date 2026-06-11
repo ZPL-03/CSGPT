@@ -66,9 +66,11 @@ export function SearchChatPage() {
 
     const results: SearchItem[] = [];
     sessions.forEach((session, index) => {
-      const snippets = session.messages.flatMap((message) =>
+      const titleSnippets = findSnippets(session.topic, query);
+      const messageSnippets = session.messages.flatMap((message) =>
         findSnippets(messageToSearchText(message), query),
       );
+      const snippets = [...titleSnippets, ...messageSnippets];
       if (snippets.length > 0) {
         results.push({
           id: index,

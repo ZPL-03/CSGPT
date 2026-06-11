@@ -1229,20 +1229,24 @@ export const useChatStore = createPersistStore(
         set(() => ({ sessions }));
       },
       async clearAllData() {
-        // 服务端对话和文件数据
         const token = useUserStore.getState().token;
         if (token) {
           try {
-            await fetch("/api/conversations", {
+            const response = await fetch("/api/conversations", {
               method: "DELETE",
               headers: { Authorization: `Bearer ${token}` },
             });
-          } catch {
-            // 本地数据处理不依赖服务端响应。
+            if (!response.ok) {
+              showToast("清除服务器数据失败");
+              return;
+            }
+          } catch (error) {
+            console.error("[ChatStore] Failed to clear server data:", error);
+            showToast("清除服务器数据失败");
+            return;
           }
         }
         await indexedDBStorage.clear();
-        // 对话数据独立于登录令牌和配置。
         const preservedKeys = [StoreKey.User, StoreKey.Access, StoreKey.Config];
         const preserved: Record<string, string | null> = {};
         for (const key of preservedKeys) {

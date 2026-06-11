@@ -1,5 +1,5 @@
 // 对话数据同步工具
-// 将对话数据同步到 PostgreSQL 数据库，支持从数据库加载和合并
+// 将当前对话写入 PostgreSQL，并从数据库加载用户对话。
 
 import { useUserStore } from "../store/user";
 
@@ -94,7 +94,9 @@ export function parseMessageContent(content: string): string | any[] {
   try {
     const parsed = JSON.parse(content);
     if (Array.isArray(parsed)) return parsed;
-  } catch {}
+  } catch {
+    return content;
+  }
   return content;
 }
 

@@ -28,6 +28,91 @@
       ]
     },
     {
+      "name": "RAG KG disabled blocks domain retrieval",
+      "message": "Please compare buckling failure modes of composite pressure vessels under external pressure.",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": [],
+      "unselected": ["csgpt-rag-kg", "csgpt-design-calculation"]
+    },
+    {
+      "name": "RAG KG enabled ignores non domain request",
+      "message": "Please write a short greeting for a project kickoff meeting.",
+      "allow": {
+        "ragKgEnabled": true,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": [],
+      "unselected": ["csgpt-rag-kg"]
+    },
+    {
+      "name": "RAG KG enabled selects domain request",
+      "message": "Please summarize composite pressure vessel laminate buckling design considerations.",
+      "allow": {
+        "ragKgEnabled": true,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": ["csgpt-rag-kg"],
+      "unselected": ["csgpt-web-search", "csgpt-academic-search"]
+    },
+    {
+      "name": "File knowledge disabled blocks attachment retrieval",
+      "message": "Please summarize the uploaded PDF and explain the second figure.",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": [],
+      "unselected": ["csgpt-session-file-rag", "csgpt-user-file-rag"]
+    },
+    {
+      "name": "All external tools disabled block explicit intents",
+      "message": "Search the latest ISO standard and calculate pressure vessel thickness at 6000 m depth.",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": [],
+      "unselected": [
+        "csgpt-rag-kg",
+        "csgpt-web-search",
+        "csgpt-standard-search",
+        "csgpt-design-calculation"
+      ]
+    },
+    {
       "name": "标准规范问题触发标准检索",
       "message": "ISO 11119 对复合材料压力容器有哪些标准要求？",
       "allow": {
