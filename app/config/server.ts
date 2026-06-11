@@ -106,10 +106,6 @@ declare global {
       CSGPT_CS3_BASE_URL?: string; // CS3 上游服务地址
       CSGPT_CS3_API_KEY?: string; // CS3 上游 API 密钥
       CSGPT_CS3_UPSTREAM_MODEL_NAME?: string; // CS3 上游实际模型名称
-
-      FEM_SERVICE_BASE_URL?: string; // 外部有限元任务服务地址
-      FEM_SERVICE_API_KEY?: string; // 外部有限元任务服务密钥
-      FEM_SERVICE_JOBS_PATH?: string; // 外部有限元任务提交路径
     }
   }
 }

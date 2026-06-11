@@ -28,13 +28,9 @@ interface MessageItem {
   isError: boolean;
   model: string;
   tools?: unknown[];
-  agentPlan?: unknown;
   fileContent?: string;
   ragKgSources?: unknown[];
   researchSources?: unknown[];
-  designCalculations?: unknown[];
-  structureVisualizations?: unknown[];
-  simulationJobDrafts?: unknown[];
   sessionFileSources?: unknown[];
   userFileSources?: unknown[];
 }
@@ -62,7 +58,6 @@ interface Stats {
   messages: number;
   files: number;
   userFileRagChunks: number;
-  simulationJobs: number;
   fileList: FileItem[];
   dbSize: string;
   tableSize: string;
@@ -109,15 +104,11 @@ function countItems(value?: unknown[]) {
 
 function SourceCountBadges({ message }: { message: MessageItem }) {
   const rawItems: Array<[string, number]> = [
-    ["RAG/KG 来源", countItems(message.ragKgSources)],
+    ["内部知识库来源", countItems(message.ragKgSources)],
     ["外部检索来源", countItems(message.researchSources)],
     ["用户文件来源", countItems(message.userFileSources)],
     ["会话文件来源", countItems(message.sessionFileSources)],
-    ["设计计算记录", countItems(message.designCalculations)],
-    ["结构可视化记录", countItems(message.structureVisualizations)],
-    ["仿真任务草案", countItems(message.simulationJobDrafts)],
     ["工具执行记录", countItems(message.tools)],
-    ["工具规划记录", message.agentPlan ? 1 : 0],
   ];
   const items = rawItems.filter(([, count]) => count > 0);
 
@@ -577,11 +568,6 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
       desc: "当前用户文件 RAG 索引块记录数",
     },
     {
-      label: "仿真任务",
-      value: stats?.simulationJobs,
-      desc: "当前有限元任务记录数",
-    },
-    {
       label: "数据库占用",
       value: stats?.dbSize,
       desc: "PostgreSQL 当前数据库物理占用",
@@ -594,7 +580,7 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
     {
       label: "当前内容",
       value: stats?.dataSize,
-      desc: "当前文件二进制、解析文本、索引文本、消息文本和仿真任务合计",
+      desc: "当前文件二进制、解析文本、索引文本和消息文本合计",
     },
     {
       label: "索引内容",
@@ -811,8 +797,8 @@ function FilesTab({
                 </span>
                 <span>{file.username || file.userId || "未知用户"}</span>
                 <span>原始文件 {formatSize(file.size)}</span>
-                <span>解析文本 {formatSize(file.extractedTextLength)}</span>
-                <span>索引块 {file.ragChunkCount}</span>
+                <span>附件解析文本 {formatSize(file.extractedTextLength)}</span>
+                <span>用户文件索引块 {file.ragChunkCount}</span>
                 <span>{formatParseStatus(file.parseStatus)}</span>
                 <span>{file.mimeType}</span>
                 <span>{formatDate(file.createdAt)}</span>

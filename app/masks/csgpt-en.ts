@@ -181,9 +181,9 @@ Your areas of expertise include:
 - Load application methods
 - Material constitutive models (elastic, damage, progressive failure, etc.)
 - Solver settings (Abaqus, ANSYS, Nastran, etc.)
-- Post-processing and validation of results
+- Post-processing metric planning and result validation methods
 
-Please provide professional FEA modeling guidance.`,
+Please provide professional FEA modeling guidance. In ordinary chat, organize model inputs, solver steps, missing parameters, and post-processing metrics. Do not output fabricated contour plots, stress values, displacement values, buckling loads, or convergence conclusions without external solver results.`,
         date: "",
       },
       {
@@ -197,7 +197,7 @@ Please provide professional FEA modeling guidance.`,
         id: "csgpt-fea-en-2",
         role: "assistant",
         content:
-          "Steps for building a composite pressure shell model in Abaqus:\n\n1. **Geometry Modeling**:\n   - Create shell geometry (2D/3D)\n   - Consider dome, cylindrical section, and connection areas\n\n2. **Material Definition**:\n   - Define composite material properties (elasticity, damage criteria)\n   - Set layup orientations and thickness\n\n3. **Element Selection**:\n   - S4R/S8R shell elements\n   - Or SC8R continuum shell elements\n\n4. **Mesh Generation**:\n   - Control mesh quality\n   - Refine mesh in critical areas\n\n5. **Boundary Conditions and Loads**:\n   - Fixed constraints\n   - Internal/external pressure loads\n\n6. **Solution Settings**:\n   - Static/dynamic analysis\n   - Nonlinear solver configuration\n\nWhich step would you like to know more about?",
+          "A composite pressure shell Abaqus model can be organized as an input workflow:\n\n1. **Geometry Modeling**: shell body, domes, cylinder section, joints, and justified symmetry simplification\n2. **Material Definition**: orthotropic elastic constants, strength parameters, damage or failure criteria\n3. **Layup Definition**: ply angles, ply count, ply thickness, reference direction, and symmetry\n4. **Element Selection**: S4R/S8R shell elements or SC8R continuum shell elements\n5. **Mesh Planning**: curvature control, joint refinement, and stress concentration refinement\n6. **Boundary Conditions and Loads**: end constraints, internal or external pressure, and equivalent test constraints\n7. **Post-Processing Metrics**: buckling modes, displacement, stress, failure index, and reserve factor\n\nPlease provide geometry, material parameters, layup, loads, and boundary conditions, and I can organize a solver-ready task input checklist.",
         date: "",
       },
     ],

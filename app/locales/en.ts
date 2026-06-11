@@ -99,6 +99,8 @@ const en: LocaleType = {
       Clear: "Clear Context",
       Settings: "Settings",
       UploadImage: "Upload Files",
+      WebSearch: "Web Search",
+      AcademicSearch: "Literature Search",
     },
     Rename: "Rename Chat",
     Typing: "Typing…",
@@ -583,44 +585,19 @@ const en: LocaleType = {
 
     Model: "Model",
     RagKg: {
-      Title: "Allow RAG/KG",
+      Title: "Internal Knowledge Base",
       SubTitle:
-        "Allows the server to search the internal knowledge base when the current question needs it",
-    },
-    WebSearch: {
-      Title: "Allow Web Search",
-      SubTitle:
-        "Allows the server to run web, standards, or patent search for the current question and return sources",
-    },
-    AcademicSearch: {
-      Title: "Allow Academic Search",
-      SubTitle:
-        "Allows the server to run academic search for the current question and return sources",
-    },
-    DesignCalculation: {
-      Title: "Allow Design Calculation",
-      SubTitle:
-        "Allows the server to run controlled deterministic calculations from engineering parameters in the current question",
-    },
-    StructureVisualization: {
-      Title: "Allow Structure Visualization",
-      SubTitle:
-        "Allows the server to generate structure sketches from dimensions and layup data in the current question",
-    },
-    SimulationJob: {
-      Title: "Allow Simulation Job",
-      SubTitle:
-        "Allows the server to plan real solver jobs for finite-element or simulation requests",
+        "Search the built-in domain knowledge base and knowledge graph for the current question",
     },
     SessionFileRag: {
-      Title: "Allow Session File Knowledge",
+      Title: "Session File Knowledge",
       SubTitle:
-        "Allows the server to retrieve parsed attachments from the current conversation when relevant",
+        "Retrieve parsed attachments already sent in the current conversation for the current question",
     },
     UserFileRag: {
-      Title: "Allow User File Knowledge",
+      Title: "User File Knowledge",
       SubTitle:
-        "Allows the server to retrieve indexed attachments from the current user when relevant",
+        "Retrieve indexed parsed attachments owned by the current signed-in user for the current question",
     },
     CompressModel: {
       Title: "Summary Model",

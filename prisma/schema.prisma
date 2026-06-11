@@ -23,7 +23,6 @@ model User {
   tokens         AuthToken[]
   files          UploadedFile[]
   fileRagChunks  UserFileRagChunk[]
-  simulationJobs SimulationJob[]
 }
 
 // 认证令牌表
@@ -54,7 +53,6 @@ model Conversation {
   updatedAt          DateTime @updatedAt
 
   messages       Message[]
-  simulationJobs SimulationJob[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -62,25 +60,21 @@ model Conversation {
 
 // 消息表
 model Message {
-  id                      String       @id
-  conversationId          String
-  conversation            Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role                    String // system | user | assistant
-  content                 String       @default("")
-  date                    String
-  isError                 Boolean      @default(false)
-  model                   String?
-  tools                   Json? // 工具调用 JSON 数组
-  fileContent             String?
-  ragKgSources            Json?
-  researchSources         Json?
-  designCalculations      Json?
-  structureVisualizations Json?
-  simulationJobDrafts     Json?
-  sessionFileSources      Json?
-  userFileSources         Json?
-  agentPlan               Json?
-  createdAt               DateTime     @default(now())
+  id                 String       @id
+  conversationId     String
+  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role               String // system | user | assistant
+  content            String       @default("")
+  date               String
+  isError            Boolean      @default(false)
+  model              String?
+  tools              Json? // 工具调用 JSON 数组
+  fileContent        String?
+  ragKgSources       Json?
+  researchSources    Json?
+  sessionFileSources Json?
+  userFileSources    Json?
+  createdAt          DateTime     @default(now())
 
   @@index([conversationId])
   @@index([conversationId, date])
@@ -124,27 +118,4 @@ model UserFileRagChunk {
   @@unique([fileId, chunkIndex])
   @@index([userId, createdAt])
   @@index([userId, fileId])
-}
-
-// 仿真任务表
-model SimulationJob {
-  id             String        @id @default(cuid())
-  userId         String
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversationId String?
-  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  messageId      String?
-  solver         String
-  status         String        @default("queued")
-  title          String
-  input          Json
-  result         Json?
-  externalJobId  String?
-  error          String?       @db.Text
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  @@index([userId, createdAt])
-  @@index([userId, status])
-  @@index([conversationId])
 }

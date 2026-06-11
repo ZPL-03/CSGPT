@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export type ResearchSearchProvider =
   | "tavily"
-  | "brave"
   | "semantic-scholar"
   | "elsevier-scopus"
   | "springer-openaccess"
@@ -37,14 +36,6 @@ const providerDefinitions = [
     title: "Tavily Web Search",
     description: "面向 Agent 和 RAG 场景的联网、标准规范和专利检索。",
     envKeys: ["TAVILY_API_KEY"],
-  },
-  {
-    provider: "brave",
-    mode: "web",
-    modes: ["web", "standard", "patent"],
-    title: "Brave Web Search",
-    description: "基于 Brave 独立网页索引的联网、标准规范和专利检索。",
-    envKeys: ["BRAVE_SEARCH_API_KEY"],
   },
   {
     provider: "semantic-scholar",
@@ -112,7 +103,6 @@ const requestSchema = z.object({
   provider: z
     .enum([
       "tavily",
-      "brave",
       "semantic-scholar",
       "elsevier-scopus",
       "springer-openaccess",
@@ -154,8 +144,6 @@ function isProviderConfigured(provider: ResearchSearchProvider) {
   switch (provider) {
     case "tavily":
       return hasEnv("TAVILY_API_KEY");
-    case "brave":
-      return hasEnv("BRAVE_SEARCH_API_KEY");
     case "semantic-scholar":
       return isSemanticScholarConfigured();
     case "elsevier-scopus":
@@ -238,7 +226,7 @@ function resolveDefaultProvider(mode: ResearchSearchMode) {
   const candidates: ResearchSearchProvider[] =
     mode === "academic"
       ? ["semantic-scholar", "elsevier-scopus", "springer-openaccess", "core"]
-      : ["tavily", "brave"];
+      : ["tavily"];
 
   return (
     candidates.find((provider) => isProviderConfigured(provider)) ||
@@ -485,64 +473,6 @@ async function runTavilySearch(input: z.infer<typeof requestSchema>) {
     mode,
     query: input.query,
     answer: compactString(data?.answer),
-    results,
-  };
-}
-
-async function runBraveSearch(input: z.infer<typeof requestSchema>) {
-  const apiKey = process.env.BRAVE_SEARCH_API_KEY?.trim();
-  if (!apiKey) {
-    throw new ResearchSearchConfigurationError("BRAVE_SEARCH_API_KEY 未配置。");
-  }
-
-  const mode = normalizeWebMode(input.mode);
-  const maxResults = clampMaxResults(input.maxResults, mode);
-  const url = new URL("https://api.search.brave.com/res/v1/web/search");
-  url.searchParams.set("q", buildExternalWebQuery(input.query, mode));
-  url.searchParams.set("count", String(maxResults));
-  url.searchParams.set("extra_snippets", "true");
-  if (input.country) url.searchParams.set("country", input.country);
-  if (input.language) url.searchParams.set("search_lang", input.language);
-
-  const response = await fetchSearchProvider("Brave", url, {
-    headers: {
-      Accept: "application/json",
-      "Cache-Control": "no-cache",
-      "User-Agent": "CSGPT/1.0",
-      "X-Subscription-Token": apiKey,
-    },
-  });
-  const data = await parseJsonResponse(response, "Brave");
-
-  const results: ResearchSearchResult[] = (
-    Array.isArray(data?.web?.results) ? data.web.results : []
-  )
-    .map((item: any) => {
-      const itemUrl = normalizeUrl(item?.url);
-      const title = compactString(item?.title) || itemUrl;
-      if (!itemUrl || !title) return null;
-      const snippets = [
-        compactString(item?.description),
-        ...(Array.isArray(item?.extra_snippets)
-          ? item.extra_snippets.map(compactString)
-          : []),
-      ].filter(Boolean);
-      return {
-        title,
-        url: itemUrl,
-        snippet: snippets.join("\n"),
-        source: compactString(item?.profile?.name) || hostFromUrl(itemUrl),
-        provider: "brave" as const,
-        mode,
-        publishedAt: compactString(item?.page_age),
-      };
-    })
-    .filter(Boolean);
-
-  return {
-    provider: "brave" as const,
-    mode,
-    query: input.query,
     results,
   };
 }
@@ -853,8 +783,6 @@ export async function executeResearchSearch(rawBody: unknown) {
   switch (provider) {
     case "tavily":
       return runTavilySearch({ ...input, mode });
-    case "brave":
-      return runBraveSearch({ ...input, mode });
     case "semantic-scholar":
       return runSemanticScholarSearch({ ...input, mode });
     case "elsevier-scopus":

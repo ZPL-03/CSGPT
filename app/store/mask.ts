@@ -1,7 +1,7 @@
 import { BUILTIN_MASKS } from "../masks";
 import { getLang, Lang } from "../locales";
 import { DEFAULT_TOPIC, ChatMessage } from "./chat";
-import { ModelConfig, useAppConfig } from "./config";
+import { ModelConfig, normalizeModelConfigState, useAppConfig } from "./config";
 import { ServiceProvider, StoreKey } from "../constant";
 import { nanoid } from "nanoid";
 import { createPersistStore } from "../utils/store";
@@ -48,10 +48,10 @@ function normalizeMaskState(state?: Partial<MaskState>): MaskState {
 
   Object.values(source.masks || {}).forEach((mask) => {
     const id = mask.id || nanoid();
-    const modelConfig = {
+    const modelConfig = normalizeModelConfigState({
       ...useAppConfig.getState().modelConfig,
       ...(mask.modelConfig || {}),
-    };
+    });
     masks[id] = {
       ...createEmptyMask(),
       ...mask,
@@ -113,8 +113,10 @@ export const useMaskStore = createPersistStore(
           ({
             ...m,
             modelConfig: {
-              ...config.modelConfig,
-              ...m.modelConfig,
+              ...normalizeModelConfigState({
+                ...config.modelConfig,
+                ...m.modelConfig,
+              }),
             },
           }) as Mask,
       );

@@ -43,7 +43,7 @@ export async function buildUserFileRagContext(
     {
       contextTitle: "用户私有文件知识上下文",
       scopeDescription:
-        "这些内容来自当前登录用户已上传附件的解析文本，不属于全局 RAG/KG，也不属于其他用户数据。",
+        "这些内容来自当前登录用户已上传附件的解析文本，不属于内部知识库，也不属于其他用户数据。",
       sourcePrefix: "U",
     },
     (source) => ({

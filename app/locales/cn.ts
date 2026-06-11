@@ -98,6 +98,8 @@ const cn = {
       Clear: "清除聊天",
       Settings: "对话设置",
       UploadImage: "添加文件",
+      WebSearch: "联网搜索",
+      AcademicSearch: "文献搜索",
     },
     Rename: "重命名对话",
     Typing: "正在输入…",
@@ -576,36 +578,16 @@ const cn = {
 
     Model: "模型 (model)",
     RagKg: {
-      Title: "允许 RAG/KG",
-      SubTitle: "允许服务端按当前问题检索项目内部知识库",
-    },
-    WebSearch: {
-      Title: "允许联网搜索",
-      SubTitle: "允许服务端按当前问题执行网页、标准规范或专利检索并返回来源",
-    },
-    AcademicSearch: {
-      Title: "允许学术检索",
-      SubTitle: "允许服务端按当前问题执行外部文献检索并返回来源",
-    },
-    DesignCalculation: {
-      Title: "允许设计计算",
-      SubTitle: "允许服务端按当前问题中的工程参数执行受控确定性计算",
-    },
-    StructureVisualization: {
-      Title: "允许结构可视化",
-      SubTitle: "允许服务端按当前问题中的尺寸和铺层信息生成结构示意",
-    },
-    SimulationJob: {
-      Title: "允许仿真任务",
-      SubTitle: "允许服务端按有限元或仿真需求规划真实求解任务",
+      Title: "内部知识库",
+      SubTitle: "按当前问题检索项目内置领域知识库和知识图谱",
     },
     SessionFileRag: {
-      Title: "允许会话文件知识",
-      SubTitle: "允许服务端按当前问题检索当前会话附件解析文本",
+      Title: "会话文件知识",
+      SubTitle: "按当前问题检索本会话已发送附件的解析文本",
     },
     UserFileRag: {
-      Title: "允许用户文件知识",
-      SubTitle: "允许服务端按当前问题检索当前用户附件索引",
+      Title: "用户文件知识",
+      SubTitle: "按当前问题检索当前登录用户已解析附件索引",
     },
     CompressModel: {
       Title: "对话摘要模型",

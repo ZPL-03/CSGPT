@@ -196,14 +196,9 @@ export async function POST(request: NextRequest) {
                 isError: msg.isError || false,
                 model: msg.model || null,
                 tools: msg.tools || undefined,
-                agentPlan: msg.agentPlan || undefined,
                 fileContent: fileContentFromRefs || existingFileContent,
                 ragKgSources: msg.ragKgSources || undefined,
                 researchSources: msg.researchSources || undefined,
-                designCalculations: msg.designCalculations || undefined,
-                structureVisualizations:
-                  msg.structureVisualizations || undefined,
-                simulationJobDrafts: msg.simulationJobDrafts || undefined,
                 sessionFileSources: msg.sessionFileSources || undefined,
                 userFileSources: msg.userFileSources || undefined,
                 createdAt: new Date(baseCreatedAt + index),
@@ -261,9 +256,6 @@ export async function DELETE(request: NextRequest) {
     await prisma.$transaction(async (tx: any) => {
       if (conversations.length > 0) {
         await tx.message.deleteMany({
-          where: { conversationId: { in: conversations.map((c) => c.id) } },
-        });
-        await tx.simulationJob.deleteMany({
           where: { conversationId: { in: conversations.map((c) => c.id) } },
         });
         await tx.conversation.deleteMany({ where: { userId } });

@@ -72,22 +72,19 @@ export interface RequestPayload {
   max_tokens?: number;
   max_completion_tokens?: number;
   chat_template_kwargs?: Record<string, unknown>;
-  external_rag_kg_enabled?: boolean;
-  external_web_search_enabled?: boolean;
-  external_academic_search_enabled?: boolean;
-  external_design_calculation_enabled?: boolean;
-  external_structure_visualization_enabled?: boolean;
-  external_simulation_job_enabled?: boolean;
-  external_session_file_rag_enabled?: boolean;
-  external_session_file_records?: {
+  csgpt_internal_knowledge_enabled?: boolean;
+  csgpt_web_search_enabled?: boolean;
+  csgpt_academic_search_enabled?: boolean;
+  csgpt_session_file_knowledge_enabled?: boolean;
+  csgpt_session_file_records?: {
     messageId?: string;
     role?: string;
     fileContent?: string;
     fileIds?: string[];
   }[];
-  external_user_file_rag_enabled?: boolean;
-  external_user_file_excluded_file_ids?: string[];
-  external_upstream_url?: string;
+  csgpt_user_file_knowledge_enabled?: boolean;
+  csgpt_user_file_excluded_file_ids?: string[];
+  csgpt_upstream_url?: string;
 }
 
 export interface DalleRequestPayload {
@@ -274,7 +271,7 @@ export class ChatGPTApi implements LLMApi {
     } else {
       const messages: ChatOptions["messages"] = [];
       const sessionFileRecords: NonNullable<
-        RequestPayload["external_session_file_records"]
+        RequestPayload["csgpt_session_file_records"]
       > = options.sessionFileRecords ? [...options.sessionFileRecords] : [];
       const messageFileIds: string[] = [];
       for (const v of options.messages) {
@@ -325,44 +322,32 @@ export class ChatGPTApi implements LLMApi {
         max_tokens: modelConfig.max_tokens,
       };
       if (modelConfig.enableRagKg) {
-        requestPayload.external_rag_kg_enabled = true;
+        requestPayload.csgpt_internal_knowledge_enabled = true;
       }
       if (modelConfig.enableWebSearch) {
-        requestPayload.external_web_search_enabled = true;
+        requestPayload.csgpt_web_search_enabled = true;
       }
       if (modelConfig.enableAcademicSearch) {
-        requestPayload.external_academic_search_enabled = true;
-      }
-      if (modelConfig.enableDesignCalculation) {
-        requestPayload.external_design_calculation_enabled = true;
-      }
-      if (modelConfig.enableStructureVisualization) {
-        requestPayload.external_structure_visualization_enabled = true;
-      }
-      if (modelConfig.enableSimulationJob) {
-        requestPayload.external_simulation_job_enabled = true;
+        requestPayload.csgpt_academic_search_enabled = true;
       }
       if (modelConfig.enableSessionFileRag) {
-        requestPayload.external_session_file_rag_enabled = true;
-        requestPayload.external_session_file_records = sessionFileRecords;
+        requestPayload.csgpt_session_file_knowledge_enabled = true;
+        requestPayload.csgpt_session_file_records = sessionFileRecords;
       }
       if (modelConfig.enableUserFileRag) {
-        requestPayload.external_user_file_rag_enabled = true;
+        requestPayload.csgpt_user_file_knowledge_enabled = true;
         const excludedFileIds = uniqueFileIds([
           ...messageFileIds,
           ...collectFileIdsFromSessionRecords(sessionFileRecords),
         ]);
         if (excludedFileIds.length) {
-          requestPayload.external_user_file_excluded_file_ids = excludedFileIds;
+          requestPayload.csgpt_user_file_excluded_file_ids = excludedFileIds;
         }
       }
       if (
         modelConfig.enableRagKg ||
         modelConfig.enableWebSearch ||
         modelConfig.enableAcademicSearch ||
-        modelConfig.enableDesignCalculation ||
-        modelConfig.enableStructureVisualization ||
-        modelConfig.enableSimulationJob ||
         modelConfig.enableSessionFileRag ||
         modelConfig.enableUserFileRag
       ) {
@@ -373,7 +358,7 @@ export class ChatGPTApi implements LLMApi {
             )
           : "";
         if (customUpstreamUrl) {
-          requestPayload.external_upstream_url = customUpstreamUrl;
+          requestPayload.csgpt_upstream_url = customUpstreamUrl;
         }
       }
       if (options.config.chat_template_kwargs) {
@@ -399,15 +384,12 @@ export class ChatGPTApi implements LLMApi {
     }
 
     const shouldStream = !isDalle3 && !!options.config.stream;
-    const forceServerProxyForExternalEnhancement =
+    const forceServerProxyForCsgptTools =
       !isDalle3 &&
       !!(
         modelConfig.enableRagKg ||
         modelConfig.enableWebSearch ||
         modelConfig.enableAcademicSearch ||
-        modelConfig.enableDesignCalculation ||
-        modelConfig.enableStructureVisualization ||
-        modelConfig.enableSimulationJob ||
         modelConfig.enableSessionFileRag ||
         modelConfig.enableUserFileRag
       );
@@ -441,13 +423,13 @@ export class ChatGPTApi implements LLMApi {
             useCustomConfig ? useAccessStore.getState().azureApiVersion : "",
           ),
           modelConfig.providerName,
-          forceServerProxyForExternalEnhancement,
+          forceServerProxyForCsgptTools,
         );
       } else {
         chatPath = this.path(
           isDalle3 ? OpenaiPath.ImagePath : OpenaiPath.ChatPath,
           modelConfig.providerName,
-          forceServerProxyForExternalEnhancement,
+          forceServerProxyForCsgptTools,
         );
       }
       if (shouldStream) {

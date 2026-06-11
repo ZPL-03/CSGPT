@@ -159,7 +159,7 @@ let kgStatsPromise: Promise<{
 function assertFileExists(filePath: string, label: string) {
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `外部 RAG/KG 数据缺失：${label} 不存在。请将数据放置到 ${DATA_ROOT} 后再启用 RAG/KG。`,
+      `内部知识库数据缺失：${label} 不存在。请将数据放置到 ${DATA_ROOT} 后再启用内部知识库。`,
     );
   }
 }
@@ -396,7 +396,7 @@ async function loadRagRows() {
   });
 
   if (!rows.length) {
-    throw new Error("外部 RAG 文本块为空，不能启用 RAG/KG。");
+    throw new Error("内部知识库文本块为空，不能启用内部知识库。");
   }
 
   return rows;
@@ -820,7 +820,9 @@ export async function queryKnowledgeGraph(
   );
 }
 
-export async function buildExternalRagKgContext(messages: ChatMessageLike[]) {
+export async function buildInternalKnowledgeContext(
+  messages: ChatMessageLike[],
+) {
   const query = lastUserMessage(messages);
   if (!query) return null;
 
@@ -910,7 +912,7 @@ export async function buildExternalRagKgContext(messages: ChatMessageLike[]) {
   }
 
   const message = [
-    "当前请求启用外部 RAG/KG 增强。",
+    "当前请求启用内部知识库。",
     "以下检索内容来自本项目内部数据，仅作为回答依据。需要标注依据时，只能使用 [S1]、[S2] 这类已列出的来源编号；不要输出“片段1”“资料片段1”“文献1”“图谱关系1”等不可映射说法。",
     "正文只使用界面可映射的来源编号，不展示内部标识、文件散列名称或后台来源清单；界面会单独显示可核对来源。",
     "如果检索内容不足，应说明缺少的工程参数，并给出可验证的设计、制造、仿真或试验分析路径。",

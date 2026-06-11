@@ -228,7 +228,11 @@ function MarkdownRenderer(props: { content: string }) {
 
   return (
     <ReactMarkdown
-      remarkPlugins={[RemarkMath, RemarkGfm, RemarkBreaks]}
+      remarkPlugins={[
+        RemarkMath,
+        [RemarkGfm, { singleTilde: false }],
+        RemarkBreaks,
+      ]}
       rehypePlugins={[
         RehypeKatex,
         [

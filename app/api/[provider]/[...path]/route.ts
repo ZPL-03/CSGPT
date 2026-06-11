@@ -7,7 +7,7 @@ import {
   CSGPT_MODEL_3,
 } from "@/app/constant";
 import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
-import { buildExternalRagKgContext } from "@/app/utils/server-rag-kg";
+import { buildInternalKnowledgeContext } from "@/app/utils/server-rag-kg";
 import {
   encodeRagKgSourcesHeader,
   RAG_KG_SOURCES_HEADER,
@@ -19,18 +19,6 @@ import {
   type ResearchSource,
 } from "@/app/utils/research-sources";
 import { buildExternalResearchContext } from "@/app/utils/server-research";
-import { buildExternalDesignCalculationContext } from "@/app/utils/server-design-calculation";
-import {
-  DESIGN_CALCULATION_RESULTS_HEADER,
-  encodeDesignCalculationResultsHeader,
-  type DesignCalculationTrace,
-} from "@/app/utils/design-calculation-results";
-import { buildExternalStructureVisualizationContext } from "@/app/utils/server-structure-visualization";
-import {
-  encodeStructureVisualizationResultsHeader,
-  STRUCTURE_VISUALIZATION_RESULTS_HEADER,
-  type StructureVisualizationTrace,
-} from "@/app/utils/structure-visualization-results";
 import {
   encodeSessionFileSourcesHeader,
   SESSION_FILE_SOURCES_HEADER,
@@ -52,21 +40,6 @@ import {
   encodeControlledToolRecordsHeader,
   type ControlledToolRecord,
 } from "@/app/utils/controlled-tool-records";
-import {
-  buildControlledAgentPlan,
-  planControlledChatTools,
-  type ControlledAgentPlan,
-} from "@/app/utils/server-agent-planner";
-import {
-  CONTROLLED_AGENT_PLAN_HEADER,
-  encodeControlledAgentPlanHeader,
-} from "@/app/utils/controlled-agent-plan";
-import { buildExternalSimulationJobContext } from "@/app/utils/server-simulation-job";
-import {
-  encodeSimulationJobDraftsHeader,
-  SIMULATION_JOB_DRAFTS_HEADER,
-  type SimulationJobDraft,
-} from "@/app/utils/simulation-job-results";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -237,36 +210,6 @@ function attachResearchSourcesHeader(
   }
 }
 
-function attachDesignCalculationResultsHeader(
-  headers: Headers,
-  results: DesignCalculationTrace[],
-) {
-  const encoded = encodeDesignCalculationResultsHeader(results);
-  if (encoded) {
-    headers.set(DESIGN_CALCULATION_RESULTS_HEADER, encoded);
-  }
-}
-
-function attachStructureVisualizationResultsHeader(
-  headers: Headers,
-  results: StructureVisualizationTrace[],
-) {
-  const encoded = encodeStructureVisualizationResultsHeader(results);
-  if (encoded) {
-    headers.set(STRUCTURE_VISUALIZATION_RESULTS_HEADER, encoded);
-  }
-}
-
-function attachSimulationJobDraftsHeader(
-  headers: Headers,
-  drafts: SimulationJobDraft[],
-) {
-  const encoded = encodeSimulationJobDraftsHeader(drafts);
-  if (encoded) {
-    headers.set(SIMULATION_JOB_DRAFTS_HEADER, encoded);
-  }
-}
-
 function attachSessionFileSourcesHeader(
   headers: Headers,
   sources: SessionFileSource[],
@@ -297,36 +240,29 @@ function attachControlledToolRecordsHeader(
   }
 }
 
-function attachControlledAgentPlanHeader(
-  headers: Headers,
-  plan?: ControlledAgentPlan,
-) {
-  if (!plan) return;
-  const encoded = encodeControlledAgentPlanHeader(plan);
-  if (encoded) {
-    headers.set(CONTROLLED_AGENT_PLAN_HEADER, encoded);
-  }
-}
-
 function buildControlledToolRecords(input: {
   ragKgEnabled: boolean;
   ragKgSources: RagKgSource[];
   webSearchEnabled: boolean;
-  standardSearchEnabled: boolean;
-  patentSearchEnabled: boolean;
   academicSearchEnabled: boolean;
   researchSources: ResearchSource[];
-  designCalculationEnabled: boolean;
-  designCalculations: DesignCalculationTrace[];
-  structureVisualizationEnabled: boolean;
-  structureVisualizations: StructureVisualizationTrace[];
-  simulationJobEnabled: boolean;
-  simulationJobTaskCount: number;
   sessionFileRagEnabled: boolean;
   sessionFileSources: SessionFileSource[];
   userFileRagEnabled: boolean;
   userFileSources: UserFileSource[];
 }) {
+  const webSourceCount = input.researchSources.filter(
+    (source) => source.mode === "web",
+  ).length;
+  const standardSourceCount = input.researchSources.filter(
+    (source) => source.mode === "standard",
+  ).length;
+  const patentSourceCount = input.researchSources.filter(
+    (source) => source.mode === "patent",
+  ).length;
+  const academicSourceCount = input.researchSources.filter(
+    (source) => source.mode === "academic",
+  ).length;
   const records = [
     createControlledToolRecord({
       id: "csgpt-rag-kg",
@@ -339,58 +275,29 @@ function buildControlledToolRecords(input: {
       id: "csgpt-web-search",
       name: "联网检索",
       enabled: input.webSearchEnabled,
-      count: input.researchSources.filter((source) => source.mode === "web")
-        .length,
+      count: webSourceCount,
       unit: "条来源",
     }),
     createControlledToolRecord({
       id: "csgpt-standard-search",
       name: "标准/规范检索",
-      enabled: input.standardSearchEnabled,
-      count: input.researchSources.filter(
-        (source) => source.mode === "standard",
-      ).length,
+      enabled: standardSourceCount > 0,
+      count: standardSourceCount,
       unit: "条来源",
     }),
     createControlledToolRecord({
       id: "csgpt-patent-search",
       name: "专利检索",
-      enabled: input.patentSearchEnabled,
-      count: input.researchSources.filter((source) => source.mode === "patent")
-        .length,
+      enabled: patentSourceCount > 0,
+      count: patentSourceCount,
       unit: "条来源",
     }),
     createControlledToolRecord({
       id: "csgpt-academic-search",
       name: "学术检索",
       enabled: input.academicSearchEnabled,
-      count: input.researchSources.filter(
-        (source) => source.mode === "academic",
-      ).length,
+      count: academicSourceCount,
       unit: "条来源",
-    }),
-    createControlledToolRecord({
-      id: "csgpt-design-calculation",
-      name: "设计计算",
-      enabled: input.designCalculationEnabled,
-      count: input.designCalculations.length,
-      unit: "项计算",
-    }),
-    createControlledToolRecord({
-      id: "csgpt-structure-visualization",
-      name: "结构可视化",
-      enabled: input.structureVisualizationEnabled,
-      count: input.structureVisualizations.length,
-      unit: "张示意图",
-    }),
-    createControlledToolRecord({
-      id: "csgpt-simulation-job",
-      name: "仿真任务",
-      enabled: input.simulationJobEnabled,
-      count: input.simulationJobTaskCount,
-      unit: "项任务入口",
-      status: "configured",
-      content: "可创建真实仿真任务，结果需外部求解器返回",
     }),
     createControlledToolRecord({
       id: "csgpt-session-file-rag",
@@ -625,9 +532,6 @@ async function prepareProxyMessages(
     ragKgEnabled: boolean;
     webSearchEnabled: boolean;
     academicSearchEnabled: boolean;
-    designCalculationEnabled: boolean;
-    structureVisualizationEnabled: boolean;
-    simulationJobEnabled: boolean;
     sessionFileRagEnabled: boolean;
     sessionFileRecords: SessionFileRecord[];
     userFileRagEnabled: boolean;
@@ -636,32 +540,8 @@ async function prepareProxyMessages(
   },
 ) {
   const processedMessages = [...messages];
-  const toolPlan = planControlledChatTools(processedMessages, {
-    ragKgEnabled: options.ragKgEnabled,
-    webSearchEnabled: options.webSearchEnabled,
-    academicSearchEnabled: options.academicSearchEnabled,
-    designCalculationEnabled: options.designCalculationEnabled,
-    structureVisualizationEnabled: options.structureVisualizationEnabled,
-    simulationJobEnabled: options.simulationJobEnabled,
-    sessionFileRagEnabled: options.sessionFileRagEnabled,
-    userFileRagEnabled: options.userFileRagEnabled,
-  });
-  const controlledAgentPlan = buildControlledAgentPlan(processedMessages, {
-    ragKgEnabled: options.ragKgEnabled,
-    webSearchEnabled: options.webSearchEnabled,
-    academicSearchEnabled: options.academicSearchEnabled,
-    designCalculationEnabled: options.designCalculationEnabled,
-    structureVisualizationEnabled: options.structureVisualizationEnabled,
-    simulationJobEnabled: options.simulationJobEnabled,
-    sessionFileRagEnabled: options.sessionFileRagEnabled,
-    userFileRagEnabled: options.userFileRagEnabled,
-  });
   let ragKgSources: RagKgSource[] = [];
   let researchSources: ResearchSource[] = [];
-  let designCalculations: DesignCalculationTrace[] = [];
-  let structureVisualizations: StructureVisualizationTrace[] = [];
-  let simulationJobDrafts: SimulationJobDraft[] = [];
-  let simulationJobTaskCount = 0;
   let sessionFileSources: SessionFileSource[] = [];
   let userFileSources: UserFileSource[] = [];
   const contextBlocks: string[] = [];
@@ -675,28 +555,20 @@ async function prepareProxyMessages(
     });
   }
 
-  if (toolPlan.ragKgEnabled) {
-    const ragKgContext = await buildExternalRagKgContext(processedMessages);
+  if (options.ragKgEnabled) {
+    const ragKgContext = await buildInternalKnowledgeContext(processedMessages);
     if (ragKgContext?.message) {
       ragKgSources = ragKgContext.sources;
       contextBlocks.push(`项目内部知识库上下文\n${ragKgContext.message}`);
     }
   }
 
-  if (
-    toolPlan.webSearchEnabled ||
-    toolPlan.standardSearchEnabled ||
-    toolPlan.patentSearchEnabled ||
-    toolPlan.academicSearchEnabled
-  ) {
+  if (options.webSearchEnabled || options.academicSearchEnabled) {
     const researchContext = await buildExternalResearchContext(
       processedMessages,
       {
-        webSearchEnabled:
-          toolPlan.webSearchEnabled ||
-          toolPlan.standardSearchEnabled ||
-          toolPlan.patentSearchEnabled,
-        academicSearchEnabled: toolPlan.academicSearchEnabled,
+        webSearchEnabled: options.webSearchEnabled,
+        academicSearchEnabled: options.academicSearchEnabled,
       },
     );
     if (researchContext?.message) {
@@ -705,35 +577,7 @@ async function prepareProxyMessages(
     }
   }
 
-  if (toolPlan.designCalculationEnabled) {
-    const calculationContext =
-      buildExternalDesignCalculationContext(processedMessages);
-    if (calculationContext?.message) {
-      designCalculations = calculationContext.calculations;
-      contextBlocks.push(calculationContext.message);
-    }
-  }
-
-  if (toolPlan.structureVisualizationEnabled) {
-    const visualizationContext =
-      buildExternalStructureVisualizationContext(processedMessages);
-    if (visualizationContext?.message) {
-      structureVisualizations = visualizationContext.visualizations;
-      contextBlocks.push(visualizationContext.message);
-    }
-  }
-
-  if (toolPlan.simulationJobEnabled) {
-    const simulationContext =
-      buildExternalSimulationJobContext(processedMessages);
-    if (simulationContext?.message) {
-      simulationJobDrafts = simulationContext.drafts;
-      simulationJobTaskCount = simulationContext.drafts.length;
-      contextBlocks.push(simulationContext.message);
-    }
-  }
-
-  if (toolPlan.sessionFileRagEnabled) {
+  if (options.sessionFileRagEnabled) {
     const sessionFileContext = buildSessionFileRagContext(
       processedMessages,
       options.sessionFileRecords,
@@ -744,7 +588,7 @@ async function prepareProxyMessages(
     }
   }
 
-  if (toolPlan.userFileRagEnabled && options.userId) {
+  if (options.userFileRagEnabled && options.userId) {
     const userFileContext = await buildUserFileRagContext(
       processedMessages,
       options.userId,
@@ -778,29 +622,17 @@ async function prepareProxyMessages(
     messages: processedMessages,
     ragKgSources,
     researchSources,
-    designCalculations,
-    structureVisualizations,
-    simulationJobDrafts,
     sessionFileSources,
     userFileSources,
-    controlledAgentPlan,
     controlledToolRecords: buildControlledToolRecords({
-      ragKgEnabled: toolPlan.ragKgEnabled,
+      ragKgEnabled: options.ragKgEnabled,
       ragKgSources,
-      webSearchEnabled: toolPlan.webSearchEnabled,
-      standardSearchEnabled: toolPlan.standardSearchEnabled,
-      patentSearchEnabled: toolPlan.patentSearchEnabled,
-      academicSearchEnabled: toolPlan.academicSearchEnabled,
+      webSearchEnabled: options.webSearchEnabled,
+      academicSearchEnabled: options.academicSearchEnabled,
       researchSources,
-      designCalculationEnabled: toolPlan.designCalculationEnabled,
-      designCalculations,
-      structureVisualizationEnabled: toolPlan.structureVisualizationEnabled,
-      structureVisualizations,
-      simulationJobEnabled: toolPlan.simulationJobEnabled,
-      simulationJobTaskCount,
-      sessionFileRagEnabled: toolPlan.sessionFileRagEnabled,
+      sessionFileRagEnabled: options.sessionFileRagEnabled,
       sessionFileSources,
-      userFileRagEnabled: toolPlan.userFileRagEnabled,
+      userFileRagEnabled: options.userFileRagEnabled,
       userFileSources,
     }),
   };
@@ -817,9 +649,6 @@ async function handleDedicatedCSGPTChatCompletions(
     ragKgEnabled: boolean;
     webSearchEnabled: boolean;
     academicSearchEnabled: boolean;
-    designCalculationEnabled: boolean;
-    structureVisualizationEnabled: boolean;
-    simulationJobEnabled: boolean;
     sessionFileRagEnabled: boolean;
     sessionFileRecords: SessionFileRecord[];
     userFileRagEnabled: boolean;
@@ -835,9 +664,6 @@ async function handleDedicatedCSGPTChatCompletions(
     ragKgEnabled,
     webSearchEnabled,
     academicSearchEnabled,
-    designCalculationEnabled,
-    structureVisualizationEnabled,
-    simulationJobEnabled,
     sessionFileRagEnabled,
     sessionFileRecords,
     userFileRagEnabled,
@@ -859,9 +685,6 @@ async function handleDedicatedCSGPTChatCompletions(
       ragKgEnabled,
       webSearchEnabled,
       academicSearchEnabled,
-      designCalculationEnabled,
-      structureVisualizationEnabled,
-      simulationJobEnabled,
       sessionFileRagEnabled,
       sessionFileRecords,
       userFileRagEnabled,
@@ -933,18 +756,6 @@ async function handleDedicatedCSGPTChatCompletions(
       responseHeaders,
       preparedMessages.researchSources,
     );
-    attachDesignCalculationResultsHeader(
-      responseHeaders,
-      preparedMessages.designCalculations,
-    );
-    attachStructureVisualizationResultsHeader(
-      responseHeaders,
-      preparedMessages.structureVisualizations,
-    );
-    attachSimulationJobDraftsHeader(
-      responseHeaders,
-      preparedMessages.simulationJobDrafts,
-    );
     attachSessionFileSourcesHeader(
       responseHeaders,
       preparedMessages.sessionFileSources,
@@ -952,10 +763,6 @@ async function handleDedicatedCSGPTChatCompletions(
     attachUserFileSourcesHeader(
       responseHeaders,
       preparedMessages.userFileSources,
-    );
-    attachControlledAgentPlanHeader(
-      responseHeaders,
-      preparedMessages.controlledAgentPlan,
     );
     attachControlledToolRecordsHeader(
       responseHeaders,
@@ -974,18 +781,6 @@ async function handleDedicatedCSGPTChatCompletions(
     nextResponse.headers,
     preparedMessages.researchSources,
   );
-  attachDesignCalculationResultsHeader(
-    nextResponse.headers,
-    preparedMessages.designCalculations,
-  );
-  attachStructureVisualizationResultsHeader(
-    nextResponse.headers,
-    preparedMessages.structureVisualizations,
-  );
-  attachSimulationJobDraftsHeader(
-    nextResponse.headers,
-    preparedMessages.simulationJobDrafts,
-  );
   attachSessionFileSourcesHeader(
     nextResponse.headers,
     preparedMessages.sessionFileSources,
@@ -993,10 +788,6 @@ async function handleDedicatedCSGPTChatCompletions(
   attachUserFileSourcesHeader(
     nextResponse.headers,
     preparedMessages.userFileSources,
-  );
-  attachControlledAgentPlanHeader(
-    nextResponse.headers,
-    preparedMessages.controlledAgentPlan,
   );
   attachControlledToolRecordsHeader(
     nextResponse.headers,
@@ -1017,62 +808,39 @@ async function handleChatCompletions(
     messages,
     stream = true,
     model,
-    external_rag_kg_enabled = false,
-    external_web_search_enabled = false,
-    external_academic_search_enabled = false,
-    external_design_calculation_enabled = false,
-    external_structure_visualization_enabled = false,
-    external_simulation_job_enabled = false,
-    external_session_file_rag_enabled = false,
-    external_session_file_records = [],
-    external_user_file_rag_enabled = false,
-    external_user_file_excluded_file_ids = [],
-    external_upstream_url,
+    csgpt_internal_knowledge_enabled = false,
+    csgpt_web_search_enabled = false,
+    csgpt_academic_search_enabled = false,
+    csgpt_session_file_knowledge_enabled = false,
+    csgpt_session_file_records = [],
+    csgpt_user_file_knowledge_enabled = false,
+    csgpt_user_file_excluded_file_ids = [],
+    csgpt_upstream_url,
     ...rest
   } = body;
-  const ragKgEnabled = !!external_rag_kg_enabled;
-  const webSearchEnabled = !!external_web_search_enabled;
-  const academicSearchEnabled = !!external_academic_search_enabled;
-  const designCalculationEnabled = !!external_design_calculation_enabled;
-  const structureVisualizationEnabled =
-    !!external_structure_visualization_enabled;
-  const simulationJobEnabled = !!external_simulation_job_enabled;
-  const sessionFileRagEnabled = !!external_session_file_rag_enabled;
-  const userFileRagEnabled = !!external_user_file_rag_enabled;
-  const sessionFileRecords = Array.isArray(external_session_file_records)
-    ? external_session_file_records
+  const ragKgEnabled = !!csgpt_internal_knowledge_enabled;
+  const webSearchEnabled = !!csgpt_web_search_enabled;
+  const academicSearchEnabled = !!csgpt_academic_search_enabled;
+  const sessionFileRagEnabled = !!csgpt_session_file_knowledge_enabled;
+  const userFileRagEnabled = !!csgpt_user_file_knowledge_enabled;
+  const sessionFileRecords = Array.isArray(csgpt_session_file_records)
+    ? csgpt_session_file_records
     : [];
   const userFileExcludedFileIds = Array.isArray(
-    external_user_file_excluded_file_ids,
+    csgpt_user_file_excluded_file_ids,
   )
-    ? external_user_file_excluded_file_ids
+    ? csgpt_user_file_excluded_file_ids
         .map((id: unknown) => String(id || "").trim())
         .filter(Boolean)
     : [];
-  const externalEnhancementEnabled =
+  const csgptToolsEnabled =
     ragKgEnabled ||
     webSearchEnabled ||
     academicSearchEnabled ||
-    designCalculationEnabled ||
-    structureVisualizationEnabled ||
-    simulationJobEnabled ||
     sessionFileRagEnabled ||
     userFileRagEnabled;
-  const preliminaryToolPlan = planControlledChatTools(messages, {
-    ragKgEnabled,
-    webSearchEnabled,
-    academicSearchEnabled,
-    designCalculationEnabled,
-    structureVisualizationEnabled,
-    simulationJobEnabled,
-    sessionFileRagEnabled,
-    userFileRagEnabled,
-  });
-
-  const userId = preliminaryToolPlan.userFileRagEnabled
-    ? await getUserFromRequest(req)
-    : null;
-  if (preliminaryToolPlan.userFileRagEnabled && !userId) {
+  const userId = userFileRagEnabled ? await getUserFromRequest(req) : null;
+  if (userFileRagEnabled && !userId) {
     return NextResponse.json(
       { error: true, message: "未授权" },
       { status: 401 },
@@ -1081,8 +849,8 @@ async function handleChatCompletions(
 
   let customUpstreamBaseUrl = "";
   try {
-    customUpstreamBaseUrl = externalEnhancementEnabled
-      ? normalizeCustomUpstreamBaseUrl(external_upstream_url)
+    customUpstreamBaseUrl = csgptToolsEnabled
+      ? normalizeCustomUpstreamBaseUrl(csgpt_upstream_url)
       : "";
   } catch (error: any) {
     return NextResponse.json(
@@ -1103,9 +871,6 @@ async function handleChatCompletions(
       ragKgEnabled,
       webSearchEnabled,
       academicSearchEnabled,
-      designCalculationEnabled,
-      structureVisualizationEnabled,
-      simulationJobEnabled,
       sessionFileRagEnabled,
       sessionFileRecords,
       userFileRagEnabled,
@@ -1117,23 +882,16 @@ async function handleChatCompletions(
   let processedMessages = [...messages];
   let ragKgSources: RagKgSource[] = [];
   let researchSources: ResearchSource[] = [];
-  let designCalculations: DesignCalculationTrace[] = [];
-  let structureVisualizations: StructureVisualizationTrace[] = [];
-  let simulationJobDrafts: SimulationJobDraft[] = [];
   let sessionFileSources: SessionFileSource[] = [];
   let userFileSources: UserFileSource[] = [];
   let controlledToolRecords: ControlledToolRecord[] = [];
-  let controlledAgentPlan: ControlledAgentPlan | undefined;
-  if (backend.isCSGPT || externalEnhancementEnabled) {
+  if (backend.isCSGPT || csgptToolsEnabled) {
     try {
       const preparedMessages = await prepareProxyMessages(messages, {
         injectCSGPTPrompt: backend.isCSGPT,
         ragKgEnabled,
         webSearchEnabled,
         academicSearchEnabled,
-        designCalculationEnabled,
-        structureVisualizationEnabled,
-        simulationJobEnabled,
         sessionFileRagEnabled,
         sessionFileRecords,
         userFileRagEnabled,
@@ -1143,13 +901,9 @@ async function handleChatCompletions(
       processedMessages = preparedMessages.messages;
       ragKgSources = preparedMessages.ragKgSources;
       researchSources = preparedMessages.researchSources;
-      designCalculations = preparedMessages.designCalculations;
-      structureVisualizations = preparedMessages.structureVisualizations;
-      simulationJobDrafts = preparedMessages.simulationJobDrafts;
       sessionFileSources = preparedMessages.sessionFileSources;
       userFileSources = preparedMessages.userFileSources;
       controlledToolRecords = preparedMessages.controlledToolRecords;
-      controlledAgentPlan = preparedMessages.controlledAgentPlan;
     } catch (error: any) {
       return NextResponse.json(
         { error: true, message: error?.message || "外部增强失败" },
@@ -1228,15 +982,8 @@ async function handleChatCompletions(
     });
     attachRagKgSourcesHeader(responseHeaders, ragKgSources);
     attachResearchSourcesHeader(responseHeaders, researchSources);
-    attachDesignCalculationResultsHeader(responseHeaders, designCalculations);
-    attachStructureVisualizationResultsHeader(
-      responseHeaders,
-      structureVisualizations,
-    );
-    attachSimulationJobDraftsHeader(responseHeaders, simulationJobDrafts);
     attachSessionFileSourcesHeader(responseHeaders, sessionFileSources);
     attachUserFileSourcesHeader(responseHeaders, userFileSources);
-    attachControlledAgentPlanHeader(responseHeaders, controlledAgentPlan);
     attachControlledToolRecordsHeader(responseHeaders, controlledToolRecords);
     return new Response(response.body, {
       status: 200,
@@ -1247,18 +994,8 @@ async function handleChatCompletions(
     const nextResponse = NextResponse.json(data);
     attachRagKgSourcesHeader(nextResponse.headers, ragKgSources);
     attachResearchSourcesHeader(nextResponse.headers, researchSources);
-    attachDesignCalculationResultsHeader(
-      nextResponse.headers,
-      designCalculations,
-    );
-    attachStructureVisualizationResultsHeader(
-      nextResponse.headers,
-      structureVisualizations,
-    );
-    attachSimulationJobDraftsHeader(nextResponse.headers, simulationJobDrafts);
     attachSessionFileSourcesHeader(nextResponse.headers, sessionFileSources);
     attachUserFileSourcesHeader(nextResponse.headers, userFileSources);
-    attachControlledAgentPlanHeader(nextResponse.headers, controlledAgentPlan);
     attachControlledToolRecordsHeader(
       nextResponse.headers,
       controlledToolRecords,

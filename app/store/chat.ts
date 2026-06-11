@@ -40,7 +40,12 @@ import Locale, { getLang } from "../locales";
 import { prettyObject } from "../utils/format";
 import { createPersistStore } from "../utils/store";
 import { estimateTokenLength } from "../utils/token";
-import { ModelConfig, ModelType, useAppConfig } from "./config";
+import {
+  ModelConfig,
+  ModelType,
+  normalizeModelConfigState,
+  useAppConfig,
+} from "./config";
 import { useAccessStore } from "./access";
 import { collectModelsWithDefaultModel } from "../utils/model";
 import { createEmptyMask, Mask } from "./mask";
@@ -56,18 +61,6 @@ import {
   type ResearchSource,
 } from "../utils/research-sources";
 import {
-  parseDesignCalculationResultsHeader,
-  type DesignCalculationTrace,
-} from "../utils/design-calculation-results";
-import {
-  parseStructureVisualizationResultsHeader,
-  type StructureVisualizationTrace,
-} from "../utils/structure-visualization-results";
-import {
-  parseSimulationJobDraftsHeader,
-  type SimulationJobDraft,
-} from "../utils/simulation-job-results";
-import {
   parseSessionFileSourcesHeader,
   type SessionFileSource,
 } from "../utils/session-file-sources";
@@ -76,7 +69,6 @@ import {
   type UserFileSource,
 } from "../utils/user-file-sources";
 import { parseControlledToolRecordsHeader } from "../utils/controlled-tool-records";
-import { parseControlledAgentPlanHeader } from "../utils/controlled-agent-plan";
 import { extractFileIdsFromMessageContent } from "../utils/file-context-ids";
 
 const localStorage = safeLocalStorage();
@@ -102,14 +94,10 @@ export type ChatMessage = RequestMessage & {
   model?: ModelType;
   tools?: ChatMessageTool[];
   isMcpResponse?: boolean;
-  agentPlan?: unknown;
   /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
   fileContent?: string;
   ragKgSources?: RagKgSource[];
   researchSources?: ResearchSource[];
-  designCalculations?: DesignCalculationTrace[];
-  structureVisualizations?: StructureVisualizationTrace[];
-  simulationJobDrafts?: SimulationJobDraft[];
   sessionFileSources?: SessionFileSource[];
   userFileSources?: UserFileSource[];
 };
@@ -126,12 +114,6 @@ function appendControlledToolRecords(
   if (!nextRecords.length) return;
 
   message.tools = [...(message.tools || []), ...nextRecords];
-}
-
-function appendControlledAgentPlan(message: ChatMessage, response?: Response) {
-  const plan = parseControlledAgentPlanHeader(response);
-  if (!plan) return;
-  message.agentPlan = plan;
 }
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -342,9 +324,6 @@ function buildTitleRequestConfig(
     enableRagKg: false,
     enableWebSearch: false,
     enableAcademicSearch: false,
-    enableDesignCalculation: false,
-    enableStructureVisualization: false,
-    enableSimulationJob: false,
     enableSessionFileRag: false,
     enableUserFileRag: false,
   };
@@ -372,10 +351,10 @@ function normalizeChatMessage(message: Partial<ChatMessage>): ChatMessage {
 }
 
 function normalizeSessionModelConfig(modelConfig: any) {
-  const normalized = {
+  const normalized = normalizeModelConfigState({
     ...useAppConfig.getState().modelConfig,
     ...(modelConfig || {}),
-  };
+  });
   if (typeof normalized.max_tokens !== "number") {
     normalized.max_tokens = useAppConfig.getState().modelConfig.max_tokens;
   }
@@ -532,22 +511,15 @@ export const useChatStore = createPersistStore(
         const sessions: ChatSession[] = [];
 
         for (const ss of serverSessions) {
-          const mask = ss.mask || createEmptyMask();
-          if (ss.mask && typeof ss.mask === "object") {
-            Object.assign(mask.modelConfig, (ss.mask as any).modelConfig || {});
-          }
-          sessions.push({
-            ...createEmptySession(),
-            id: ss.id,
-            topic: ss.topic,
-            memoryPrompt: ss.memoryPrompt,
-            messages: ss.messages || [],
-            lastUpdate: ss.lastUpdate || Date.now(),
-            lastSummarizeIndex: ss.lastSummarizeIndex || 0,
-            clearContextIndex: ss.clearContextIndex,
-            stat: { tokenCount: 0, wordCount: 0, charCount: 0 },
-            mask,
-          });
+          sessions.push(
+            normalizeChatSession({
+              ...ss,
+              lastUpdate: ss.lastUpdate || Date.now(),
+              lastSummarizeIndex: ss.lastSummarizeIndex || 0,
+              messages: ss.messages || [],
+              mask: ss.mask || createEmptyMask(),
+            }),
+          );
         }
 
         if (sessions.length === 0) {
@@ -821,21 +793,6 @@ export const useChatStore = createPersistStore(
               if (researchSources.length) {
                 botMessage.researchSources = researchSources;
               }
-              const designCalculations =
-                parseDesignCalculationResultsHeader(responseRes);
-              if (designCalculations.length) {
-                botMessage.designCalculations = designCalculations;
-              }
-              const structureVisualizations =
-                parseStructureVisualizationResultsHeader(responseRes);
-              if (structureVisualizations.length) {
-                botMessage.structureVisualizations = structureVisualizations;
-              }
-              const simulationJobDrafts =
-                parseSimulationJobDraftsHeader(responseRes);
-              if (simulationJobDrafts.length) {
-                botMessage.simulationJobDrafts = simulationJobDrafts;
-              }
               const sessionFileSources =
                 parseSessionFileSourcesHeader(responseRes);
               if (sessionFileSources.length) {
@@ -845,7 +802,6 @@ export const useChatStore = createPersistStore(
               if (userFileSources.length) {
                 botMessage.userFileSources = userFileSources;
               }
-              appendControlledAgentPlan(botMessage, responseRes);
               appendControlledToolRecords(botMessage, responseRes);
               if (message) {
                 botMessage.content = message;
@@ -1184,9 +1140,6 @@ export const useChatStore = createPersistStore(
               enableRagKg: false,
               enableWebSearch: false,
               enableAcademicSearch: false,
-              enableDesignCalculation: false,
-              enableStructureVisualization: false,
-              enableSimulationJob: false,
               enableSessionFileRag: false,
               enableUserFileRag: false,
             },

@@ -28,7 +28,7 @@ export enum Theme {
 }
 
 const config = getClientConfig();
-const STORE_SCHEMA_VERSION = 1;
+const STORE_SCHEMA_VERSION = 2;
 
 export const DEFAULT_CONFIG = {
   lastUpdate: Date.now(), // 状态合并时间戳
@@ -60,12 +60,9 @@ export const DEFAULT_CONFIG = {
     max_tokens: 8192,
     presence_penalty: 0,
     frequency_penalty: 0,
-    enableRagKg: false,
+    enableRagKg: true,
     enableWebSearch: false,
     enableAcademicSearch: false,
-    enableDesignCalculation: false,
-    enableStructureVisualization: false,
-    enableSimulationJob: false,
     enableSessionFileRag: false,
     enableUserFileRag: false,
     sendMemory: true,
@@ -85,12 +82,21 @@ export type ChatConfig = typeof DEFAULT_CONFIG;
 
 export type ModelConfig = ChatConfig["modelConfig"];
 
-function normalizeConfigState(state?: Partial<ChatConfig>): ChatConfig {
-  const stateModels = state?.models;
-  const modelConfig = {
-    ...DEFAULT_CONFIG.modelConfig,
-    ...(state?.modelConfig || {}),
-  } as ModelConfig;
+const MODEL_CONFIG_KEYS = Object.keys(
+  DEFAULT_CONFIG.modelConfig,
+) as (keyof ModelConfig)[];
+
+export function normalizeModelConfigState(
+  input?: Partial<ModelConfig> | Record<string, unknown>,
+): ModelConfig {
+  const modelConfig = { ...DEFAULT_CONFIG.modelConfig } as ModelConfig;
+  const source = input || {};
+
+  MODEL_CONFIG_KEYS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      (modelConfig as any)[key] = (source as any)[key];
+    }
+  });
 
   if (!modelConfig.template) {
     modelConfig.template = config?.template ?? DEFAULT_INPUT_TEMPLATE;
@@ -98,6 +104,19 @@ function normalizeConfigState(state?: Partial<ChatConfig>): ChatConfig {
 
   if (typeof modelConfig.max_tokens !== "number") {
     modelConfig.max_tokens = DEFAULT_CONFIG.modelConfig.max_tokens;
+  }
+
+  return modelConfig;
+}
+
+function normalizeConfigState(
+  state?: Partial<ChatConfig>,
+  options?: { enforceDefaultRagKg?: boolean },
+): ChatConfig {
+  const stateModels = state?.models;
+  const modelConfig = normalizeModelConfigState(state?.modelConfig);
+  if (options?.enforceDefaultRagKg) {
+    modelConfig.enableRagKg = DEFAULT_CONFIG.modelConfig.enableRagKg;
   }
 
   return {
@@ -207,8 +226,10 @@ export const useAppConfig = createPersistStore(
       };
     },
 
-    migrate(persistedState) {
-      return normalizeConfigState(persistedState as Partial<ChatConfig>) as any;
+    migrate(persistedState, version) {
+      return normalizeConfigState(persistedState as Partial<ChatConfig>, {
+        enforceDefaultRagKg: (version ?? 0) < 2,
+      }) as any;
     },
   },
 );

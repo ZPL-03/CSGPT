@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { executeDesignCalculation } from "../app/utils/design-calculation-registry";
 import { extractTextFromFile } from "../app/utils/file-text-extractor";
 import {
   executeResearchSearch,
@@ -13,20 +12,9 @@ import {
 } from "../app/utils/file-context-ids";
 import { createResearchSource } from "../app/utils/research-sources";
 import {
-  buildControlledAgentPlan,
-  planControlledChatTools,
-  type ControlledToolAllowList,
-} from "../app/utils/server-agent-planner";
-import {
-  buildExternalRagKgContext,
+  buildInternalKnowledgeContext,
   queryKnowledgeGraph,
 } from "../app/utils/server-rag-kg";
-import { buildExternalStructureVisualizationContext } from "../app/utils/server-structure-visualization";
-import { buildExternalSimulationJobContext } from "../app/utils/server-simulation-job";
-import {
-  simulationJobCreateSchema,
-  simulationJobUpdateSchema,
-} from "../app/utils/simulation-jobs";
 import type { RagKgDocumentSource } from "../app/utils/rag-kg-sources";
 
 type EvalFailure = {
@@ -43,25 +31,6 @@ type EvalResult = {
 };
 
 type CasesFile = {
-  planner: Array<{
-    name: string;
-    message: string;
-    allow: ControlledToolAllowList;
-    selected: string[];
-    unselected: string[];
-  }>;
-  designCalculations: Array<{
-    name: string;
-    type: string;
-    input: unknown;
-    expect: Array<{
-      path: string;
-      equals?: unknown;
-      approx?: number;
-      tolerance?: number;
-      min?: number;
-    }>;
-  }>;
   ragKg: Array<{
     name: string;
     query: string;
@@ -73,25 +42,6 @@ type CasesFile = {
     query: string;
     minNodes: number;
     minEdges: number;
-  }>;
-  structureVisualizations: Array<{
-    name: string;
-    query: string;
-    minVisualizations: number;
-    expectedTypes: string[];
-  }>;
-  simulationJobDrafts: Array<{
-    name: string;
-    query: string;
-    expectedSolver: string;
-    expectedOutputs: string[];
-    expectedMissingFields: string[];
-  }>;
-  simulationJobs: Array<{
-    name: string;
-    create: unknown;
-    update?: unknown;
-    expectError?: boolean;
   }>;
   fileExtraction: Array<{
     name: string;
@@ -111,7 +61,6 @@ type CasesFile = {
     mode: "web" | "academic" | "standard" | "patent";
     provider:
       | "tavily"
-      | "brave"
       | "semantic-scholar"
       | "elsevier-scopus"
       | "springer-openaccess"
@@ -122,7 +71,7 @@ type CasesFile = {
     name: string;
     query: string;
     mode: "web" | "academic" | "standard" | "patent";
-    provider: "tavily" | "brave";
+    provider: "tavily";
     minResults: number;
   }>;
   databaseMigrations: Array<{
@@ -184,10 +133,6 @@ function assertCondition(
   if (!condition) throw new Error(message);
 }
 
-function readPath(value: any, rawPath: string) {
-  return rawPath.split(".").reduce((current, key) => current?.[key], value);
-}
-
 function assertNoForbiddenText(
   text: string,
   patterns: string[],
@@ -221,73 +166,13 @@ async function runCase(
   }
 }
 
-async function evaluatePlanner(cases: CasesFile["planner"]) {
-  for (const item of cases) {
-    await runCase("agent-planner", item.name, () => {
-      const messages = [{ role: "user", content: item.message }];
-      const plan = buildControlledAgentPlan(messages, item.allow);
-      const decision = planControlledChatTools(messages, item.allow);
-      const selected = new Set(
-        plan.items.filter((entry) => entry.selected).map((entry) => entry.id),
-      );
-
-      for (const id of item.selected) {
-        assertCondition(selected.has(id), `未触发预期工具：${id}`);
-      }
-      for (const id of item.unselected) {
-        assertCondition(!selected.has(id), `误触发工具：${id}`);
-      }
-      assertCondition(decision.query.length > 0, "规划查询为空");
-      return `selected=${Array.from(selected).join(",") || "none"}`;
-    });
-  }
-}
-
-async function evaluateDesignCalculations(
-  cases: CasesFile["designCalculations"],
-) {
-  for (const item of cases) {
-    await runCase("design-calculation", item.name, () => {
-      const output = executeDesignCalculation({
-        type: item.type,
-        input: item.input,
-      });
-      const result = output.result as any;
-      for (const expectation of item.expect) {
-        const actual = readPath(result, expectation.path);
-        if ("equals" in expectation) {
-          assertCondition(
-            actual === expectation.equals,
-            `${expectation.path}=${actual}，期望 ${expectation.equals}`,
-          );
-        }
-        if (typeof expectation.approx === "number") {
-          const tolerance = expectation.tolerance ?? 0;
-          assertCondition(
-            typeof actual === "number" &&
-              Math.abs(actual - expectation.approx) <= tolerance,
-            `${expectation.path}=${actual}，期望 ${expectation.approx}±${tolerance}`,
-          );
-        }
-        if (typeof expectation.min === "number") {
-          assertCondition(
-            typeof actual === "number" && actual >= expectation.min,
-            `${expectation.path}=${actual}，小于 ${expectation.min}`,
-          );
-        }
-      }
-      return `type=${item.type}`;
-    });
-  }
-}
-
 async function evaluateRagKg(cases: CasesFile["ragKg"]) {
   for (const item of cases) {
     await runCase("rag-kg", item.name, async () => {
-      const context = await buildExternalRagKgContext([
+      const context = await buildInternalKnowledgeContext([
         { role: "user", content: item.query },
       ]);
-      assertCondition(context, "RAG/KG 未返回上下文");
+      assertCondition(context, "内部知识库未返回上下文");
       const documentSources = context.sources.filter(isDocumentSource);
       assertCondition(
         documentSources.length >= item.minDocumentSources,
@@ -320,90 +205,6 @@ async function evaluateKnowledgeGraph(cases: CasesFile["knowledgeGraph"]) {
         `关系数量 ${graph.edges.length} 小于 ${item.minEdges}`,
       );
       return `nodes=${graph.nodes.length}, edges=${graph.edges.length}`;
-    });
-  }
-}
-
-async function evaluateStructureVisualizations(
-  cases: CasesFile["structureVisualizations"],
-) {
-  for (const item of cases) {
-    await runCase("structure-visualization", item.name, () => {
-      const context = buildExternalStructureVisualizationContext([
-        { role: "user", content: item.query },
-      ]);
-      assertCondition(context, "结构可视化未返回结果");
-      assertCondition(
-        context.visualizations.length >= item.minVisualizations,
-        `结构可视化数量 ${context.visualizations.length} 小于 ${item.minVisualizations}`,
-      );
-      const types = new Set(context.visualizations.map((entry) => entry.type));
-      for (const type of item.expectedTypes) {
-        assertCondition(types.has(type as any), `缺少结构可视化类型：${type}`);
-      }
-      return `visualizations=${context.visualizations.length}`;
-    });
-  }
-}
-
-async function evaluateSimulationJobDrafts(
-  cases: CasesFile["simulationJobDrafts"],
-) {
-  for (const item of cases) {
-    await runCase("simulation-job-draft", item.name, () => {
-      const context = buildExternalSimulationJobContext([
-        { role: "user", content: item.query },
-      ]);
-      assertCondition(context, "仿真任务草案未返回结果");
-      assertCondition(context.drafts.length > 0, "仿真任务草案为空");
-      const draft = context.drafts[0];
-      assertCondition(
-        draft.solver === item.expectedSolver,
-        `solver=${draft.solver}，期望 ${item.expectedSolver}`,
-      );
-      for (const output of item.expectedOutputs) {
-        assertCondition(
-          draft.input.outputs.includes(output),
-          `缺少输出指标：${output}`,
-        );
-      }
-      for (const field of item.expectedMissingFields) {
-        assertCondition(
-          draft.input.missingFields.includes(field),
-          `缺少缺失参数：${field}`,
-        );
-      }
-      const createPayload = simulationJobCreateSchema.safeParse({
-        title: draft.title,
-        solver: draft.solver,
-        input: draft.input,
-        conversationId: "eval-conversation",
-        messageId: "eval-message",
-      });
-      assertCondition(
-        createPayload.success,
-        "仿真任务草案无法作为任务创建参数",
-      );
-      return `solver=${draft.solver}, outputs=${draft.input.outputs.length}`;
-    });
-  }
-}
-
-async function evaluateSimulationJobs(cases: CasesFile["simulationJobs"]) {
-  for (const item of cases) {
-    await runCase("simulation-job", item.name, () => {
-      const createResult = simulationJobCreateSchema.safeParse(item.create);
-      if (item.expectError) {
-        assertCondition(!createResult.success, "未拒绝无效仿真任务");
-        return "expected-error";
-      }
-
-      assertCondition(createResult.success, "仿真任务创建参数无效");
-      if (item.update !== undefined) {
-        const updateResult = simulationJobUpdateSchema.safeParse(item.update);
-        assertCondition(updateResult.success, "仿真任务更新参数无效");
-      }
-      return `solver=${createResult.data.solver}`;
     });
   }
 }
@@ -547,13 +348,8 @@ async function main() {
   }
 
   const cases = loadCases();
-  await evaluatePlanner(cases.planner);
-  await evaluateDesignCalculations(cases.designCalculations);
   await evaluateRagKg(cases.ragKg);
   await evaluateKnowledgeGraph(cases.knowledgeGraph);
-  await evaluateStructureVisualizations(cases.structureVisualizations);
-  await evaluateSimulationJobDrafts(cases.simulationJobDrafts);
-  await evaluateSimulationJobs(cases.simulationJobs);
   await evaluateFileExtraction(cases.fileExtraction);
   await evaluateFileContextIds(cases.fileContextIds);
   await evaluateResearchModes(cases.researchModes);

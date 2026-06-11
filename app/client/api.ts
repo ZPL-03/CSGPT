@@ -54,9 +54,6 @@ export interface LLMConfig {
   enableRagKg?: boolean;
   enableWebSearch?: boolean;
   enableAcademicSearch?: boolean;
-  enableDesignCalculation?: boolean;
-  enableStructureVisualization?: boolean;
-  enableSimulationJob?: boolean;
   enableSessionFileRag?: boolean;
   enableUserFileRag?: boolean;
   size?: DalleRequestPayload["size"];

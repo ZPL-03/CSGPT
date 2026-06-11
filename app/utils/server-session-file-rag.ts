@@ -42,7 +42,7 @@ export function buildSessionFileRagContext(
     {
       contextTitle: "当前会话附件知识上下文",
       scopeDescription:
-        "这些内容来自当前会话中用户已发送附件的解析文本，不属于全局 RAG/KG。",
+        "这些内容来自当前会话中用户已发送附件的解析文本，不属于内部知识库。",
       sourcePrefix: "F",
     },
     (source) => ({

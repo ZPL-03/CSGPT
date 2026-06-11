@@ -43,12 +43,8 @@ CREATE TABLE IF NOT EXISTS "Message" (
     "fileContent" TEXT,
     "ragKgSources" JSONB,
     "researchSources" JSONB,
-    "designCalculations" JSONB,
-    "structureVisualizations" JSONB,
-    "simulationJobDrafts" JSONB,
     "sessionFileSources" JSONB,
     "userFileSources" JSONB,
-    "agentPlan" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
 );
@@ -81,28 +77,6 @@ CREATE TABLE IF NOT EXISTS "UserFileRagChunk" (
     CONSTRAINT "UserFileRagChunk_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE IF NOT EXISTS "SimulationJob" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "conversationId" TEXT,
-    "messageId" TEXT,
-    "solver" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'queued',
-    "title" TEXT NOT NULL,
-    "input" JSONB NOT NULL,
-    "result" JSONB,
-    "externalJobId" TEXT,
-    "error" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "SimulationJob_pkey" PRIMARY KEY ("id")
-);
-
-ALTER TABLE "Message"
-    ADD COLUMN IF NOT EXISTS "structureVisualizations" JSONB;
-
-ALTER TABLE "Message"
-    ADD COLUMN IF NOT EXISTS "simulationJobDrafts" JSONB;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username");
 CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
@@ -118,10 +92,6 @@ CREATE INDEX IF NOT EXISTS "UploadedFile_userId_parseStatus_idx" ON "UploadedFil
 CREATE INDEX IF NOT EXISTS "UserFileRagChunk_userId_createdAt_idx" ON "UserFileRagChunk"("userId", "createdAt");
 CREATE INDEX IF NOT EXISTS "UserFileRagChunk_userId_fileId_idx" ON "UserFileRagChunk"("userId", "fileId");
 CREATE UNIQUE INDEX IF NOT EXISTS "UserFileRagChunk_fileId_chunkIndex_key" ON "UserFileRagChunk"("fileId", "chunkIndex");
-CREATE INDEX IF NOT EXISTS "SimulationJob_userId_createdAt_idx" ON "SimulationJob"("userId", "createdAt");
-CREATE INDEX IF NOT EXISTS "SimulationJob_userId_status_idx" ON "SimulationJob"("userId", "status");
-CREATE INDEX IF NOT EXISTS "SimulationJob_conversationId_idx" ON "SimulationJob"("conversationId");
-
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -134,29 +104,7 @@ BEGIN
     END IF;
 END $$;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'SimulationJob_userId_fkey'
-    ) THEN
-        ALTER TABLE "SimulationJob"
-            ADD CONSTRAINT "SimulationJob_userId_fkey"
-            FOREIGN KEY ("userId") REFERENCES "User"("id")
-            ON DELETE CASCADE ON UPDATE CASCADE;
-    END IF;
-END $$;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'SimulationJob_conversationId_fkey'
-    ) THEN
-        ALTER TABLE "SimulationJob"
-            ADD CONSTRAINT "SimulationJob_conversationId_fkey"
-            FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id")
-            ON DELETE CASCADE ON UPDATE CASCADE;
-    END IF;
-END $$;
 
 DO $$
 BEGIN
