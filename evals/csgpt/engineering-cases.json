@@ -1,0 +1,454 @@
+{
+  "planner": [
+    {
+      "name": "日常问候不触发工具",
+      "message": "你好",
+      "allow": {
+        "ragKgEnabled": true,
+        "webSearchEnabled": true,
+        "academicSearchEnabled": true,
+        "designCalculationEnabled": true,
+        "structureVisualizationEnabled": true,
+        "simulationJobEnabled": true,
+        "sessionFileRagEnabled": true,
+        "userFileRagEnabled": true
+      },
+      "selected": [],
+      "unselected": [
+        "csgpt-rag-kg",
+        "csgpt-web-search",
+        "csgpt-standard-search",
+        "csgpt-patent-search",
+        "csgpt-academic-search",
+        "csgpt-design-calculation",
+        "csgpt-structure-visualization",
+        "csgpt-simulation-job",
+        "csgpt-session-file-rag",
+        "csgpt-user-file-rag"
+      ]
+    },
+    {
+      "name": "标准规范问题触发标准检索",
+      "message": "ISO 11119 对复合材料压力容器有哪些标准要求？",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": true,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": ["csgpt-standard-search"],
+      "unselected": ["csgpt-web-search", "csgpt-patent-search"]
+    },
+    {
+      "name": "专利问题触发专利检索",
+      "message": "复合材料耐压壳纤维缠绕相关专利有哪些？",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": true,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": ["csgpt-patent-search"],
+      "unselected": ["csgpt-web-search", "csgpt-standard-search"]
+    },
+    {
+      "name": "含工程参数的设计问题触发计算",
+      "message": "深度 6000 m、内半径 1200 mm、许用应力 900 MPa、安全系数 1.5，估算复合材料外压耐压壳初始壁厚。",
+      "allow": {
+        "ragKgEnabled": true,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": true,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": ["csgpt-rag-kg", "csgpt-design-calculation"],
+      "unselected": ["csgpt-web-search", "csgpt-academic-search"]
+    },
+    {
+      "name": "结构示意请求触发结构可视化",
+      "message": "请画一个圆柱耐压壳结构示意图，内半径 1200 mm，长度 3000 mm，壁厚 120 mm，铺层 [90/45/-45/90]，单层厚度 0.25 mm。",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": true,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": ["csgpt-structure-visualization"],
+      "unselected": ["csgpt-rag-kg", "csgpt-design-calculation"]
+    },
+    {
+      "name": "有限元请求触发仿真任务规划",
+      "message": "请为深海复合材料耐压壳建立 Abaqus 有限元仿真任务，外压 60 MPa，输出屈曲模态和最大应力。",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": true,
+        "sessionFileRagEnabled": false,
+        "userFileRagEnabled": false
+      },
+      "selected": ["csgpt-simulation-job"],
+      "unselected": [
+        "csgpt-design-calculation",
+        "csgpt-structure-visualization"
+      ]
+    },
+    {
+      "name": "附件追问触发会话和用户文件知识",
+      "message": "请根据我上传的 PDF 文档总结第二张图的实验结论。",
+      "allow": {
+        "ragKgEnabled": false,
+        "webSearchEnabled": false,
+        "academicSearchEnabled": false,
+        "designCalculationEnabled": false,
+        "structureVisualizationEnabled": false,
+        "simulationJobEnabled": false,
+        "sessionFileRagEnabled": true,
+        "userFileRagEnabled": true
+      },
+      "selected": ["csgpt-session-file-rag", "csgpt-user-file-rag"],
+      "unselected": ["csgpt-rag-kg", "csgpt-web-search"]
+    }
+  ],
+  "designCalculations": [
+    {
+      "name": "6000 m 海水静水外压",
+      "type": "hydrostatic-pressure",
+      "input": {
+        "depthM": 6000,
+        "densityKgM3": 1025,
+        "gravityMS2": 9.80665,
+        "safetyFactor": 1.5
+      },
+      "expect": [
+        { "path": "pressureMPa", "approx": 60.3108975, "tolerance": 0.0001 },
+        {
+          "path": "designPressureMPa",
+          "approx": 90.46634625,
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "name": "薄壁圆柱壳初始厚度",
+      "type": "preliminary-thickness",
+      "input": {
+        "innerRadiusM": 1.2,
+        "pressureMPa": 60,
+        "allowableHoopStressMPa": 900,
+        "safetyFactor": 1.5
+      },
+      "expect": [
+        { "path": "requiredThicknessMm", "approx": 120, "tolerance": 0.001 }
+      ]
+    },
+    {
+      "name": "铺层比例统计",
+      "type": "layup-summary",
+      "input": {
+        "plies": [
+          { "angleDeg": 90, "thicknessMm": 0.25, "materialName": "T700/Epoxy" },
+          { "angleDeg": 45, "thicknessMm": 0.25, "materialName": "T700/Epoxy" },
+          {
+            "angleDeg": -45,
+            "thicknessMm": 0.25,
+            "materialName": "T700/Epoxy"
+          },
+          { "angleDeg": 0, "thicknessMm": 0.25, "materialName": "T700/Epoxy" }
+        ]
+      },
+      "expect": [
+        { "path": "plyCount", "equals": 4 },
+        { "path": "totalThicknessMm", "approx": 1, "tolerance": 0.0001 }
+      ]
+    },
+    {
+      "name": "Tsai-Wu 失效指数",
+      "type": "tsai-wu",
+      "input": {
+        "stress": { "sigma1MPa": 450, "sigma2MPa": 20, "tau12MPa": 30 },
+        "strengths": {
+          "xtMPa": 1500,
+          "xcMPa": 1000,
+          "ytMPa": 50,
+          "ycMPa": 150,
+          "s12MPa": 80
+        },
+        "interactionCoefficient": -0.5
+      },
+      "expect": [
+        { "path": "failureIndex", "min": 0 },
+        { "path": "reserveFactor", "min": 0 }
+      ]
+    },
+    {
+      "name": "铺层角度候选搜索",
+      "type": "layup-angle-search",
+      "input": {
+        "lamina": {
+          "e1GPa": 135,
+          "e2GPa": 10,
+          "g12GPa": 5,
+          "nu12": 0.3
+        },
+        "angleCandidatesDeg": [15, 30, 45, 60, 75],
+        "plyThicknessMm": 0.25,
+        "anglePairRepeats": 4,
+        "hoopPliesPerSide": 2,
+        "mirrorSymmetric": true,
+        "materialName": "T700/Epoxy",
+        "objectiveWeights": {
+          "hoopStiffness": 1,
+          "axialStiffness": 0.2,
+          "shearStiffness": 0.2,
+          "couplingPenalty": 1
+        },
+        "topK": 3
+      },
+      "expect": [
+        { "path": "searchSpace.candidateCount", "equals": 5 },
+        { "path": "best.plyCount", "equals": 24 },
+        { "path": "best.effectiveEngineeringConstants.eyGPa", "min": 1 }
+      ]
+    },
+    {
+      "name": "多目标方案筛选",
+      "type": "multi-objective-screening",
+      "input": {
+        "candidates": [
+          {
+            "id": "A",
+            "massKg": 1200,
+            "thicknessMm": 90,
+            "failureIndex": 0.82,
+            "reserveFactor": 1.22,
+            "manufacturabilityScore": 0.8
+          },
+          {
+            "id": "B",
+            "massKg": 980,
+            "thicknessMm": 78,
+            "failureIndex": 0.96,
+            "reserveFactor": 1.04,
+            "manufacturabilityScore": 0.65
+          },
+          {
+            "id": "C",
+            "massKg": 1350,
+            "thicknessMm": 105,
+            "failureIndex": 0.62,
+            "reserveFactor": 1.61,
+            "manufacturabilityScore": 0.9
+          }
+        ],
+        "objectives": [
+          { "metric": "massKg", "direction": "minimize", "weight": 1 },
+          { "metric": "failureIndex", "direction": "minimize", "weight": 2 },
+          {
+            "metric": "manufacturabilityScore",
+            "direction": "maximize",
+            "weight": 0.5
+          }
+        ],
+        "topK": 3
+      },
+      "expect": [
+        { "path": "ranked.0.score", "min": 0 },
+        { "path": "ranked.0.objectiveValues.0.normalized", "min": 0 }
+      ]
+    },
+    {
+      "name": "参数敏感性分析",
+      "type": "parameter-sensitivity",
+      "input": {
+        "calculationType": "preliminary-thickness",
+        "baseInput": {
+          "innerRadiusM": 1.2,
+          "pressureMPa": 60,
+          "allowableHoopStressMPa": 900,
+          "safetyFactor": 1.5
+        },
+        "parameterPath": "pressureMPa",
+        "values": [40, 60, 80],
+        "metricPath": "requiredThicknessMm"
+      },
+      "expect": [
+        { "path": "baseMetricValue", "approx": 120, "tolerance": 0.001 },
+        { "path": "samples.1.metricValue", "approx": 120, "tolerance": 0.001 }
+      ]
+    }
+  ],
+  "ragKg": [
+    {
+      "name": "复合材料耐压壳屈曲检索",
+      "query": "复合材料耐压壳 外压 屈曲 设计",
+      "minDocumentSources": 1,
+      "forbiddenPatterns": [
+        "[a-f0-9]{20,}\\\\.(pdf|docx?|pptx?|xlsx?)",
+        "chunk_id",
+        "record_id",
+        "内部路径"
+      ]
+    }
+  ],
+  "knowledgeGraph": [
+    {
+      "name": "压力容器查询子图",
+      "query": "composite pressure vessel buckling",
+      "minNodes": 2,
+      "minEdges": 1
+    }
+  ],
+  "structureVisualizations": [
+    {
+      "name": "圆柱壳与铺层截面",
+      "query": "请画一个圆柱耐压壳结构示意图，内半径 1200 mm，长度 3000 mm，壁厚 120 mm，铺层 [90/45/-45/90]，单层厚度 0.25 mm。",
+      "minVisualizations": 2,
+      "expectedTypes": ["cylindrical-shell", "laminate-section"]
+    }
+  ],
+  "simulationJobDrafts": [
+    {
+      "name": "Abaqus 外压耐压壳任务草案",
+      "query": "请为深海复合材料耐压壳建立 Abaqus 有限元仿真任务，内半径 1200 mm，长度 3000 mm，外压 60 MPa，铺层 [90/45/-45/90]，输出屈曲模态和最大应力。",
+      "expectedSolver": "abaqus",
+      "expectedOutputs": ["屈曲模态或屈曲载荷", "最大应力"],
+      "expectedMissingFields": ["材料参数", "边界条件"]
+    }
+  ],
+  "simulationJobs": [
+    {
+      "name": "有限元任务创建和结果回写参数",
+      "create": {
+        "title": "6000 m 外压耐压壳有限元校核",
+        "solver": "abaqus",
+        "input": {
+          "geometry": {
+            "innerRadiusMm": 1200,
+            "lengthMm": 3000,
+            "thicknessMm": 120
+          },
+          "load": {
+            "externalPressureMPa": 60
+          },
+          "layup": "[90/45/-45/90]"
+        }
+      },
+      "update": {
+        "status": "completed",
+        "result": {
+          "jobStatus": "completed",
+          "source": "external-solver"
+        }
+      }
+    },
+    {
+      "name": "有限元任务拒绝未知求解器",
+      "create": {
+        "title": "未知求解器任务",
+        "solver": "unknown",
+        "input": {
+          "geometry": {}
+        }
+      },
+      "expectError": true
+    }
+  ],
+  "fileExtraction": [
+    {
+      "name": "UTF-8 文本解析",
+      "fileName": "pressure-vessel-notes.txt",
+      "mimeType": "text/plain",
+      "content": "复合材料压力容器外压屈曲设计记录\\n半径 1200 mm，深度 6000 m。",
+      "expectedIncludes": ["复合材料压力容器", "6000 m"],
+      "parser": "text"
+    },
+    {
+      "name": "CSV 表格解析",
+      "fileName": "layup-table.csv",
+      "mimeType": "text/csv",
+      "content": "angle,thickness,material\\n90,0.25,T700/Epoxy\\n45,0.25,T700/Epoxy\\n",
+      "expectedIncludes": ["angle", "T700/Epoxy"],
+      "parser": "csv"
+    }
+  ],
+  "fileContextIds": [
+    {
+      "name": "附件 URL 提取文件 ID",
+      "urls": [
+        "/api/files/cm-file-001",
+        "https://csgpt.ipen03.com/api/files/cm-file-002?download=1",
+        "/api/other/cm-file-003",
+        "/api/files/cm-file-001"
+      ],
+      "expectedIds": ["cm-file-001", "cm-file-002"]
+    }
+  ],
+  "researchModes": [
+    {
+      "name": "标准模式使用联网 Provider",
+      "mode": "standard",
+      "provider": "tavily"
+    },
+    {
+      "name": "专利模式使用联网 Provider",
+      "mode": "patent",
+      "provider": "tavily"
+    },
+    {
+      "name": "学术 Provider 不支持专利模式",
+      "mode": "patent",
+      "provider": "semantic-scholar",
+      "expectErrorIncludes": "不支持"
+    }
+  ],
+  "onlineResearch": [
+    {
+      "name": "标准真实检索",
+      "query": "composite pressure vessel ISO 11119 standard",
+      "mode": "standard",
+      "provider": "tavily",
+      "minResults": 1
+    },
+    {
+      "name": "专利真实检索",
+      "query": "composite pressure vessel filament winding patent",
+      "mode": "patent",
+      "provider": "tavily",
+      "minResults": 1
+    }
+  ],
+  "databaseMigrations": [
+    {
+      "name": "Prisma 迁移包含消息结构可视化字段",
+      "file": "prisma/migrations/20260611000100_csgpt_schema/migration.sql",
+      "requiredIncludes": [
+        "CREATE TABLE IF NOT EXISTS \"Message\"",
+        "CREATE TABLE IF NOT EXISTS \"SimulationJob\"",
+        "\"structureVisualizations\" JSONB",
+        "\"simulationJobDrafts\" JSONB",
+        "\"SimulationJob_conversationId_fkey\"",
+        "ALTER TABLE \"Message\"",
+        "ADD COLUMN IF NOT EXISTS \"structureVisualizations\" JSONB",
+        "ADD COLUMN IF NOT EXISTS \"simulationJobDrafts\" JSONB"
+      ]
+    }
+  ]
+}

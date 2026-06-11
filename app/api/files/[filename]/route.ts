@@ -5,6 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
 import { FILE_UPLOAD_CHUNK_SIZE } from "@/app/constant";
+import {
+  clearUserFileRagIndex,
+  markUploadedFileParsedAndIndexed,
+} from "@/app/utils/user-file-rag-index";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -190,11 +194,17 @@ export async function POST(
     if (body?.action === "beginExtractedText") {
       const result = await prisma.uploadedFile.updateMany({
         where: { id: fileId, userId },
-        data: { extractedText: "" },
+        data: {
+          extractedText: "",
+          parseStatus: "parsing",
+          parseError: null,
+          parsedAt: null,
+        },
       });
       if (result.count === 0) {
         return NextResponse.json({ error: "文件不存在" }, { status: 404 });
       }
+      await clearUserFileRagIndex(fileId, userId);
       return NextResponse.json({ code: 0 });
     }
 
@@ -214,6 +224,14 @@ export async function POST(
         return NextResponse.json({ error: "文件不存在" }, { status: 404 });
       }
       return NextResponse.json({ code: 0 });
+    }
+
+    if (body?.action === "completeExtractedText") {
+      const result = await markUploadedFileParsedAndIndexed({ fileId, userId });
+      if (!result) {
+        return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+      }
+      return NextResponse.json({ code: 0, ragChunkCount: result.chunkCount });
     }
 
     if (body?.action !== "complete") {
@@ -256,6 +274,15 @@ export async function POST(
         { status: 409 },
       );
     }
+
+    await prisma.uploadedFile.updateMany({
+      where: { id: fileId, userId },
+      data: {
+        parseStatus: "uploaded",
+        parseError: null,
+      },
+    });
+    await clearUserFileRagIndex(fileId, userId);
 
     return NextResponse.json({
       code: 0,

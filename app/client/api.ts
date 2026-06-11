@@ -35,6 +35,13 @@ export interface RequestMessage {
   content: string | MultimodalContent[];
 }
 
+export type ChatSessionFileRecord = {
+  messageId?: string;
+  role?: string;
+  fileContent?: string;
+  fileIds?: string[];
+};
+
 export interface LLMConfig {
   model: string;
   providerName?: string;
@@ -45,6 +52,13 @@ export interface LLMConfig {
   frequency_penalty?: number;
   chat_template_kwargs?: Record<string, unknown>;
   enableRagKg?: boolean;
+  enableWebSearch?: boolean;
+  enableAcademicSearch?: boolean;
+  enableDesignCalculation?: boolean;
+  enableStructureVisualization?: boolean;
+  enableSimulationJob?: boolean;
+  enableSessionFileRag?: boolean;
+  enableUserFileRag?: boolean;
   size?: DalleRequestPayload["size"];
   quality?: DalleRequestPayload["quality"];
   style?: DalleRequestPayload["style"];
@@ -52,6 +66,7 @@ export interface LLMConfig {
 
 export interface ChatOptions {
   messages: RequestMessage[];
+  sessionFileRecords?: ChatSessionFileRecord[];
   config: LLMConfig;
 
   onUpdate?: (message: string, chunk: string) => void;

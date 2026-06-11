@@ -302,6 +302,7 @@ export async function saveExtractedText(
       chunk: extractedText.slice(offset, offset + EXTRACTED_TEXT_CHUNK_SIZE),
     });
   }
+  await postAction({ action: "completeExtractedText" });
 }
 
 // 服务端文件解析：读取文件表数据并执行完整解析管线。

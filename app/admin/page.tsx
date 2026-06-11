@@ -27,7 +27,16 @@ interface MessageItem {
   date: string;
   isError: boolean;
   model: string;
+  tools?: unknown[];
+  agentPlan?: unknown;
   fileContent?: string;
+  ragKgSources?: unknown[];
+  researchSources?: unknown[];
+  designCalculations?: unknown[];
+  structureVisualizations?: unknown[];
+  simulationJobDrafts?: unknown[];
+  sessionFileSources?: unknown[];
+  userFileSources?: unknown[];
 }
 
 interface FileItem {
@@ -37,6 +46,11 @@ interface FileItem {
   originalName: string;
   mimeType: string;
   size: number;
+  extractedTextLength: number;
+  parseStatus: string;
+  parseError?: string | null;
+  parsedAt?: string | null;
+  ragChunkCount: number;
   createdAt: string;
 }
 
@@ -47,11 +61,15 @@ interface Stats {
   conversationList: ConversationItem[];
   messages: number;
   files: number;
+  userFileRagChunks: number;
+  simulationJobs: number;
   fileList: FileItem[];
   dbSize: string;
   tableSize: string;
   dataSize: string;
   dataBytes: number;
+  ragIndexSize: string;
+  ragIndexBytes: number;
 }
 
 type TabKey = "overview" | "users" | "conversations" | "files";
@@ -72,6 +90,48 @@ function formatSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatParseStatus(status?: string): string {
+  const labels: Record<string, string> = {
+    pending: "等待上传",
+    uploaded: "已保存原始文件",
+    parsing: "解析中",
+    parsed: "解析完成",
+    failed: "解析失败",
+  };
+  return labels[status || ""] || status || "未知";
+}
+
+function countItems(value?: unknown[]) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function SourceCountBadges({ message }: { message: MessageItem }) {
+  const rawItems: Array<[string, number]> = [
+    ["RAG/KG 来源", countItems(message.ragKgSources)],
+    ["外部检索来源", countItems(message.researchSources)],
+    ["用户文件来源", countItems(message.userFileSources)],
+    ["会话文件来源", countItems(message.sessionFileSources)],
+    ["设计计算记录", countItems(message.designCalculations)],
+    ["结构可视化记录", countItems(message.structureVisualizations)],
+    ["仿真任务草案", countItems(message.simulationJobDrafts)],
+    ["工具执行记录", countItems(message.tools)],
+    ["工具规划记录", message.agentPlan ? 1 : 0],
+  ];
+  const items = rawItems.filter(([, count]) => count > 0);
+
+  if (!items.length) return null;
+
+  return (
+    <div className={styles["admin-msg-source-badges"]}>
+      {items.map(([label, count]) => (
+        <span key={label} className={styles["admin-msg-source-badge"]}>
+          {label} {count}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function noStoreUrl(path: string) {
@@ -512,6 +572,16 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
     { label: "消息总数", value: stats?.messages, desc: "当前消息记录数" },
     { label: "文件记录", value: stats?.files, desc: "当前附件记录数" },
     {
+      label: "用户文件索引",
+      value: stats?.userFileRagChunks,
+      desc: "当前用户文件 RAG 索引块记录数",
+    },
+    {
+      label: "仿真任务",
+      value: stats?.simulationJobs,
+      desc: "当前有限元任务记录数",
+    },
+    {
       label: "数据库占用",
       value: stats?.dbSize,
       desc: "PostgreSQL 当前数据库物理占用",
@@ -524,7 +594,12 @@ function OverviewTab({ stats }: { stats: Stats | null }) {
     {
       label: "当前内容",
       value: stats?.dataSize,
-      desc: "当前文件二进制与消息文本合计",
+      desc: "当前文件二进制、解析文本、索引文本、消息文本和仿真任务合计",
+    },
+    {
+      label: "索引内容",
+      value: stats?.ragIndexSize,
+      desc: "用户文件 RAG 索引文本体积",
     },
   ];
 
@@ -735,10 +810,21 @@ function FilesTab({
                   {file.originalName}
                 </span>
                 <span>{file.username || file.userId || "未知用户"}</span>
-                <span>{formatSize(file.size)}</span>
+                <span>原始文件 {formatSize(file.size)}</span>
+                <span>解析文本 {formatSize(file.extractedTextLength)}</span>
+                <span>索引块 {file.ragChunkCount}</span>
+                <span>{formatParseStatus(file.parseStatus)}</span>
                 <span>{file.mimeType}</span>
                 <span>{formatDate(file.createdAt)}</span>
+                {file.parsedAt && (
+                  <span>解析时间 {formatDate(file.parsedAt)}</span>
+                )}
               </div>
+              {file.parseError && (
+                <div className={styles["admin-file-error"]}>
+                  {file.parseError}
+                </div>
+              )}
               <div className={styles["admin-file-actions"]}>
                 <a
                   href={`/api/files/${file.id}`}
@@ -949,6 +1035,7 @@ function ConvRow({
                             {formatDate(m.date)}
                           </span>
                         </div>
+                        <SourceCountBadges message={m} />
                         <div className={styles["admin-msg-content"]}>
                           {m.content || "（空）"}
                         </div>

@@ -43,6 +43,11 @@ import {
 import { fetch } from "@/app/utils/stream";
 import { prettyObject } from "@/app/utils/format";
 import { stripThinkingContent } from "@/app/utils/thinking";
+import {
+  collectFileIdsFromSessionRecords,
+  extractFileIdsFromMessageContent,
+  uniqueFileIds,
+} from "@/app/utils/file-context-ids";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -68,7 +73,21 @@ export interface RequestPayload {
   max_completion_tokens?: number;
   chat_template_kwargs?: Record<string, unknown>;
   external_rag_kg_enabled?: boolean;
-  external_rag_kg_upstream_url?: string;
+  external_web_search_enabled?: boolean;
+  external_academic_search_enabled?: boolean;
+  external_design_calculation_enabled?: boolean;
+  external_structure_visualization_enabled?: boolean;
+  external_simulation_job_enabled?: boolean;
+  external_session_file_rag_enabled?: boolean;
+  external_session_file_records?: {
+    messageId?: string;
+    role?: string;
+    fileContent?: string;
+    fileIds?: string[];
+  }[];
+  external_user_file_rag_enabled?: boolean;
+  external_user_file_excluded_file_ids?: string[];
+  external_upstream_url?: string;
 }
 
 export interface DalleRequestPayload {
@@ -254,8 +273,24 @@ export class ChatGPTApi implements LLMApi {
       };
     } else {
       const messages: ChatOptions["messages"] = [];
+      const sessionFileRecords: NonNullable<
+        RequestPayload["external_session_file_records"]
+      > = options.sessionFileRecords ? [...options.sessionFileRecords] : [];
+      const messageFileIds: string[] = [];
       for (const v of options.messages) {
         let fileContent = (v as ChatMessage).fileContent;
+        const currentMessageFileIds = extractFileIdsFromMessageContent(
+          v.content,
+        );
+        messageFileIds.push(...currentMessageFileIds);
+        if (fileContent && !options.sessionFileRecords) {
+          sessionFileRecords.push({
+            messageId: (v as ChatMessage).id,
+            role: v.role,
+            fileContent,
+            fileIds: currentMessageFileIds,
+          });
+        }
         const messageContent = Array.isArray(v.content)
           ? v.content.map((part) =>
               part.type === "text"
@@ -291,6 +326,46 @@ export class ChatGPTApi implements LLMApi {
       };
       if (modelConfig.enableRagKg) {
         requestPayload.external_rag_kg_enabled = true;
+      }
+      if (modelConfig.enableWebSearch) {
+        requestPayload.external_web_search_enabled = true;
+      }
+      if (modelConfig.enableAcademicSearch) {
+        requestPayload.external_academic_search_enabled = true;
+      }
+      if (modelConfig.enableDesignCalculation) {
+        requestPayload.external_design_calculation_enabled = true;
+      }
+      if (modelConfig.enableStructureVisualization) {
+        requestPayload.external_structure_visualization_enabled = true;
+      }
+      if (modelConfig.enableSimulationJob) {
+        requestPayload.external_simulation_job_enabled = true;
+      }
+      if (modelConfig.enableSessionFileRag) {
+        requestPayload.external_session_file_rag_enabled = true;
+        requestPayload.external_session_file_records = sessionFileRecords;
+      }
+      if (modelConfig.enableUserFileRag) {
+        requestPayload.external_user_file_rag_enabled = true;
+        const excludedFileIds = uniqueFileIds([
+          ...messageFileIds,
+          ...collectFileIdsFromSessionRecords(sessionFileRecords),
+        ]);
+        if (excludedFileIds.length) {
+          requestPayload.external_user_file_excluded_file_ids = excludedFileIds;
+        }
+      }
+      if (
+        modelConfig.enableRagKg ||
+        modelConfig.enableWebSearch ||
+        modelConfig.enableAcademicSearch ||
+        modelConfig.enableDesignCalculation ||
+        modelConfig.enableStructureVisualization ||
+        modelConfig.enableSimulationJob ||
+        modelConfig.enableSessionFileRag ||
+        modelConfig.enableUserFileRag
+      ) {
         const customUpstreamUrl = useAccessStore.getState().useCustomConfig
           ? this.getCustomProviderUrl(
               useAccessStore.getState(),
@@ -298,7 +373,7 @@ export class ChatGPTApi implements LLMApi {
             )
           : "";
         if (customUpstreamUrl) {
-          requestPayload.external_rag_kg_upstream_url = customUpstreamUrl;
+          requestPayload.external_upstream_url = customUpstreamUrl;
         }
       }
       if (options.config.chat_template_kwargs) {
@@ -324,7 +399,18 @@ export class ChatGPTApi implements LLMApi {
     }
 
     const shouldStream = !isDalle3 && !!options.config.stream;
-    const forceServerProxyForRagKg = !isDalle3 && !!modelConfig.enableRagKg;
+    const forceServerProxyForExternalEnhancement =
+      !isDalle3 &&
+      !!(
+        modelConfig.enableRagKg ||
+        modelConfig.enableWebSearch ||
+        modelConfig.enableAcademicSearch ||
+        modelConfig.enableDesignCalculation ||
+        modelConfig.enableStructureVisualization ||
+        modelConfig.enableSimulationJob ||
+        modelConfig.enableSessionFileRag ||
+        modelConfig.enableUserFileRag
+      );
     const controller = new AbortController();
     options.onController?.(controller);
 
@@ -355,13 +441,13 @@ export class ChatGPTApi implements LLMApi {
             useCustomConfig ? useAccessStore.getState().azureApiVersion : "",
           ),
           modelConfig.providerName,
-          forceServerProxyForRagKg,
+          forceServerProxyForExternalEnhancement,
         );
       } else {
         chatPath = this.path(
           isDalle3 ? OpenaiPath.ImagePath : OpenaiPath.ChatPath,
           modelConfig.providerName,
-          forceServerProxyForRagKg,
+          forceServerProxyForExternalEnhancement,
         );
       }
       if (shouldStream) {

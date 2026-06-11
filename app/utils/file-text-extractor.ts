@@ -217,15 +217,15 @@ function cleanText(text: string): string {
       // 控制字符
       .replace(/[\x01-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, " ")
       // PDF 编码噪声处理
-      .replace(/Â±/g, "±")
-      .replace(/Â°/g, "°")
-      .replace(/Âµ/g, "µ")
-      .replace(/Â²/g, "²")
-      .replace(/Â³/g, "³")
-      .replace(/â‰¤/g, "≤")
-      .replace(/â‰¥/g, "≥")
+      .replace(/\u00c2\u00b1/g, "±")
+      .replace(/\u00c2\u00b0/g, "°")
+      .replace(/\u00c2\u00b5/g, "µ")
+      .replace(/\u00c2\u00b2/g, "²")
+      .replace(/\u00c2\u00b3/g, "³")
+      .replace(/\u00e2\u2030\u00a4/g, "≤")
+      .replace(/\u00e2\u2030\u00a5/g, "≥")
       // 替换字符
-      .replace(/�/g, " ")
+      .replace(/\ufffd/g, " ")
       // 连字规范化
       .replace(/ﬀ/g, "ff")
       .replace(/ﬁ/g, "fi")

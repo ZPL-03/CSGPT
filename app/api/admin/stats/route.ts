@@ -112,7 +112,16 @@ export async function GET(req: NextRequest) {
               date: true,
               isError: true,
               model: true,
+              tools: true,
+              agentPlan: true,
               fileContent: true,
+              ragKgSources: true,
+              researchSources: true,
+              designCalculations: true,
+              structureVisualizations: true,
+              simulationJobDrafts: true,
+              sessionFileSources: true,
+              userFileSources: true,
             },
             orderBy: { createdAt: "asc" },
           },
@@ -151,9 +160,18 @@ export async function GET(req: NextRequest) {
             date: m.date,
             isError: m.isError,
             model: m.model,
+            tools: m.tools,
+            agentPlan: m.agentPlan,
             fileContent:
               m.fileContent ||
               buildFileContentFromMessage(m.content, filesById),
+            ragKgSources: m.ragKgSources,
+            researchSources: m.researchSources,
+            designCalculations: m.designCalculations,
+            structureVisualizations: m.structureVisualizations,
+            simulationJobDrafts: m.simulationJobDrafts,
+            sessionFileSources: m.sessionFileSources,
+            userFileSources: m.userFileSources,
           };
         }),
       });
@@ -172,16 +190,22 @@ export async function GET(req: NextRequest) {
       conversationCount,
       messageCount,
       fileCount,
+      userFileRagChunkCount,
+      simulationJobCount,
       users,
       conversations,
       files,
       fileSizeResult,
       messageSizeResult,
+      ragIndexSizeResult,
+      simulationJobSizeResult,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.conversation.count(),
       prisma.message.count(),
       prisma.uploadedFile.count(),
+      prisma.userFileRagChunk.count(),
+      prisma.simulationJob.count(),
       prisma.user.findMany({
         select: {
           id: true,
@@ -209,16 +233,29 @@ export async function GET(req: NextRequest) {
           originalName: true,
           mimeType: true,
           size: true,
+          extractedText: true,
+          parseStatus: true,
+          parseError: true,
+          parsedAt: true,
           createdAt: true,
           user: { select: { username: true } },
+          _count: { select: { ragChunks: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
       prisma.$queryRawUnsafe<{ file_bytes: bigint | number | null }[]>(
-        `SELECT COALESCE(SUM(octet_length("data")), 0) AS file_bytes FROM "UploadedFile"`,
+        `SELECT COALESCE(SUM(octet_length("data") + octet_length(COALESCE("extractedText", ''))), 0) AS file_bytes FROM "UploadedFile"`,
       ),
       prisma.$queryRawUnsafe<{ message_bytes: bigint | number | null }[]>(
         `SELECT COALESCE(SUM(octet_length("content") + octet_length(COALESCE("fileContent", ''))), 0) AS message_bytes FROM "Message"`,
+      ),
+      prisma.$queryRawUnsafe<{ rag_index_bytes: bigint | number | null }[]>(
+        `SELECT COALESCE(SUM(octet_length("title") + octet_length("text")), 0) AS rag_index_bytes FROM "UserFileRagChunk"`,
+      ),
+      prisma.$queryRawUnsafe<
+        { simulation_job_bytes: bigint | number | null }[]
+      >(
+        `SELECT COALESCE(SUM(octet_length("title") + octet_length("solver") + octet_length("status") + octet_length(COALESCE("externalJobId", '')) + octet_length(COALESCE("error", '')) + octet_length("input"::text) + octet_length(COALESCE("result"::text, ''))), 0) AS simulation_job_bytes FROM "SimulationJob"`,
       ),
     ]);
 
@@ -226,7 +263,7 @@ export async function GET(req: NextRequest) {
       { db_size: string; table_size: string }[]
     >(
       `WITH app_tables(name) AS (
-        VALUES ('"User"'), ('"Conversation"'), ('"Message"'), ('"AuthToken"'), ('"UploadedFile"')
+        VALUES ('"User"'), ('"Conversation"'), ('"Message"'), ('"AuthToken"'), ('"UploadedFile"'), ('"UserFileRagChunk"'), ('"SimulationJob"')
       )
       SELECT
         pg_size_pretty(pg_database_size(current_database())) AS db_size,
@@ -245,7 +282,10 @@ export async function GET(req: NextRequest) {
     );
     const currentDataBytes =
       Number(fileSizeResult[0]?.file_bytes || 0) +
-      Number(messageSizeResult[0]?.message_bytes || 0);
+      Number(messageSizeResult[0]?.message_bytes || 0) +
+      Number(ragIndexSizeResult[0]?.rag_index_bytes || 0) +
+      Number(simulationJobSizeResult[0]?.simulation_job_bytes || 0);
+    const ragIndexBytes = Number(ragIndexSizeResult[0]?.rag_index_bytes || 0);
 
     return jsonNoStore({
       users: Number(userCount),
@@ -266,6 +306,8 @@ export async function GET(req: NextRequest) {
       })),
       messages: Number(messageCount),
       files: Number(fileCount),
+      userFileRagChunks: Number(userFileRagChunkCount),
+      simulationJobs: Number(simulationJobCount),
       fileList: files.map((file) => ({
         id: file.id,
         userId: file.userId,
@@ -273,12 +315,19 @@ export async function GET(req: NextRequest) {
         originalName: file.originalName,
         mimeType: file.mimeType,
         size: file.size,
+        extractedTextLength: file.extractedText?.length || 0,
+        parseStatus: file.parseStatus,
+        parseError: file.parseError,
+        parsedAt: file.parsedAt,
+        ragChunkCount: Number(file._count.ragChunks),
         createdAt: file.createdAt,
       })),
       dbSize: dbSizeResult[0]?.db_size || "N/A",
       tableSize: dbSizeResult[0]?.table_size || "N/A",
       dataSize: formatBytes(currentDataBytes),
       dataBytes: currentDataBytes,
+      ragIndexSize: formatBytes(ragIndexBytes),
+      ragIndexBytes,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -343,6 +392,9 @@ export async function DELETE(req: NextRequest) {
           tx,
           targetId,
         );
+        await tx.simulationJob.deleteMany({
+          where: { conversationId: targetId },
+        });
         await tx.conversation.delete({ where: { id: targetId } });
         await deleteUnreferencedFiles(tx, fileIds, conversation.userId);
       });

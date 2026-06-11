@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
+import { getUserFromRequest } from "@/app/lib/auth";
 import {
   CSGPT_DEFAULT_MODEL,
   CSGPT_MODEL_2,
@@ -12,6 +13,60 @@ import {
   RAG_KG_SOURCES_HEADER,
   type RagKgSource,
 } from "@/app/utils/rag-kg-sources";
+import {
+  encodeResearchSourcesHeader,
+  RESEARCH_SOURCES_HEADER,
+  type ResearchSource,
+} from "@/app/utils/research-sources";
+import { buildExternalResearchContext } from "@/app/utils/server-research";
+import { buildExternalDesignCalculationContext } from "@/app/utils/server-design-calculation";
+import {
+  DESIGN_CALCULATION_RESULTS_HEADER,
+  encodeDesignCalculationResultsHeader,
+  type DesignCalculationTrace,
+} from "@/app/utils/design-calculation-results";
+import { buildExternalStructureVisualizationContext } from "@/app/utils/server-structure-visualization";
+import {
+  encodeStructureVisualizationResultsHeader,
+  STRUCTURE_VISUALIZATION_RESULTS_HEADER,
+  type StructureVisualizationTrace,
+} from "@/app/utils/structure-visualization-results";
+import {
+  encodeSessionFileSourcesHeader,
+  SESSION_FILE_SOURCES_HEADER,
+  type SessionFileSource,
+} from "@/app/utils/session-file-sources";
+import {
+  buildSessionFileRagContext,
+  type SessionFileRecord,
+} from "@/app/utils/server-session-file-rag";
+import { buildUserFileRagContext } from "@/app/utils/server-user-file-rag";
+import {
+  encodeUserFileSourcesHeader,
+  USER_FILE_SOURCES_HEADER,
+  type UserFileSource,
+} from "@/app/utils/user-file-sources";
+import {
+  CONTROLLED_TOOL_RECORDS_HEADER,
+  createControlledToolRecord,
+  encodeControlledToolRecordsHeader,
+  type ControlledToolRecord,
+} from "@/app/utils/controlled-tool-records";
+import {
+  buildControlledAgentPlan,
+  planControlledChatTools,
+  type ControlledAgentPlan,
+} from "@/app/utils/server-agent-planner";
+import {
+  CONTROLLED_AGENT_PLAN_HEADER,
+  encodeControlledAgentPlanHeader,
+} from "@/app/utils/controlled-agent-plan";
+import { buildExternalSimulationJobContext } from "@/app/utils/server-simulation-job";
+import {
+  encodeSimulationJobDraftsHeader,
+  SIMULATION_JOB_DRAFTS_HEADER,
+  type SimulationJobDraft,
+} from "@/app/utils/simulation-job-results";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -111,14 +166,14 @@ function normalizeCustomUpstreamBaseUrl(baseUrl?: string) {
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error("自定义 RAG/KG 上游接口地址不是有效 URL。");
+    throw new Error("自定义上游接口地址不是有效 URL。");
   }
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("自定义 RAG/KG 上游接口地址只支持 HTTP 或 HTTPS。");
+    throw new Error("自定义上游接口地址只支持 HTTP 或 HTTPS。");
   }
   if (parsed.username || parsed.password) {
-    throw new Error("自定义 RAG/KG 上游接口地址不能包含用户名或密码。");
+    throw new Error("自定义上游接口地址不能包含用户名或密码。");
   }
 
   return ensureOpenAIBaseUrl(value);
@@ -170,6 +225,190 @@ function attachRagKgSourcesHeader(headers: Headers, sources: RagKgSource[]) {
   if (encoded) {
     headers.set(RAG_KG_SOURCES_HEADER, encoded);
   }
+}
+
+function attachResearchSourcesHeader(
+  headers: Headers,
+  sources: ResearchSource[],
+) {
+  const encoded = encodeResearchSourcesHeader(sources);
+  if (encoded) {
+    headers.set(RESEARCH_SOURCES_HEADER, encoded);
+  }
+}
+
+function attachDesignCalculationResultsHeader(
+  headers: Headers,
+  results: DesignCalculationTrace[],
+) {
+  const encoded = encodeDesignCalculationResultsHeader(results);
+  if (encoded) {
+    headers.set(DESIGN_CALCULATION_RESULTS_HEADER, encoded);
+  }
+}
+
+function attachStructureVisualizationResultsHeader(
+  headers: Headers,
+  results: StructureVisualizationTrace[],
+) {
+  const encoded = encodeStructureVisualizationResultsHeader(results);
+  if (encoded) {
+    headers.set(STRUCTURE_VISUALIZATION_RESULTS_HEADER, encoded);
+  }
+}
+
+function attachSimulationJobDraftsHeader(
+  headers: Headers,
+  drafts: SimulationJobDraft[],
+) {
+  const encoded = encodeSimulationJobDraftsHeader(drafts);
+  if (encoded) {
+    headers.set(SIMULATION_JOB_DRAFTS_HEADER, encoded);
+  }
+}
+
+function attachSessionFileSourcesHeader(
+  headers: Headers,
+  sources: SessionFileSource[],
+) {
+  const encoded = encodeSessionFileSourcesHeader(sources);
+  if (encoded) {
+    headers.set(SESSION_FILE_SOURCES_HEADER, encoded);
+  }
+}
+
+function attachUserFileSourcesHeader(
+  headers: Headers,
+  sources: UserFileSource[],
+) {
+  const encoded = encodeUserFileSourcesHeader(sources);
+  if (encoded) {
+    headers.set(USER_FILE_SOURCES_HEADER, encoded);
+  }
+}
+
+function attachControlledToolRecordsHeader(
+  headers: Headers,
+  records: ControlledToolRecord[],
+) {
+  const encoded = encodeControlledToolRecordsHeader(records);
+  if (encoded) {
+    headers.set(CONTROLLED_TOOL_RECORDS_HEADER, encoded);
+  }
+}
+
+function attachControlledAgentPlanHeader(
+  headers: Headers,
+  plan?: ControlledAgentPlan,
+) {
+  if (!plan) return;
+  const encoded = encodeControlledAgentPlanHeader(plan);
+  if (encoded) {
+    headers.set(CONTROLLED_AGENT_PLAN_HEADER, encoded);
+  }
+}
+
+function buildControlledToolRecords(input: {
+  ragKgEnabled: boolean;
+  ragKgSources: RagKgSource[];
+  webSearchEnabled: boolean;
+  standardSearchEnabled: boolean;
+  patentSearchEnabled: boolean;
+  academicSearchEnabled: boolean;
+  researchSources: ResearchSource[];
+  designCalculationEnabled: boolean;
+  designCalculations: DesignCalculationTrace[];
+  structureVisualizationEnabled: boolean;
+  structureVisualizations: StructureVisualizationTrace[];
+  simulationJobEnabled: boolean;
+  simulationJobTaskCount: number;
+  sessionFileRagEnabled: boolean;
+  sessionFileSources: SessionFileSource[];
+  userFileRagEnabled: boolean;
+  userFileSources: UserFileSource[];
+}) {
+  const records = [
+    createControlledToolRecord({
+      id: "csgpt-rag-kg",
+      name: "知识库检索",
+      enabled: input.ragKgEnabled,
+      count: input.ragKgSources.length,
+      unit: "条来源",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-web-search",
+      name: "联网检索",
+      enabled: input.webSearchEnabled,
+      count: input.researchSources.filter((source) => source.mode === "web")
+        .length,
+      unit: "条来源",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-standard-search",
+      name: "标准/规范检索",
+      enabled: input.standardSearchEnabled,
+      count: input.researchSources.filter(
+        (source) => source.mode === "standard",
+      ).length,
+      unit: "条来源",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-patent-search",
+      name: "专利检索",
+      enabled: input.patentSearchEnabled,
+      count: input.researchSources.filter((source) => source.mode === "patent")
+        .length,
+      unit: "条来源",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-academic-search",
+      name: "学术检索",
+      enabled: input.academicSearchEnabled,
+      count: input.researchSources.filter(
+        (source) => source.mode === "academic",
+      ).length,
+      unit: "条来源",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-design-calculation",
+      name: "设计计算",
+      enabled: input.designCalculationEnabled,
+      count: input.designCalculations.length,
+      unit: "项计算",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-structure-visualization",
+      name: "结构可视化",
+      enabled: input.structureVisualizationEnabled,
+      count: input.structureVisualizations.length,
+      unit: "张示意图",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-simulation-job",
+      name: "仿真任务",
+      enabled: input.simulationJobEnabled,
+      count: input.simulationJobTaskCount,
+      unit: "项任务入口",
+      status: "configured",
+      content: "可创建真实仿真任务，结果需外部求解器返回",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-session-file-rag",
+      name: "会话文件知识",
+      enabled: input.sessionFileRagEnabled,
+      count: input.sessionFileSources.length,
+      unit: "个附件来源",
+    }),
+    createControlledToolRecord({
+      id: "csgpt-user-file-rag",
+      name: "用户文件知识",
+      enabled: input.userFileRagEnabled,
+      count: input.userFileSources.length,
+      unit: "个附件来源",
+    }),
+  ];
+
+  return records.filter(Boolean) as ControlledToolRecord[];
 }
 
 async function handle(req: NextRequest, { params }: { params: RouteParams }) {
@@ -381,10 +620,51 @@ async function handleModelsRequest(
 
 async function prepareProxyMessages(
   messages: any[],
-  options: { injectCSGPTPrompt: boolean; ragKgEnabled: boolean },
+  options: {
+    injectCSGPTPrompt: boolean;
+    ragKgEnabled: boolean;
+    webSearchEnabled: boolean;
+    academicSearchEnabled: boolean;
+    designCalculationEnabled: boolean;
+    structureVisualizationEnabled: boolean;
+    simulationJobEnabled: boolean;
+    sessionFileRagEnabled: boolean;
+    sessionFileRecords: SessionFileRecord[];
+    userFileRagEnabled: boolean;
+    userFileExcludedFileIds: string[];
+    userId?: string | null;
+  },
 ) {
   const processedMessages = [...messages];
+  const toolPlan = planControlledChatTools(processedMessages, {
+    ragKgEnabled: options.ragKgEnabled,
+    webSearchEnabled: options.webSearchEnabled,
+    academicSearchEnabled: options.academicSearchEnabled,
+    designCalculationEnabled: options.designCalculationEnabled,
+    structureVisualizationEnabled: options.structureVisualizationEnabled,
+    simulationJobEnabled: options.simulationJobEnabled,
+    sessionFileRagEnabled: options.sessionFileRagEnabled,
+    userFileRagEnabled: options.userFileRagEnabled,
+  });
+  const controlledAgentPlan = buildControlledAgentPlan(processedMessages, {
+    ragKgEnabled: options.ragKgEnabled,
+    webSearchEnabled: options.webSearchEnabled,
+    academicSearchEnabled: options.academicSearchEnabled,
+    designCalculationEnabled: options.designCalculationEnabled,
+    structureVisualizationEnabled: options.structureVisualizationEnabled,
+    simulationJobEnabled: options.simulationJobEnabled,
+    sessionFileRagEnabled: options.sessionFileRagEnabled,
+    userFileRagEnabled: options.userFileRagEnabled,
+  });
   let ragKgSources: RagKgSource[] = [];
+  let researchSources: ResearchSource[] = [];
+  let designCalculations: DesignCalculationTrace[] = [];
+  let structureVisualizations: StructureVisualizationTrace[] = [];
+  let simulationJobDrafts: SimulationJobDraft[] = [];
+  let simulationJobTaskCount = 0;
+  let sessionFileSources: SessionFileSource[] = [];
+  let userFileSources: UserFileSource[] = [];
+  const contextBlocks: string[] = [];
   if (
     options.injectCSGPTPrompt &&
     !processedMessages.some((msg: any) => msg.role === "system")
@@ -395,29 +675,135 @@ async function prepareProxyMessages(
     });
   }
 
-  if (options.ragKgEnabled) {
+  if (toolPlan.ragKgEnabled) {
     const ragKgContext = await buildExternalRagKgContext(processedMessages);
     if (ragKgContext?.message) {
       ragKgSources = ragKgContext.sources;
-      let insertIndex = 0;
-      while (
-        insertIndex < processedMessages.length &&
-        ["developer", "system"].includes(processedMessages[insertIndex]?.role)
-      ) {
-        insertIndex += 1;
-      }
-      processedMessages.splice(insertIndex, 0, {
-        role: processedMessages.some(
-          (message: any) => message.role === "developer",
-        )
-          ? "developer"
-          : "system",
-        content: ragKgContext.message,
-      });
+      contextBlocks.push(`项目内部知识库上下文\n${ragKgContext.message}`);
     }
   }
 
-  return { messages: processedMessages, ragKgSources };
+  if (
+    toolPlan.webSearchEnabled ||
+    toolPlan.standardSearchEnabled ||
+    toolPlan.patentSearchEnabled ||
+    toolPlan.academicSearchEnabled
+  ) {
+    const researchContext = await buildExternalResearchContext(
+      processedMessages,
+      {
+        webSearchEnabled:
+          toolPlan.webSearchEnabled ||
+          toolPlan.standardSearchEnabled ||
+          toolPlan.patentSearchEnabled,
+        academicSearchEnabled: toolPlan.academicSearchEnabled,
+      },
+    );
+    if (researchContext?.message) {
+      researchSources = researchContext.sources;
+      contextBlocks.push(researchContext.message);
+    }
+  }
+
+  if (toolPlan.designCalculationEnabled) {
+    const calculationContext =
+      buildExternalDesignCalculationContext(processedMessages);
+    if (calculationContext?.message) {
+      designCalculations = calculationContext.calculations;
+      contextBlocks.push(calculationContext.message);
+    }
+  }
+
+  if (toolPlan.structureVisualizationEnabled) {
+    const visualizationContext =
+      buildExternalStructureVisualizationContext(processedMessages);
+    if (visualizationContext?.message) {
+      structureVisualizations = visualizationContext.visualizations;
+      contextBlocks.push(visualizationContext.message);
+    }
+  }
+
+  if (toolPlan.simulationJobEnabled) {
+    const simulationContext =
+      buildExternalSimulationJobContext(processedMessages);
+    if (simulationContext?.message) {
+      simulationJobDrafts = simulationContext.drafts;
+      simulationJobTaskCount = simulationContext.drafts.length;
+      contextBlocks.push(simulationContext.message);
+    }
+  }
+
+  if (toolPlan.sessionFileRagEnabled) {
+    const sessionFileContext = buildSessionFileRagContext(
+      processedMessages,
+      options.sessionFileRecords,
+    );
+    if (sessionFileContext?.message) {
+      sessionFileSources = sessionFileContext.sources;
+      contextBlocks.push(sessionFileContext.message);
+    }
+  }
+
+  if (toolPlan.userFileRagEnabled && options.userId) {
+    const userFileContext = await buildUserFileRagContext(
+      processedMessages,
+      options.userId,
+      options.userFileExcludedFileIds,
+    );
+    if (userFileContext?.message) {
+      userFileSources = userFileContext.sources;
+      contextBlocks.push(userFileContext.message);
+    }
+  }
+
+  if (contextBlocks.length > 0) {
+    let insertIndex = 0;
+    while (
+      insertIndex < processedMessages.length &&
+      ["developer", "system"].includes(processedMessages[insertIndex]?.role)
+    ) {
+      insertIndex += 1;
+    }
+    processedMessages.splice(insertIndex, 0, {
+      role: processedMessages.some(
+        (message: any) => message.role === "developer",
+      )
+        ? "developer"
+        : "system",
+      content: contextBlocks.join("\n\n"),
+    });
+  }
+
+  return {
+    messages: processedMessages,
+    ragKgSources,
+    researchSources,
+    designCalculations,
+    structureVisualizations,
+    simulationJobDrafts,
+    sessionFileSources,
+    userFileSources,
+    controlledAgentPlan,
+    controlledToolRecords: buildControlledToolRecords({
+      ragKgEnabled: toolPlan.ragKgEnabled,
+      ragKgSources,
+      webSearchEnabled: toolPlan.webSearchEnabled,
+      standardSearchEnabled: toolPlan.standardSearchEnabled,
+      patentSearchEnabled: toolPlan.patentSearchEnabled,
+      academicSearchEnabled: toolPlan.academicSearchEnabled,
+      researchSources,
+      designCalculationEnabled: toolPlan.designCalculationEnabled,
+      designCalculations,
+      structureVisualizationEnabled: toolPlan.structureVisualizationEnabled,
+      structureVisualizations,
+      simulationJobEnabled: toolPlan.simulationJobEnabled,
+      simulationJobTaskCount,
+      sessionFileRagEnabled: toolPlan.sessionFileRagEnabled,
+      sessionFileSources,
+      userFileRagEnabled: toolPlan.userFileRagEnabled,
+      userFileSources,
+    }),
+  };
 }
 
 async function handleDedicatedCSGPTChatCompletions(
@@ -429,9 +815,35 @@ async function handleDedicatedCSGPTChatCompletions(
     model: string;
     rest: any;
     ragKgEnabled: boolean;
+    webSearchEnabled: boolean;
+    academicSearchEnabled: boolean;
+    designCalculationEnabled: boolean;
+    structureVisualizationEnabled: boolean;
+    simulationJobEnabled: boolean;
+    sessionFileRagEnabled: boolean;
+    sessionFileRecords: SessionFileRecord[];
+    userFileRagEnabled: boolean;
+    userFileExcludedFileIds: string[];
+    userId?: string | null;
   },
 ) {
-  const { messages, stream, model, rest, ragKgEnabled } = bodyData;
+  const {
+    messages,
+    stream,
+    model,
+    rest,
+    ragKgEnabled,
+    webSearchEnabled,
+    academicSearchEnabled,
+    designCalculationEnabled,
+    structureVisualizationEnabled,
+    simulationJobEnabled,
+    sessionFileRagEnabled,
+    sessionFileRecords,
+    userFileRagEnabled,
+    userFileExcludedFileIds,
+    userId,
+  } = bodyData;
   if (!upstream.baseUrl) {
     return NextResponse.json(
       { error: true, message: `${upstream.label} 后端地址未配置` },
@@ -445,10 +857,20 @@ async function handleDedicatedCSGPTChatCompletions(
     preparedMessages = await prepareProxyMessages(messages, {
       injectCSGPTPrompt: true,
       ragKgEnabled,
+      webSearchEnabled,
+      academicSearchEnabled,
+      designCalculationEnabled,
+      structureVisualizationEnabled,
+      simulationJobEnabled,
+      sessionFileRagEnabled,
+      sessionFileRecords,
+      userFileRagEnabled,
+      userFileExcludedFileIds,
+      userId,
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: true, message: error?.message || "RAG/KG 检索增强失败" },
+      { error: true, message: error?.message || "外部增强失败" },
       { status: 500 },
     );
   }
@@ -507,6 +929,38 @@ async function handleDedicatedCSGPTChatCompletions(
       "X-Accel-Buffering": "no",
     });
     attachRagKgSourcesHeader(responseHeaders, preparedMessages.ragKgSources);
+    attachResearchSourcesHeader(
+      responseHeaders,
+      preparedMessages.researchSources,
+    );
+    attachDesignCalculationResultsHeader(
+      responseHeaders,
+      preparedMessages.designCalculations,
+    );
+    attachStructureVisualizationResultsHeader(
+      responseHeaders,
+      preparedMessages.structureVisualizations,
+    );
+    attachSimulationJobDraftsHeader(
+      responseHeaders,
+      preparedMessages.simulationJobDrafts,
+    );
+    attachSessionFileSourcesHeader(
+      responseHeaders,
+      preparedMessages.sessionFileSources,
+    );
+    attachUserFileSourcesHeader(
+      responseHeaders,
+      preparedMessages.userFileSources,
+    );
+    attachControlledAgentPlanHeader(
+      responseHeaders,
+      preparedMessages.controlledAgentPlan,
+    );
+    attachControlledToolRecordsHeader(
+      responseHeaders,
+      preparedMessages.controlledToolRecords,
+    );
     return new Response(response.body, {
       status: 200,
       headers: responseHeaders,
@@ -516,6 +970,38 @@ async function handleDedicatedCSGPTChatCompletions(
   const data = await response.json();
   const nextResponse = NextResponse.json(data);
   attachRagKgSourcesHeader(nextResponse.headers, preparedMessages.ragKgSources);
+  attachResearchSourcesHeader(
+    nextResponse.headers,
+    preparedMessages.researchSources,
+  );
+  attachDesignCalculationResultsHeader(
+    nextResponse.headers,
+    preparedMessages.designCalculations,
+  );
+  attachStructureVisualizationResultsHeader(
+    nextResponse.headers,
+    preparedMessages.structureVisualizations,
+  );
+  attachSimulationJobDraftsHeader(
+    nextResponse.headers,
+    preparedMessages.simulationJobDrafts,
+  );
+  attachSessionFileSourcesHeader(
+    nextResponse.headers,
+    preparedMessages.sessionFileSources,
+  );
+  attachUserFileSourcesHeader(
+    nextResponse.headers,
+    preparedMessages.userFileSources,
+  );
+  attachControlledAgentPlanHeader(
+    nextResponse.headers,
+    preparedMessages.controlledAgentPlan,
+  );
+  attachControlledToolRecordsHeader(
+    nextResponse.headers,
+    preparedMessages.controlledToolRecords,
+  );
   return nextResponse;
 }
 
@@ -532,15 +1018,71 @@ async function handleChatCompletions(
     stream = true,
     model,
     external_rag_kg_enabled = false,
-    external_rag_kg_upstream_url,
+    external_web_search_enabled = false,
+    external_academic_search_enabled = false,
+    external_design_calculation_enabled = false,
+    external_structure_visualization_enabled = false,
+    external_simulation_job_enabled = false,
+    external_session_file_rag_enabled = false,
+    external_session_file_records = [],
+    external_user_file_rag_enabled = false,
+    external_user_file_excluded_file_ids = [],
+    external_upstream_url,
     ...rest
   } = body;
   const ragKgEnabled = !!external_rag_kg_enabled;
+  const webSearchEnabled = !!external_web_search_enabled;
+  const academicSearchEnabled = !!external_academic_search_enabled;
+  const designCalculationEnabled = !!external_design_calculation_enabled;
+  const structureVisualizationEnabled =
+    !!external_structure_visualization_enabled;
+  const simulationJobEnabled = !!external_simulation_job_enabled;
+  const sessionFileRagEnabled = !!external_session_file_rag_enabled;
+  const userFileRagEnabled = !!external_user_file_rag_enabled;
+  const sessionFileRecords = Array.isArray(external_session_file_records)
+    ? external_session_file_records
+    : [];
+  const userFileExcludedFileIds = Array.isArray(
+    external_user_file_excluded_file_ids,
+  )
+    ? external_user_file_excluded_file_ids
+        .map((id: unknown) => String(id || "").trim())
+        .filter(Boolean)
+    : [];
+  const externalEnhancementEnabled =
+    ragKgEnabled ||
+    webSearchEnabled ||
+    academicSearchEnabled ||
+    designCalculationEnabled ||
+    structureVisualizationEnabled ||
+    simulationJobEnabled ||
+    sessionFileRagEnabled ||
+    userFileRagEnabled;
+  const preliminaryToolPlan = planControlledChatTools(messages, {
+    ragKgEnabled,
+    webSearchEnabled,
+    academicSearchEnabled,
+    designCalculationEnabled,
+    structureVisualizationEnabled,
+    simulationJobEnabled,
+    sessionFileRagEnabled,
+    userFileRagEnabled,
+  });
+
+  const userId = preliminaryToolPlan.userFileRagEnabled
+    ? await getUserFromRequest(req)
+    : null;
+  if (preliminaryToolPlan.userFileRagEnabled && !userId) {
+    return NextResponse.json(
+      { error: true, message: "未授权" },
+      { status: 401 },
+    );
+  }
 
   let customUpstreamBaseUrl = "";
   try {
-    customUpstreamBaseUrl = ragKgEnabled
-      ? normalizeCustomUpstreamBaseUrl(external_rag_kg_upstream_url)
+    customUpstreamBaseUrl = externalEnhancementEnabled
+      ? normalizeCustomUpstreamBaseUrl(external_upstream_url)
       : "";
   } catch (error: any) {
     return NextResponse.json(
@@ -559,22 +1101,58 @@ async function handleChatCompletions(
       model,
       rest,
       ragKgEnabled,
+      webSearchEnabled,
+      academicSearchEnabled,
+      designCalculationEnabled,
+      structureVisualizationEnabled,
+      simulationJobEnabled,
+      sessionFileRagEnabled,
+      sessionFileRecords,
+      userFileRagEnabled,
+      userFileExcludedFileIds,
+      userId,
     });
   }
 
   let processedMessages = [...messages];
   let ragKgSources: RagKgSource[] = [];
-  if (backend.isCSGPT || ragKgEnabled) {
+  let researchSources: ResearchSource[] = [];
+  let designCalculations: DesignCalculationTrace[] = [];
+  let structureVisualizations: StructureVisualizationTrace[] = [];
+  let simulationJobDrafts: SimulationJobDraft[] = [];
+  let sessionFileSources: SessionFileSource[] = [];
+  let userFileSources: UserFileSource[] = [];
+  let controlledToolRecords: ControlledToolRecord[] = [];
+  let controlledAgentPlan: ControlledAgentPlan | undefined;
+  if (backend.isCSGPT || externalEnhancementEnabled) {
     try {
       const preparedMessages = await prepareProxyMessages(messages, {
         injectCSGPTPrompt: backend.isCSGPT,
         ragKgEnabled,
+        webSearchEnabled,
+        academicSearchEnabled,
+        designCalculationEnabled,
+        structureVisualizationEnabled,
+        simulationJobEnabled,
+        sessionFileRagEnabled,
+        sessionFileRecords,
+        userFileRagEnabled,
+        userFileExcludedFileIds,
+        userId,
       });
       processedMessages = preparedMessages.messages;
       ragKgSources = preparedMessages.ragKgSources;
+      researchSources = preparedMessages.researchSources;
+      designCalculations = preparedMessages.designCalculations;
+      structureVisualizations = preparedMessages.structureVisualizations;
+      simulationJobDrafts = preparedMessages.simulationJobDrafts;
+      sessionFileSources = preparedMessages.sessionFileSources;
+      userFileSources = preparedMessages.userFileSources;
+      controlledToolRecords = preparedMessages.controlledToolRecords;
+      controlledAgentPlan = preparedMessages.controlledAgentPlan;
     } catch (error: any) {
       return NextResponse.json(
-        { error: true, message: error?.message || "RAG/KG 检索增强失败" },
+        { error: true, message: error?.message || "外部增强失败" },
         { status: 500 },
       );
     }
@@ -649,6 +1227,17 @@ async function handleChatCompletions(
       "X-Accel-Buffering": "no",
     });
     attachRagKgSourcesHeader(responseHeaders, ragKgSources);
+    attachResearchSourcesHeader(responseHeaders, researchSources);
+    attachDesignCalculationResultsHeader(responseHeaders, designCalculations);
+    attachStructureVisualizationResultsHeader(
+      responseHeaders,
+      structureVisualizations,
+    );
+    attachSimulationJobDraftsHeader(responseHeaders, simulationJobDrafts);
+    attachSessionFileSourcesHeader(responseHeaders, sessionFileSources);
+    attachUserFileSourcesHeader(responseHeaders, userFileSources);
+    attachControlledAgentPlanHeader(responseHeaders, controlledAgentPlan);
+    attachControlledToolRecordsHeader(responseHeaders, controlledToolRecords);
     return new Response(response.body, {
       status: 200,
       headers: responseHeaders,
@@ -657,6 +1246,23 @@ async function handleChatCompletions(
     const data = await response.json();
     const nextResponse = NextResponse.json(data);
     attachRagKgSourcesHeader(nextResponse.headers, ragKgSources);
+    attachResearchSourcesHeader(nextResponse.headers, researchSources);
+    attachDesignCalculationResultsHeader(
+      nextResponse.headers,
+      designCalculations,
+    );
+    attachStructureVisualizationResultsHeader(
+      nextResponse.headers,
+      structureVisualizations,
+    );
+    attachSimulationJobDraftsHeader(nextResponse.headers, simulationJobDrafts);
+    attachSessionFileSourcesHeader(nextResponse.headers, sessionFileSources);
+    attachUserFileSourcesHeader(nextResponse.headers, userFileSources);
+    attachControlledAgentPlanHeader(nextResponse.headers, controlledAgentPlan);
+    attachControlledToolRecordsHeader(
+      nextResponse.headers,
+      controlledToolRecords,
+    );
     return nextResponse;
   }
 }

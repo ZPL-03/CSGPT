@@ -47,12 +47,16 @@ export async function POST(request: NextRequest) {
         mimeType,
         size,
         data: Buffer.alloc(0),
+        parseStatus: "pending",
       },
       select: {
         id: true,
         originalName: true,
         mimeType: true,
         size: true,
+        parseStatus: true,
+        parseError: true,
+        parsedAt: true,
       },
     });
 
@@ -87,6 +91,10 @@ export async function GET(request: NextRequest) {
         originalName: true,
         mimeType: true,
         size: true,
+        extractedText: true,
+        parseStatus: true,
+        parseError: true,
+        parsedAt: true,
         createdAt: true,
       },
     });
@@ -96,6 +104,7 @@ export async function GET(request: NextRequest) {
         ...file,
         name: file.originalName,
         url: `/api/files/${file.id}`,
+        extractedTextLength: file.extractedText?.length || 0,
       })),
     });
   } catch (error: any) {

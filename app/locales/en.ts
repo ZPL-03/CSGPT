@@ -585,7 +585,42 @@ const en: LocaleType = {
     RagKg: {
       Title: "External RAG/KG",
       SubTitle:
-        "When enabled, the internal knowledge base is searched and injected as retrieved context",
+        "Allows the server to search the internal knowledge base when the current question needs it",
+    },
+    WebSearch: {
+      Title: "Web Search",
+      SubTitle:
+        "Allows the server to run web, standards, or patent search for the current question and return sources",
+    },
+    AcademicSearch: {
+      Title: "Academic Search",
+      SubTitle:
+        "Allows the server to run academic search for the current question and return sources",
+    },
+    DesignCalculation: {
+      Title: "Design Calculation",
+      SubTitle:
+        "Allows the server to run controlled deterministic calculations from engineering parameters in the current question",
+    },
+    StructureVisualization: {
+      Title: "Structure Visualization",
+      SubTitle:
+        "Allows the server to generate structure sketches from dimensions and layup data in the current question",
+    },
+    SimulationJob: {
+      Title: "Simulation Job",
+      SubTitle:
+        "Allows the server to plan real solver jobs for finite-element or simulation requests",
+    },
+    SessionFileRag: {
+      Title: "Session File Knowledge",
+      SubTitle:
+        "Allows the server to retrieve parsed attachments from the current conversation when relevant",
+    },
+    UserFileRag: {
+      Title: "User File Knowledge",
+      SubTitle:
+        "Allows the server to retrieve indexed attachments from the current user when relevant",
     },
     CompressModel: {
       Title: "Summary Model",

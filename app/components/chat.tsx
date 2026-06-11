@@ -33,6 +33,7 @@ import CloseIcon from "../icons/close.svg";
 import CancelIcon from "../icons/cancel.svg";
 import ImageIcon from "../icons/image.svg";
 import GraphIcon from "../icons/graph.svg";
+import AddIcon from "../icons/add.svg";
 
 import LightIcon from "../icons/light.svg";
 import DarkIcon from "../icons/dark.svg";
@@ -241,6 +242,483 @@ function RagKgSourcesView({
           </div>
         </details>
       )}
+    </div>
+  );
+}
+
+function ResearchSourcesView({
+  sources,
+}: {
+  sources?: ChatMessage["researchSources"];
+}) {
+  if (!sources?.length) return null;
+
+  function getModeLabel(mode: string) {
+    if (mode === "academic") return "学术";
+    if (mode === "standard") return "标准/规范";
+    if (mode === "patent") return "专利";
+    return "网页";
+  }
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>外部检索来源</div>
+      <div className={styles["rag-kg-source-list"]}>
+        {sources.map((source) => {
+          const meta = [
+            getModeLabel(source.mode),
+            source.source || source.venue || "",
+            source.year ? String(source.year) : "",
+            typeof source.score === "number"
+              ? `分数 ${Number(source.score.toFixed(3))}`
+              : "",
+          ].filter(Boolean);
+
+          return (
+            <a
+              key={`${source.id}-${source.url}`}
+              className={styles["rag-kg-source-item"]}
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+              title={source.title}
+            >
+              <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+              <span className={styles["rag-kg-source-title"]}>
+                {source.title}
+                {meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
+              </span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DesignCalculationsView({
+  calculations,
+}: {
+  calculations?: ChatMessage["designCalculations"];
+}) {
+  if (!calculations?.length) return null;
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>设计计算</div>
+      <div className={styles["design-calculation-list"]}>
+        {calculations.map((calculation) => (
+          <details
+            className={styles["design-calculation-item"]}
+            key={`${calculation.id}-${calculation.type}`}
+          >
+            <summary>
+              <span className={styles["rag-kg-source-id"]}>
+                {calculation.id}
+              </span>
+              <span>{calculation.title}</span>
+            </summary>
+            <pre>{JSON.stringify(calculation.result, null, 2)}</pre>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const LAYER_COLORS = [
+  "#0ea5e9",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#64748b",
+];
+
+function formatDimension(value: number, unit: string) {
+  const normalized =
+    Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(3);
+  return `${Number(normalized)} ${unit}`;
+}
+
+function GeometrySketch({
+  visualization,
+}: {
+  visualization: NonNullable<ChatMessage["structureVisualizations"]>[number];
+}) {
+  if (visualization.type === "spherical-shell") {
+    return (
+      <svg viewBox="0 0 360 180" role="img">
+        <circle cx="180" cy="92" r="62" className={styles["structure-shell"]} />
+        <circle cx="180" cy="92" r="44" className={styles["structure-void"]} />
+        <line
+          x1="180"
+          y1="92"
+          x2="242"
+          y2="92"
+          className={styles["structure-dimension-line"]}
+        />
+        <text x="193" y="84">
+          R
+        </text>
+        <text x="132" y="164">
+          {visualization.title}
+        </text>
+      </svg>
+    );
+  }
+
+  if (visualization.type === "laminate-section" && visualization.laminate) {
+    const layers = visualization.laminate.layers.slice(0, 40);
+    const layerHeight = 140 / Math.max(layers.length, 1);
+    return (
+      <svg viewBox="0 0 360 190" role="img">
+        <rect
+          x="70"
+          y="22"
+          width="220"
+          height="140"
+          className={styles["structure-outline"]}
+        />
+        {layers.map((layer, index) => (
+          <g key={`${layer.index}-${layer.angleDeg}-${index}`}>
+            <rect
+              x="72"
+              y={24 + index * layerHeight}
+              width="216"
+              height={Math.max(layerHeight - 1, 1)}
+              fill={
+                LAYER_COLORS[Math.abs(layer.angleDeg) % LAYER_COLORS.length]
+              }
+              opacity="0.72"
+            />
+            {layerHeight >= 8 && (
+              <text x="298" y={31 + index * layerHeight}>
+                {layer.angleDeg}°
+              </text>
+            )}
+          </g>
+        ))}
+        <line
+          x1="54"
+          y1="22"
+          x2="54"
+          y2="162"
+          className={styles["structure-dimension-line"]}
+        />
+        <text x="18" y="96">
+          t
+        </text>
+        <text x="111" y="182">
+          {visualization.title}
+        </text>
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 360 190" role="img">
+      <ellipse
+        cx="93"
+        cy="96"
+        rx="42"
+        ry="58"
+        className={styles["structure-shell"]}
+      />
+      <rect
+        x="93"
+        y="38"
+        width="174"
+        height="116"
+        className={styles["structure-shell"]}
+      />
+      <ellipse
+        cx="267"
+        cy="96"
+        rx="42"
+        ry="58"
+        className={styles["structure-shell"]}
+      />
+      <ellipse
+        cx="93"
+        cy="96"
+        rx="28"
+        ry="42"
+        className={styles["structure-void"]}
+      />
+      <ellipse
+        cx="267"
+        cy="96"
+        rx="28"
+        ry="42"
+        className={styles["structure-void"]}
+      />
+      <line
+        x1="93"
+        y1="166"
+        x2="267"
+        y2="166"
+        className={styles["structure-dimension-line"]}
+      />
+      <text x="172" y="181">
+        L
+      </text>
+      <line
+        x1="93"
+        y1="96"
+        x2="135"
+        y2="96"
+        className={styles["structure-dimension-line"]}
+      />
+      <text x="110" y="88">
+        R
+      </text>
+      <text x="128" y="24">
+        {visualization.title}
+      </text>
+    </svg>
+  );
+}
+
+function StructureVisualizationsView({
+  visualizations,
+}: {
+  visualizations?: ChatMessage["structureVisualizations"];
+}) {
+  if (!visualizations?.length) return null;
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>结构可视化</div>
+      <div className={styles["structure-visualization-list"]}>
+        {visualizations.map((visualization) => (
+          <div
+            className={styles["structure-visualization-card"]}
+            key={`${visualization.id}-${visualization.type}`}
+          >
+            <div className={styles["structure-visualization-header"]}>
+              <span className={styles["rag-kg-source-id"]}>
+                {visualization.id}
+              </span>
+              <span>{visualization.title}</span>
+            </div>
+            <div className={styles["structure-visualization-body"]}>
+              <GeometrySketch visualization={visualization} />
+              <div className={styles["structure-dimension-list"]}>
+                {visualization.dimensions.map((dimension) => (
+                  <span key={`${visualization.id}-${dimension.label}`}>
+                    {dimension.label}：
+                    {formatDimension(dimension.value, dimension.unit)}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className={styles["structure-visualization-summary"]}>
+              {visualization.summary}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatDraftValue(value: unknown) {
+  if (Array.isArray(value)) return value.join("、");
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, entry]) => `${key}: ${String(entry)}`)
+      .join("；");
+  }
+  return String(value ?? "");
+}
+
+function isMeaningfulDraftValue(value: unknown) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>).length > 0;
+  }
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function SimulationJobDraftsView({
+  drafts,
+  conversationId,
+  messageId,
+}: {
+  drafts?: ChatMessage["simulationJobDrafts"];
+  conversationId: string;
+  messageId: string;
+}) {
+  const token = useUserStore((state) => state.token);
+  const [savingDraftIds, setSavingDraftIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [savedJobIds, setSavedJobIds] = useState<Record<string, string>>({});
+
+  if (!drafts?.length) return null;
+
+  const saveDraft = async (
+    draft: NonNullable<ChatMessage["simulationJobDrafts"]>[number],
+  ) => {
+    if (!token) {
+      showToast("请先登录后保存仿真任务");
+      return;
+    }
+    if (savingDraftIds.has(draft.id) || savedJobIds[draft.id]) return;
+
+    setSavingDraftIds((current) => new Set(current).add(draft.id));
+    try {
+      const response = await fetch("/api/simulation-jobs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: draft.title,
+          solver: draft.solver,
+          input: draft.input,
+          conversationId,
+          messageId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          data?.error || data?.message || `HTTP ${response.status}`,
+        );
+      }
+
+      const jobId = data?.job?.id;
+      if (typeof jobId === "string" && jobId) {
+        setSavedJobIds((current) => ({ ...current, [draft.id]: jobId }));
+      }
+      showToast(data?.existing ? "仿真任务已存在" : "仿真任务已保存");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "保存仿真任务失败");
+    } finally {
+      setSavingDraftIds((current) => {
+        const next = new Set(current);
+        next.delete(draft.id);
+        return next;
+      });
+    }
+  };
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>仿真任务草案</div>
+      <div className={styles["simulation-job-draft-list"]}>
+        {drafts.map((draft) => {
+          const sections = [
+            ["几何", draft.input.geometry],
+            ["载荷", draft.input.load],
+            ["材料", draft.input.material],
+            ["铺层", draft.input.layup],
+            ["边界条件", draft.input.boundaryConditions],
+            ["网格", draft.input.mesh],
+            ["输出指标", draft.input.outputs],
+            ["缺失参数", draft.input.missingFields],
+          ].filter(([, value]) => isMeaningfulDraftValue(value));
+          const saving = savingDraftIds.has(draft.id);
+          const saved = Boolean(savedJobIds[draft.id]);
+
+          return (
+            <div
+              className={styles["simulation-job-draft-card"]}
+              key={`${draft.id}-${draft.title}`}
+            >
+              <div className={styles["simulation-job-draft-header"]}>
+                <span className={styles["rag-kg-source-id"]}>{draft.id}</span>
+                <span>{draft.title}</span>
+                <span className={styles["simulation-job-draft-solver"]}>
+                  {draft.solver}
+                </span>
+              </div>
+              <div className={styles["simulation-job-draft-actions"]}>
+                <IconButton
+                  icon={saved ? <ConfirmIcon /> : <AddIcon />}
+                  text={saving ? "保存中" : saved ? "已保存" : "保存任务"}
+                  bordered
+                  disabled={saving || saved}
+                  onClick={() => void saveDraft(draft)}
+                />
+              </div>
+              <div className={styles["simulation-job-draft-summary"]}>
+                {draft.summary}
+              </div>
+              <div className={styles["simulation-job-draft-grid"]}>
+                {sections.map(([label, value]) => (
+                  <div
+                    className={styles["simulation-job-draft-section"]}
+                    key={`${draft.id}-${label}`}
+                  >
+                    <span>{label as string}</span>
+                    <strong>{formatDraftValue(value)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SessionFileSourcesView({
+  sources,
+}: {
+  sources?: ChatMessage["sessionFileSources"];
+}) {
+  if (!sources?.length) return null;
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>会话文件来源</div>
+      <div className={styles["rag-kg-source-list"]}>
+        {sources.map((source) => (
+          <span
+            key={source.id}
+            className={styles["rag-kg-source-item"]}
+            title={source.title}
+          >
+            <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+            <span className={styles["rag-kg-source-title"]}>
+              {source.title}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UserFileSourcesView({
+  sources,
+}: {
+  sources?: ChatMessage["userFileSources"];
+}) {
+  if (!sources?.length) return null;
+
+  return (
+    <div className={styles["rag-kg-sources"]}>
+      <div className={styles["rag-kg-sources-title"]}>用户文件来源</div>
+      <div className={styles["rag-kg-source-list"]}>
+        {sources.map((source) => (
+          <span
+            key={source.id}
+            className={styles["rag-kg-source-item"]}
+            title={source.title}
+          >
+            <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+            <span className={styles["rag-kg-source-title"]}>
+              {source.title}
+            </span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2231,7 +2709,7 @@ function _Chat() {
                             {message?.tools?.map((tool) => (
                               <div
                                 key={tool.id}
-                                title={tool?.errorMsg}
+                                title={tool?.errorMsg || tool.content}
                                 className={styles["chat-message-tool"]}
                               >
                                 {tool.isError === false ? (
@@ -2242,6 +2720,15 @@ function _Chat() {
                                   <LoadingButtonIcon />
                                 )}
                                 <span>{tool?.function?.name}</span>
+                                {tool.content && (
+                                  <span
+                                    className={
+                                      styles["chat-message-tool-content"]
+                                    }
+                                  >
+                                    {tool.content}
+                                  </span>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -2354,6 +2841,38 @@ function _Chat() {
                           )}
                           {!isUser && (
                             <RagKgSourcesView sources={message.ragKgSources} />
+                          )}
+                          {!isUser && (
+                            <ResearchSourcesView
+                              sources={message.researchSources}
+                            />
+                          )}
+                          {!isUser && (
+                            <SessionFileSourcesView
+                              sources={message.sessionFileSources}
+                            />
+                          )}
+                          {!isUser && (
+                            <UserFileSourcesView
+                              sources={message.userFileSources}
+                            />
+                          )}
+                          {!isUser && (
+                            <DesignCalculationsView
+                              calculations={message.designCalculations}
+                            />
+                          )}
+                          {!isUser && (
+                            <StructureVisualizationsView
+                              visualizations={message.structureVisualizations}
+                            />
+                          )}
+                          {!isUser && (
+                            <SimulationJobDraftsView
+                              drafts={message.simulationJobDrafts}
+                              conversationId={session.id}
+                              messageId={message.id}
+                            />
                           )}
                         </div>
                         <div className={styles["chat-message-action-date"]}>

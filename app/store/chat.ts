@@ -14,6 +14,7 @@ import { indexedDBStorage } from "@/app/utils/indexedDB-storage";
 import { useUserStore } from "./user";
 import { nanoid } from "nanoid";
 import type {
+  ChatSessionFileRecord,
   ClientApi,
   LLMConfig,
   MultimodalContent,
@@ -50,6 +51,33 @@ import {
   parseRagKgSourcesHeader,
   type RagKgSource,
 } from "../utils/rag-kg-sources";
+import {
+  parseResearchSourcesHeader,
+  type ResearchSource,
+} from "../utils/research-sources";
+import {
+  parseDesignCalculationResultsHeader,
+  type DesignCalculationTrace,
+} from "../utils/design-calculation-results";
+import {
+  parseStructureVisualizationResultsHeader,
+  type StructureVisualizationTrace,
+} from "../utils/structure-visualization-results";
+import {
+  parseSimulationJobDraftsHeader,
+  type SimulationJobDraft,
+} from "../utils/simulation-job-results";
+import {
+  parseSessionFileSourcesHeader,
+  type SessionFileSource,
+} from "../utils/session-file-sources";
+import {
+  parseUserFileSourcesHeader,
+  type UserFileSource,
+} from "../utils/user-file-sources";
+import { parseControlledToolRecordsHeader } from "../utils/controlled-tool-records";
+import { parseControlledAgentPlanHeader } from "../utils/controlled-agent-plan";
+import { extractFileIdsFromMessageContent } from "../utils/file-context-ids";
 
 const localStorage = safeLocalStorage();
 
@@ -74,10 +102,37 @@ export type ChatMessage = RequestMessage & {
   model?: ModelType;
   tools?: ChatMessageTool[];
   isMcpResponse?: boolean;
+  agentPlan?: unknown;
   /** 从上传文件中提取的文本，发送给模型但不显示在 UI 中 */
   fileContent?: string;
   ragKgSources?: RagKgSource[];
+  researchSources?: ResearchSource[];
+  designCalculations?: DesignCalculationTrace[];
+  structureVisualizations?: StructureVisualizationTrace[];
+  simulationJobDrafts?: SimulationJobDraft[];
+  sessionFileSources?: SessionFileSource[];
+  userFileSources?: UserFileSource[];
 };
+
+function appendControlledToolRecords(
+  message: ChatMessage,
+  response?: Response,
+) {
+  const records = parseControlledToolRecordsHeader(response);
+  if (!records.length) return;
+
+  const existingIds = new Set((message.tools || []).map((tool) => tool.id));
+  const nextRecords = records.filter((record) => !existingIds.has(record.id));
+  if (!nextRecords.length) return;
+
+  message.tools = [...(message.tools || []), ...nextRecords];
+}
+
+function appendControlledAgentPlan(message: ChatMessage, response?: Response) {
+  const plan = parseControlledAgentPlanHeader(response);
+  if (!plan) return;
+  message.agentPlan = plan;
+}
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
   return {
@@ -176,6 +231,19 @@ function countMessages(msgs: ChatMessage[]) {
   );
 }
 
+function collectSessionFileRecords(
+  messages: ChatMessage[],
+): ChatSessionFileRecord[] {
+  return messages
+    .filter((message) => message.fileContent?.trim())
+    .map((message) => ({
+      messageId: message.id,
+      role: message.role,
+      fileContent: message.fileContent,
+      fileIds: extractFileIdsFromMessageContent(message.content),
+    }));
+}
+
 function getTitleSourceMessage(messages: ChatMessage[]) {
   return messages.find(
     (message) => message.role === "user" && !message.isError,
@@ -272,6 +340,13 @@ function buildTitleRequestConfig(
     model,
     providerName,
     enableRagKg: false,
+    enableWebSearch: false,
+    enableAcademicSearch: false,
+    enableDesignCalculation: false,
+    enableStructureVisualization: false,
+    enableSimulationJob: false,
+    enableSessionFileRag: false,
+    enableUserFileRag: false,
   };
 
   if (providerName === ServiceProvider.CSGPT) {
@@ -719,10 +794,13 @@ export const useChatStore = createPersistStore(
           const recentMessages =
             await get().getMessagesWithMemory(previousMessages);
           const sendMessages = recentMessages.concat(userMessage);
+          const sessionFileRecords =
+            collectSessionFileRecords(previousMessages);
           const api: ClientApi = getClientApi(modelConfig.providerName);
 
           api.llm.chat({
             messages: sendMessages,
+            sessionFileRecords,
             config: { ...modelConfig, stream: true },
             onUpdate(message) {
               botMessage.streaming = true;
@@ -739,6 +817,36 @@ export const useChatStore = createPersistStore(
               if (ragKgSources.length) {
                 botMessage.ragKgSources = ragKgSources;
               }
+              const researchSources = parseResearchSourcesHeader(responseRes);
+              if (researchSources.length) {
+                botMessage.researchSources = researchSources;
+              }
+              const designCalculations =
+                parseDesignCalculationResultsHeader(responseRes);
+              if (designCalculations.length) {
+                botMessage.designCalculations = designCalculations;
+              }
+              const structureVisualizations =
+                parseStructureVisualizationResultsHeader(responseRes);
+              if (structureVisualizations.length) {
+                botMessage.structureVisualizations = structureVisualizations;
+              }
+              const simulationJobDrafts =
+                parseSimulationJobDraftsHeader(responseRes);
+              if (simulationJobDrafts.length) {
+                botMessage.simulationJobDrafts = simulationJobDrafts;
+              }
+              const sessionFileSources =
+                parseSessionFileSourcesHeader(responseRes);
+              if (sessionFileSources.length) {
+                botMessage.sessionFileSources = sessionFileSources;
+              }
+              const userFileSources = parseUserFileSourcesHeader(responseRes);
+              if (userFileSources.length) {
+                botMessage.userFileSources = userFileSources;
+              }
+              appendControlledAgentPlan(botMessage, responseRes);
+              appendControlledToolRecords(botMessage, responseRes);
               if (message) {
                 botMessage.content = message;
                 botMessage.date = new Date().toLocaleString();
@@ -1074,6 +1182,13 @@ export const useChatStore = createPersistStore(
               model,
               providerName,
               enableRagKg: false,
+              enableWebSearch: false,
+              enableAcademicSearch: false,
+              enableDesignCalculation: false,
+              enableStructureVisualization: false,
+              enableSimulationJob: false,
+              enableSessionFileRag: false,
+              enableUserFileRag: false,
             },
             onUpdate(message) {
               session.memoryPrompt = message;

@@ -1,9 +1,10 @@
-// 文件重解析端点：POST /api/files/[filename]/parse
-// 读取数据库中的文件数据，使用完整解析管线提取文本和公式记录。
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
+import {
+  clearUserFileRagIndex,
+  markUploadedFileParsedAndIndexed,
+} from "@/app/utils/user-file-rag-index";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,42 +23,54 @@ interface ReparseResult {
   metadata: Record<string, any>;
 }
 
+function isValidFileId(fileId: string) {
+  return (
+    fileId.length > 0 &&
+    !fileId.includes("..") &&
+    !fileId.includes("/") &&
+    !fileId.includes("\\")
+  );
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { filename: string } },
 ) {
+  const fileId = params.filename;
+  let userId: string | null = null;
+
   try {
-    const userId = await getUserFromRequest(request);
+    userId = await getUserFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const fileId = params.filename;
-    if (
-      !fileId ||
-      fileId.includes("..") ||
-      fileId.includes("/") ||
-      fileId.includes("\\")
-    ) {
-      return NextResponse.json({ error: "无效的文件名" }, { status: 400 });
+    if (!isValidFileId(fileId)) {
+      return NextResponse.json({ error: "文件 ID 无效" }, { status: 400 });
     }
 
-    const file = await prisma.uploadedFile.findUnique({
-      where: { id: fileId },
+    const file = await prisma.uploadedFile.findFirst({
+      where: { id: fileId, userId },
       select: {
         data: true,
-        mimeType: true,
         originalName: true,
-        size: true,
-        userId: true,
       },
     });
 
-    if (!file || file.userId !== userId) {
+    if (!file) {
       return NextResponse.json({ error: "文件不存在" }, { status: 404 });
     }
 
-    // 动态导入解析模块（避免浏览器端依赖在服务端报错）
+    await prisma.uploadedFile.updateMany({
+      where: { id: fileId, userId },
+      data: {
+        parseStatus: "parsing",
+        parseError: null,
+        parsedAt: null,
+      },
+    });
+    await clearUserFileRagIndex(fileId, userId);
+
     const {
       extractTextFromFile,
       extractFormulaRecords,
@@ -71,15 +84,10 @@ export async function POST(
       { includeImages: false, ocrImages: false },
     );
 
-    // 噪声过滤
     const filteredText = filterNoiseLines(originalText.text);
     const noiseRemoved =
       originalText.text.split("\n").length - filteredText.split("\n").length;
-
-    // 工程文本规范化
     const normalizedText = normalizeEngineeringText(filteredText);
-
-    // 提取公式记录
     const formulaRecords = extractFormulaRecords(normalizedText);
 
     const result: ReparseResult = {
@@ -96,8 +104,27 @@ export async function POST(
       },
     };
 
+    await markUploadedFileParsedAndIndexed({
+      fileId,
+      userId,
+      extractedText: normalizedText,
+    });
+
     return NextResponse.json(result);
   } catch (error: any) {
+    if (userId && isValidFileId(fileId)) {
+      await prisma.uploadedFile
+        .updateMany({
+          where: { id: fileId, userId },
+          data: {
+            parseStatus: "failed",
+            parseError: error?.message || "解析失败",
+          },
+        })
+        .catch(() => null);
+      await clearUserFileRagIndex(fileId, userId).catch(() => null);
+    }
+
     console.error("[Files/Parse] Error:", error);
     return NextResponse.json(
       { error: "重解析失败", message: error.message },

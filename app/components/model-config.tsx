@@ -65,6 +65,116 @@ export function ModelConfigList(props: {
         ></input>
       </ListItem>
       <ListItem
+        title={Locale.Settings.WebSearch.Title}
+        subTitle={Locale.Settings.WebSearch.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.WebSearch.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableWebSearch}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) => (config.enableWebSearch = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.AcademicSearch.Title}
+        subTitle={Locale.Settings.AcademicSearch.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.AcademicSearch.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableAcademicSearch}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) =>
+                (config.enableAcademicSearch = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.DesignCalculation.Title}
+        subTitle={Locale.Settings.DesignCalculation.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.DesignCalculation.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableDesignCalculation}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) =>
+                (config.enableDesignCalculation = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.StructureVisualization.Title}
+        subTitle={Locale.Settings.StructureVisualization.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.StructureVisualization.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableStructureVisualization}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) =>
+                (config.enableStructureVisualization = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.SimulationJob.Title}
+        subTitle={Locale.Settings.SimulationJob.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.SimulationJob.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableSimulationJob}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) =>
+                (config.enableSimulationJob = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.SessionFileRag.Title}
+        subTitle={Locale.Settings.SessionFileRag.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.SessionFileRag.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableSessionFileRag}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) =>
+                (config.enableSessionFileRag = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
+        title={Locale.Settings.UserFileRag.Title}
+        subTitle={Locale.Settings.UserFileRag.SubTitle}
+      >
+        <input
+          aria-label={Locale.Settings.UserFileRag.Title}
+          type="checkbox"
+          checked={props.modelConfig.enableUserFileRag}
+          onChange={(e) =>
+            props.updateConfig(
+              (config) => (config.enableUserFileRag = e.currentTarget.checked),
+            )
+          }
+        ></input>
+      </ListItem>
+      <ListItem
         title={Locale.Settings.Temperature.Title}
         subTitle={Locale.Settings.Temperature.SubTitle}
       >

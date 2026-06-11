@@ -74,7 +74,14 @@ export async function GET(
             isError: m.isError,
             model: m.model,
             tools: m.tools,
+            agentPlan: m.agentPlan,
             ragKgSources: m.ragKgSources,
+            researchSources: m.researchSources,
+            designCalculations: m.designCalculations,
+            structureVisualizations: m.structureVisualizations,
+            simulationJobDrafts: m.simulationJobDrafts,
+            sessionFileSources: m.sessionFileSources,
+            userFileSources: m.userFileSources,
             fileContent:
               m.fileContent ||
               buildFileContentFromMessage(m.content, filesById),
@@ -127,6 +134,9 @@ export async function DELETE(
     );
 
     await prisma.$transaction(async (tx) => {
+      await tx.simulationJob.deleteMany({
+        where: { conversationId: params.id },
+      });
       await tx.conversation.delete({
         where: { id: params.id },
       });

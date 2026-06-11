@@ -577,7 +577,35 @@ const cn = {
     Model: "模型 (model)",
     RagKg: {
       Title: "外部 RAG/KG 增强",
-      SubTitle: "启用后读取项目内部知识库并拼接检索上下文",
+      SubTitle: "允许服务端按当前问题检索项目内部知识库",
+    },
+    WebSearch: {
+      Title: "联网搜索",
+      SubTitle: "允许服务端按当前问题执行网页、标准规范或专利检索并返回来源",
+    },
+    AcademicSearch: {
+      Title: "学术检索",
+      SubTitle: "允许服务端按当前问题执行外部文献检索并返回来源",
+    },
+    DesignCalculation: {
+      Title: "设计计算",
+      SubTitle: "允许服务端按当前问题中的工程参数执行受控确定性计算",
+    },
+    StructureVisualization: {
+      Title: "结构可视化",
+      SubTitle: "允许服务端按当前问题中的尺寸和铺层信息生成结构示意",
+    },
+    SimulationJob: {
+      Title: "仿真任务",
+      SubTitle: "允许服务端按有限元或仿真需求规划真实求解任务",
+    },
+    SessionFileRag: {
+      Title: "会话文件知识",
+      SubTitle: "允许服务端按当前问题检索当前会话附件解析文本",
+    },
+    UserFileRag: {
+      Title: "用户文件知识",
+      SubTitle: "允许服务端按当前问题检索当前用户附件索引",
     },
     CompressModel: {
       Title: "对话摘要模型",

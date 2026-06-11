@@ -566,9 +566,14 @@
   .chat-message-tool {
     display: flex;
     align-items: flex-end;
+    gap: 4px;
     svg {
       margin-left: 5px;
       margin-right: 5px;
+    }
+    .chat-message-tool-content {
+      color: var(--black);
+      opacity: 0.68;
     }
   }
 }
@@ -675,6 +680,208 @@
 .rag-kg-relation {
   color: var(--primary);
   font-weight: 600;
+}
+
+.design-calculation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.design-calculation-item {
+  border: var(--border-in-light);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 12px;
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  pre {
+    margin: 0;
+    padding: 8px;
+    border-top: var(--border-in-light);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--black);
+  }
+}
+
+.structure-visualization-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.structure-visualization-card {
+  border: var(--border-in-light);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.035);
+  overflow: hidden;
+}
+
+.structure-visualization-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: var(--border-in-light);
+}
+
+.structure-visualization-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+
+  svg {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 6px;
+    background: linear-gradient(rgba(127, 127, 127, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127, 127, 127, 0.08) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--black);
+  }
+
+  text {
+    fill: currentColor;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.structure-shell {
+  fill: rgba(14, 165, 233, 0.34);
+  stroke: rgba(14, 116, 144, 0.9);
+  stroke-width: 2;
+}
+
+.structure-void {
+  fill: var(--white);
+  stroke: rgba(14, 116, 144, 0.7);
+  stroke-width: 1.5;
+}
+
+.structure-outline {
+  fill: transparent;
+  stroke: rgba(15, 23, 42, 0.55);
+  stroke-width: 1.5;
+}
+
+.structure-dimension-line {
+  stroke: var(--primary);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.structure-dimension-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+
+  span {
+    padding: 4px 7px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.04);
+  }
+}
+
+.structure-visualization-summary {
+  padding: 0 10px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.72;
+}
+
+.simulation-job-draft-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.simulation-job-draft-card {
+  border: var(--border-in-light);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.035);
+  overflow: hidden;
+}
+
+.simulation-job-draft-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: var(--border-in-light);
+
+  span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.simulation-job-draft-solver {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--primary);
+  text-transform: uppercase;
+}
+
+.simulation-job-draft-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px 0;
+}
+
+.simulation-job-draft-summary {
+  padding: 8px 10px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.76;
+}
+
+.simulation-job-draft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+
+.simulation-job-draft-section {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 12px;
+  min-width: 0;
+
+  span {
+    opacity: 0.68;
+  }
+
+  strong {
+    color: var(--black);
+    font-weight: 600;
+    line-height: 1.45;
+    word-break: break-word;
+  }
 }
 
 .chat-message-item-image {

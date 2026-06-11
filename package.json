@@ -8,6 +8,8 @@
     "build": "prisma generate && cross-env BUILD_MODE=standalone next build",
     "start": "next start",
     "lint": "next lint",
+    "eval:csgpt": "tsx scripts/evaluate-csgpt.ts",
+    "db:migrate": "prisma migrate deploy",
     "export": "cross-env BUILD_MODE=export BUILD_APP=1 next build",
     "export:dev": "cross-env BUILD_MODE=export BUILD_APP=1 next dev",
     "prepare": "husky install"

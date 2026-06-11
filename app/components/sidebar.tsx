@@ -12,6 +12,7 @@ import MaskIcon from "../icons/mask.svg";
 import McpIcon from "../icons/mcp.svg";
 import DragIcon from "../icons/drag.svg";
 import SearchIcon from "../icons/search.svg";
+import GraphIcon from "../icons/graph.svg";
 import LogoutIcon from "../icons/power.svg";
 
 import Locale from "../locales";
@@ -36,8 +37,16 @@ import clsx from "clsx";
 import { isMcpEnabled } from "../mcp/actions";
 
 const DISCOVERY = [
-  { name: Locale.SearchChat.Page.Title, path: Path.SearchChat, icon: null },
-  { name: Locale.KnowledgeGraph.Title, path: Path.KnowledgeGraph, icon: null },
+  {
+    name: Locale.SearchChat.Page.Title,
+    path: Path.SearchChat,
+    icon: <SearchIcon />,
+  },
+  {
+    name: Locale.KnowledgeGraph.Title,
+    path: Path.KnowledgeGraph,
+    icon: <GraphIcon />,
+  },
 ];
 
 const ChatList = dynamic(async () => (await import("./chat-list")).ChatList, {
@@ -301,6 +310,7 @@ export function SideBar(props: { className?: string }) {
             ]}
             onClose={() => setshowDiscoverySelector(false)}
             onSelection={(s) => {
+              setshowDiscoverySelector(false);
               navigate(s[0], { state: { fromHome: true } });
             }}
           />
