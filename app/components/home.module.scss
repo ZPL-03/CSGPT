@@ -133,17 +133,21 @@
   }
 
   .sidebar-tail {
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: clamp(6px, 2vw, 10px);
   }
 
   .sidebar-actions {
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: clamp(6px, 2vw, 10px);
   }
 
   .sidebar-actions:last-child {
     margin-left: auto;
+  }
+
+  .sidebar-tail button {
+    padding: clamp(12px, 3.4vw, 16px);
   }
 }
 

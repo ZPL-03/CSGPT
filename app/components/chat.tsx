@@ -40,7 +40,6 @@ import DarkIcon from "../icons/dark.svg";
 import AutoIcon from "../icons/auto.svg";
 import BottomIcon from "../icons/bottom.svg";
 import StopIcon from "../icons/pause.svg";
-import RobotIcon from "../icons/robot.svg";
 import SizeIcon from "../icons/size.svg";
 import QualityIcon from "../icons/hd.svg";
 import StyleIcon from "../icons/palette.svg";
@@ -160,6 +159,22 @@ function getKnowledgeGraphQuery(
     ...recentUserTexts.reverse(),
     session.topic || "",
   ]);
+}
+
+function getModelActionLabel(modelName: string, displayName: string) {
+  const source = displayName || modelName || "";
+  const csMatch = source.match(/(?:^|[-_\s])CS(\d+)\b/i);
+  if (csMatch) return `CS${csMatch[1]}`;
+
+  const lower = source.toLowerCase();
+  if (lower.includes("gpt")) return "GPT";
+  if (lower.includes("claude")) return "CLA";
+  if (lower.includes("gemini")) return "GEM";
+  if (lower.includes("deepseek")) return "DS";
+  if (lower.includes("qwen")) return "QW";
+
+  const compact = source.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  return compact.slice(0, 4) || "LLM";
 }
 
 function areModelConfigsEqual(
@@ -1018,7 +1033,11 @@ export function ChatActions(props: {
         <ChatAction
           onClick={() => setShowModelSelector(true)}
           text={currentModelName}
-          icon={<RobotIcon />}
+          icon={
+            <span className={styles["model-action-label"]}>
+              {getModelActionLabel(currentModel, currentModelName)}
+            </span>
+          }
         />
 
         {showModelSelector && (
