@@ -236,23 +236,15 @@
       align-items: center;
       justify-content: center;
     }
-  }
 
-  .model-action-label {
-    min-width: 22px;
-    height: 16px;
-    padding: 0 4px;
-    box-sizing: border-box;
-    border-radius: 6px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 162, 185, 0.12);
-    color: var(--primary);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: 0;
+    .icon :global(.user-avatar) {
+      width: 16px;
+      height: 16px;
+      min-width: 16px;
+      min-height: 16px;
+      border-radius: 5px;
+      box-shadow: none;
+    }
   }
 
   .chat-input-action-active {

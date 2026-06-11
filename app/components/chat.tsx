@@ -161,22 +161,6 @@ function getKnowledgeGraphQuery(
   ]);
 }
 
-function getModelActionLabel(modelName: string, displayName: string) {
-  const source = displayName || modelName || "";
-  const csMatch = source.match(/(?:^|[-_\s])CS(\d+)\b/i);
-  if (csMatch) return `CS${csMatch[1]}`;
-
-  const lower = source.toLowerCase();
-  if (lower.includes("gpt")) return "GPT";
-  if (lower.includes("claude")) return "CLA";
-  if (lower.includes("gemini")) return "GEM";
-  if (lower.includes("deepseek")) return "DS";
-  if (lower.includes("qwen")) return "QW";
-
-  const compact = source.replace(/[^a-z0-9]/gi, "").toUpperCase();
-  return compact.slice(0, 4) || "LLM";
-}
-
 function areModelConfigsEqual(
   left: Record<string, unknown>,
   right: Record<string, unknown>,
@@ -1034,9 +1018,7 @@ export function ChatActions(props: {
           onClick={() => setShowModelSelector(true)}
           text={currentModelName}
           icon={
-            <span className={styles["model-action-label"]}>
-              {getModelActionLabel(currentModel, currentModelName)}
-            </span>
+            <Avatar model={currentModel} providerName={currentProviderName} />
           }
         />
 
