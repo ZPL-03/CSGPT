@@ -383,6 +383,20 @@ CSGPT/
 
 知识图谱可视化接口读取同一套实体和关系数据，没有关键词时返回全局概览子图，有关键词时返回查询相关的局部节点与关系边；该接口要求用户登录。
 
+RAG/KG 运行包校验命令：
+
+```bash
+npm run verify:csllm
+```
+
+RAG/KG 运行包同步命令：
+
+```bash
+npm run sync:csllm -- --source "<csllm-runtime-package-dir>"
+```
+
+同步命令会先校验来源目录，再完整替换项目内 `data/csllm`，最后校验替换后的运行包。校验内容包含 `runtime/rag_chunks.compact.jsonl.gz`、`runtime/relations.compact.jsonl.gz`、`kg/entities.jsonl`、`kg/kg_stats.json`、`provenance/manifest.json` 和 `provenance/file_manifest.jsonl` 的存在性、记录数、字节数和 SHA256。CSGPT 运行时只读取项目内 `data/csllm`。
+
 ### 会话文件知识
 
 “会话文件知识”是会话级模型配置项，对所有经过本项目服务端代理的聊天 Provider 生效。开启后，浏览器把当前会话中本轮之前已发送消息的附件解析文本作为检索记录发送到代理层，代理按当前问题检索命中片段，把会话附件上下文插入上游请求。命中的附件来源通过 `x-csgpt-session-file-sources` 响应头返回前端，并保存到 assistant 消息的 `sessionFileSources` 字段。
