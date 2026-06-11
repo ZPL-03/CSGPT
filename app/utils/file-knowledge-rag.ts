@@ -10,6 +10,7 @@ export type FileKnowledgeRecord = {
   fallbackTitle?: string;
   text?: string | null;
   fileIds?: string[];
+  preChunked?: boolean;
 };
 
 export type FileKnowledgeSource = {
@@ -46,8 +47,42 @@ export type FileKnowledgeTextChunk = {
 };
 
 export const FILE_KNOWLEDGE_CHUNK_CHARS = 1200;
-const FILE_KNOWLEDGE_CONTEXT_CHARS = 6000;
-const MAX_VISIBLE_SOURCES = 6;
+export const FILE_KNOWLEDGE_CHUNK_OVERLAP_CHARS = 220;
+const FILE_KNOWLEDGE_CONTEXT_CHARS = 16000;
+const MAX_VISIBLE_SOURCES = 8;
+const MAX_CONTEXT_CHUNKS = 14;
+const MAX_CHUNKS_PER_SOURCE = 4;
+const DOMAIN_QUERY_TERMS = [
+  "复合材料",
+  "耐压壳",
+  "压力壳",
+  "压力容器",
+  "外压",
+  "内压",
+  "静水压力",
+  "屈曲",
+  "塌陷",
+  "爆破",
+  "铺层",
+  "缠绕",
+  "环向",
+  "轴向",
+  "螺旋",
+  "分层",
+  "缺陷",
+  "敏感性",
+  "强度",
+  "刚度",
+  "稳定性",
+  "疲劳",
+  "冲击",
+  "材料",
+  "树脂",
+  "纤维",
+  "有限元",
+  "标准",
+  "验证",
+];
 
 function fileTitleBaseName(title: string) {
   return title
@@ -111,17 +146,37 @@ export function splitFileKnowledgeText(text: string): FileKnowledgeTextChunk[] {
         charEnd: end - trailingWhitespace,
       });
     }
-    cursor = end;
+
+    if (end >= normalized.length) break;
+
+    const overlapCursor = Math.max(
+      cursor + 1,
+      end - FILE_KNOWLEDGE_CHUNK_OVERLAP_CHARS,
+    );
+    const overlapWindow = normalized.slice(cursor, overlapCursor);
+    const overlapBreakIndex = Math.max(
+      overlapWindow.lastIndexOf("\n\n"),
+      overlapWindow.lastIndexOf("\n"),
+      overlapWindow.lastIndexOf("。"),
+      overlapWindow.lastIndexOf("."),
+    );
+    cursor =
+      overlapBreakIndex > FILE_KNOWLEDGE_CHUNK_CHARS * 0.55
+        ? cursor + overlapBreakIndex + 1
+        : overlapCursor;
   }
   return chunks;
 }
 
-function queryTerms(query: string) {
+export function fileKnowledgeQueryTerms(query: string) {
   const normalized = normalizeServerMessageText(query).toLowerCase();
   const asciiTerms =
     normalized.match(/[a-z0-9][a-z0-9_+./-]{2,}/g)?.filter(Boolean) || [];
+  const domainTerms = DOMAIN_QUERY_TERMS.filter((term) =>
+    normalized.includes(term.toLowerCase()),
+  );
   const chineseTerms =
-    normalized.match(/[\u4e00-\u9fff]{2,}/g)?.flatMap((term) => {
+    normalized.match(/[一-龥]{2,}/g)?.flatMap((term) => {
       const terms: string[] = [];
       for (let size = Math.min(6, term.length); size >= 2; size -= 1) {
         for (let index = 0; index + size <= term.length; index += 1) {
@@ -131,7 +186,9 @@ function queryTerms(query: string) {
       return terms;
     }) || [];
 
-  return Array.from(new Set([...asciiTerms, ...chineseTerms])).slice(0, 80);
+  return Array.from(new Set([...asciiTerms, ...domainTerms, ...chineseTerms]))
+    .sort((left, right) => right.length - left.length)
+    .slice(0, 120);
 }
 
 function scoreChunk(chunk: string, terms: string[]) {
@@ -147,14 +204,17 @@ function scoreChunk(chunk: string, terms: string[]) {
 }
 
 function buildChunks(records: FileKnowledgeRecord[], query: string) {
-  const terms = queryTerms(query);
+  const terms = fileKnowledgeQueryTerms(query);
   const chunks: FileKnowledgeChunk[] = [];
 
   for (const record of records) {
     const { title, text } = normalizeFileRecord(record);
     if (!text) continue;
-    for (const chunk of splitFileKnowledgeText(text)) {
-      const score = scoreChunk(chunk.text, terms);
+    const recordChunks = record.preChunked
+      ? [{ text, charStart: 0, charEnd: text.length }]
+      : splitFileKnowledgeText(text);
+    for (const chunk of recordChunks) {
+      const score = scoreChunk(`${title}\n${chunk.text}`, terms);
       if (score <= 0) continue;
       chunks.push({
         sourceTitle: title,
@@ -176,10 +236,13 @@ function renderContext<TSource extends FileKnowledgeSource>(
 ) {
   const sources: TSource[] = [];
   const sourceIds = new Map<string, string>();
+  const sourceChunkCounts = new Map<string, number>();
   const blocks: string[] = [];
   let usedChars = 0;
 
   for (const chunk of chunks) {
+    if (blocks.length >= MAX_CONTEXT_CHUNKS) break;
+
     const key = `${chunk.recordId || ""}:${chunk.sourceTitle}`;
     let sourceId = sourceIds.get(key);
     if (!sourceId) {
@@ -197,6 +260,9 @@ function renderContext<TSource extends FileKnowledgeSource>(
       );
     }
 
+    const sourceChunkCount = sourceChunkCounts.get(sourceId) || 0;
+    if (sourceChunkCount >= MAX_CHUNKS_PER_SOURCE) continue;
+
     const block = [
       `来源 ${sourceId}: ${chunk.sourceTitle}`,
       `内容: ${chunk.text}`,
@@ -204,6 +270,7 @@ function renderContext<TSource extends FileKnowledgeSource>(
     if (usedChars + block.length > FILE_KNOWLEDGE_CONTEXT_CHARS) break;
     blocks.push(block);
     usedChars += block.length;
+    sourceChunkCounts.set(sourceId, sourceChunkCount + 1);
   }
 
   if (!blocks.length) return null;

@@ -34,7 +34,7 @@ const providerDefinitions = [
     mode: "web",
     modes: ["web", "standard", "patent"],
     title: "Tavily Web Search",
-    description: "面向 Agent 和 RAG 场景的联网、标准规范和专利检索。",
+    description: "面向网页、标准规范和专利来源的外部检索。",
     envKeys: ["TAVILY_API_KEY"],
   },
   {

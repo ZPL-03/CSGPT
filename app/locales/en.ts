@@ -597,7 +597,7 @@ const en: LocaleType = {
     UserFileRag: {
       Title: "User File Knowledge",
       SubTitle:
-        "Retrieve indexed parsed attachments owned by the current signed-in user for the current question",
+        "Retrieve parsed attachment text owned by the current signed-in user for the current question",
     },
     CompressModel: {
       Title: "Summary Model",

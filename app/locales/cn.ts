@@ -587,7 +587,7 @@ const cn = {
     },
     UserFileRag: {
       Title: "用户文件知识",
-      SubTitle: "按当前问题检索当前登录用户已解析附件索引",
+      SubTitle: "按当前问题检索当前登录用户已解析附件正文",
     },
     CompressModel: {
       Title: "对话摘要模型",

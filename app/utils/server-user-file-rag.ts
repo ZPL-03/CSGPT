@@ -36,6 +36,7 @@ export async function buildUserFileRagContext(
       title: chunk.title,
       fallbackTitle: "用户附件",
       text: chunk.text,
+      preChunked: true,
     }));
 
   return buildFileKnowledgeContext<UserFileSource>(
@@ -43,7 +44,7 @@ export async function buildUserFileRagContext(
     records,
     {
       contextTitle: "用户私有文件知识上下文",
-      scopeDescription: "来源层级：当前登录用户已解析附件索引。",
+      scopeDescription: "来源层级：当前登录用户已解析附件正文。",
       sourcePrefix: "U",
     },
     (source) => ({

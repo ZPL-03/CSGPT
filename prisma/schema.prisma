@@ -101,7 +101,7 @@ model UploadedFile {
   @@index([userId, parseStatus])
 }
 
-// 用户文件 RAG 索引块表
+// 用户文件正文检索块表
 model UserFileRagChunk {
   id         String       @id @default(cuid())
   userId     String
