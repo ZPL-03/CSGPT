@@ -131,6 +131,20 @@
   .mobile {
     display: block;
   }
+
+  .sidebar-tail {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .sidebar-actions {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .sidebar-actions:last-child {
+    margin-left: auto;
+  }
 }
 
 .sidebar-header {
@@ -355,11 +369,6 @@
     .sidebar-actions {
       flex-direction: column-reverse;
       align-items: center;
-
-      .sidebar-action {
-        margin-right: 0;
-        margin-top: 15px;
-      }
     }
   }
 }
@@ -367,15 +376,15 @@
 .sidebar-tail {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 15px;
   padding-top: 20px;
 }
 
 .sidebar-actions {
   display: inline-flex;
-}
-
-.sidebar-action:not(:last-child) {
-  margin-right: 15px;
+  align-items: center;
+  gap: 15px;
 }
 
 .loading-content {
