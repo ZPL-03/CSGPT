@@ -126,7 +126,6 @@ CSGPT 基于 NextChat 改造，提供 CSGPT 系列复合材料领域模型、通
 - `semantic-scholar`：学术论文检索，使用 `SEMANTIC_SCHOLAR_BASE_URL`、`SEMANTIC_SCHOLAR_AUTH_MODE`、`AI4SCHOLAR_API_KEY` 或 `SEMANTIC_SCHOLAR_API_KEY`。
 - `elsevier-scopus`：Scopus 学术论文检索，使用 `ELSEVIER_API_KEY` 和可选 `ELSEVIER_INSTTOKEN`。
 - `springer-openaccess`：Springer Nature Open Access 学术论文检索，使用 `SPRINGER_OPENACCESS_API_KEY`。
-- `core`：CORE 开放获取论文检索，使用 `CORE_API_KEY`。
 
 检索模式包括 `web`、`standard`、`patent` 和 `academic`。聊天链路中的外部检索来源保存到 `researchSources`，与内部知识库来源分离。
 
@@ -189,7 +188,6 @@ SEMANTIC_SCHOLAR_AUTH_MODE=bearer
 ELSEVIER_API_KEY=
 ELSEVIER_INSTTOKEN=
 SPRINGER_OPENACCESS_API_KEY=
-CORE_API_KEY=
 ```
 
 ## 本地运行

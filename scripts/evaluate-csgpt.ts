@@ -63,8 +63,7 @@ type CasesFile = {
       | "tavily"
       | "semantic-scholar"
       | "elsevier-scopus"
-      | "springer-openaccess"
-      | "core";
+      | "springer-openaccess";
     expectErrorIncludes?: string;
   }>;
   onlineResearch: Array<{

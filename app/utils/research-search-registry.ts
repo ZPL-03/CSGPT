@@ -4,8 +4,7 @@ export type ResearchSearchProvider =
   | "tavily"
   | "semantic-scholar"
   | "elsevier-scopus"
-  | "springer-openaccess"
-  | "core";
+  | "springer-openaccess";
 export type ResearchSearchMode = "web" | "academic" | "standard" | "patent";
 
 export type ResearchSearchResult = {
@@ -68,14 +67,6 @@ const providerDefinitions = [
       "面向 Springer Nature 开放获取论文元数据和 DOI 链接的学术检索。",
     envKeys: ["SPRINGER_OPENACCESS_API_KEY"],
   },
-  {
-    provider: "core",
-    mode: "academic",
-    modes: ["academic"],
-    title: "CORE Works Search",
-    description: "面向开放获取论文、仓储记录和全文链接的学术检索。",
-    envKeys: ["CORE_API_KEY"],
-  },
 ] as const;
 
 const providerPrimaryModes = new Map<
@@ -106,7 +97,6 @@ const requestSchema = z.object({
       "semantic-scholar",
       "elsevier-scopus",
       "springer-openaccess",
-      "core",
     ])
     .optional(),
   maxResults: z.number().int().min(1).max(MAX_RESULTS).optional(),
@@ -150,8 +140,6 @@ function isProviderConfigured(provider: ResearchSearchProvider) {
       return hasEnv("ELSEVIER_API_KEY");
     case "springer-openaccess":
       return hasEnv("SPRINGER_OPENACCESS_API_KEY");
-    case "core":
-      return hasEnv("CORE_API_KEY");
   }
 }
 
@@ -225,7 +213,7 @@ function resolveProvider(
 function resolveDefaultProvider(mode: ResearchSearchMode) {
   const candidates: ResearchSearchProvider[] =
     mode === "academic"
-      ? ["semantic-scholar", "elsevier-scopus", "springer-openaccess", "core"]
+      ? ["semantic-scholar", "elsevier-scopus", "springer-openaccess"]
       : ["tavily"];
 
   return (
@@ -709,69 +697,6 @@ async function runSpringerOpenAccessSearch(
   };
 }
 
-async function runCoreSearch(input: z.infer<typeof requestSchema>) {
-  const apiKey = process.env.CORE_API_KEY?.trim();
-  if (!apiKey) {
-    throw new ResearchSearchConfigurationError("CORE_API_KEY 未配置。");
-  }
-
-  const maxResults = clampMaxResults(input.maxResults, "academic");
-  const url = new URL("https://api.core.ac.uk/v3/search/works");
-  url.searchParams.set("q", input.query);
-  url.searchParams.set("limit", String(maxResults));
-
-  const response = await fetchSearchProvider("CORE", url, {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "User-Agent": "CSGPT/1.0",
-    },
-  });
-  const data = await parseJsonResponse(response, "CORE");
-
-  const results: ResearchSearchResult[] = (
-    Array.isArray(data?.results) ? data.results : []
-  )
-    .map((work: any) => {
-      const doi = compactString(work?.doi);
-      const url =
-        firstUrl(
-          work?.downloadUrl,
-          work?.links,
-          work?.urls,
-          work?.sourceFulltextUrls,
-        ) || (doi ? `https://doi.org/${doi}` : undefined);
-      const title = compactText(work?.title);
-      if (!url || !title) return null;
-      const year = compactNumber(work?.yearPublished ?? work?.year);
-      return {
-        title,
-        url,
-        snippet: compactText(work?.abstract),
-        source:
-          compactText(work?.publisher) ||
-          compactText(work?.repositoryDocument?.repository?.name) ||
-          hostFromUrl(url),
-        provider: "core" as const,
-        mode: "academic" as const,
-        year,
-        authors: normalizeAuthors(work?.authors),
-        venue:
-          compactText(work?.journal?.title) || compactText(work?.publisher),
-        doi,
-        score: compactNumber(work?._score),
-      };
-    })
-    .filter(Boolean);
-
-  return {
-    provider: "core" as const,
-    mode: "academic" as const,
-    query: input.query,
-    results,
-  };
-}
-
 export async function executeResearchSearch(rawBody: unknown) {
   const input = requestSchema.parse(rawBody);
   const { provider, mode } = resolveProvider(input.provider, input.mode);
@@ -789,8 +714,6 @@ export async function executeResearchSearch(rawBody: unknown) {
       return runElsevierScopusSearch({ ...input, mode });
     case "springer-openaccess":
       return runSpringerOpenAccessSearch({ ...input, mode });
-    case "core":
-      return runCoreSearch({ ...input, mode });
     default:
       throw new UnsupportedResearchSearchProviderError(provider);
   }
