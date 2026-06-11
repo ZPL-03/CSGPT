@@ -264,45 +264,82 @@
 
   .chat-item {
     padding: 0;
+    width: 50px;
+    height: 50px;
     min-height: 50px;
     display: flex;
     justify-content: center;
     align-items: center;
-    transition: all ease 0.3s;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
     overflow: hidden;
 
     &:hover {
       .chat-item-narrow {
-        transform: scale(0.7) translateX(-50%);
+        transform: none;
       }
     }
   }
 
   .chat-item-narrow {
+    position: relative;
+    width: 36px;
+    height: 36px;
     line-height: 0;
-    font-weight: lighter;
     color: var(--black);
-    transform: translateX(0);
-    transition: all ease 0.3s;
-    padding: 4px;
+    transform: none;
+    padding: 0;
     display: flex;
-    flex-direction: column;
+    align-items: center;
     justify-content: center;
 
     .chat-item-avatar {
+      width: 36px;
+      height: 36px;
       display: flex;
+      align-items: center;
       justify-content: center;
-      opacity: 0.2;
-      position: absolute;
-      transform: scale(4);
+      opacity: 1;
+      position: static;
+      transform: none;
+      overflow: hidden;
+      border-radius: 8px;
+
+      :global(img),
+      :global(svg) {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      :global(.no-dark),
+      :global(.user-avatar) {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
     }
 
     .chat-item-narrow-count {
-      font-size: 24px;
-      font-weight: bolder;
+      position: absolute;
+      right: -5px;
+      bottom: -5px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      box-sizing: border-box;
+      background: var(--primary);
+      border: 1px solid var(--sidebar-bg);
+      font-size: 11px;
+      line-height: 14px;
+      font-weight: 700;
       text-align: center;
-      color: var(--primary);
-      opacity: 0.6;
+      color: #fff;
+      opacity: 1;
     }
   }
 
