@@ -26,6 +26,7 @@ const DEFAULT_WEB_RESULTS = 6;
 const DEFAULT_ACADEMIC_RESULTS = 8;
 const MAX_RESULTS = 10;
 const SEARCH_TIMEOUT_MS = 20000;
+const ACADEMIC_RESULT_CANDIDATE_MULTIPLIER = 3;
 
 const providerDefinitions = [
   {
@@ -87,6 +88,74 @@ const providerAllowedModes = new Map<
     [...definition.modes] as ResearchSearchMode[],
   ]),
 );
+
+const academicProviders: ResearchSearchProvider[] = [
+  "semantic-scholar",
+  "elsevier-scopus",
+  "springer-openaccess",
+];
+
+const chineseAcademicTermMap = [
+  ["复合材料", ["fiber reinforced polymer composites", "composite materials"]],
+  ["纤维增强", ["fiber reinforced composites"]],
+  ["碳纤维", ["carbon fiber reinforced polymer", "CFRP"]],
+  ["玻璃纤维", ["glass fiber reinforced polymer", "GFRP"]],
+  ["芳纶", ["aramid fiber composites"]],
+  ["树脂", ["resin matrix"]],
+  ["环氧", ["epoxy resin"]],
+  ["热塑性", ["thermoplastic composites"]],
+  ["层合板", ["composite laminates"]],
+  ["铺层", ["laminate layup"]],
+  ["缠绕", ["filament winding"]],
+  ["加筋", ["stiffened composite structures"]],
+  ["壁板", ["composite panels"]],
+  ["壳体", ["composite shells"]],
+  ["耐压壳", ["external pressure composite pressure hull"]],
+  ["压力容器", ["composite pressure vessels"]],
+  ["储氢", ["hydrogen storage pressure vessels"]],
+  ["屈曲", ["buckling"]],
+  ["失效", ["failure"]],
+  ["损伤", ["damage"]],
+  ["疲劳", ["fatigue"]],
+  ["冲击", ["impact"]],
+  ["制造", ["manufacturing"]],
+  ["工艺", ["processing"]],
+  ["优化", ["optimization"]],
+  ["有限元", ["finite element analysis"]],
+  ["仿真", ["simulation"]],
+  ["研究进展", ["recent advances", "review"]],
+  ["进展", ["recent advances"]],
+  ["最新", ["recent advances"]],
+  ["综述", ["review"]],
+] as const;
+
+const academicStopWords = new Set([
+  "latest",
+  "recent",
+  "advance",
+  "advances",
+  "progress",
+  "research",
+  "study",
+  "studies",
+  "review",
+  "reviews",
+  "overview",
+  "current",
+  "status",
+  "development",
+  "developments",
+  "what",
+  "which",
+  "about",
+  "with",
+  "from",
+  "into",
+  "using",
+  "based",
+  "materials",
+  "material",
+]);
 
 const requestSchema = z.object({
   query: z.string().trim().min(1, "检索词不能为空").max(500, "检索词过长"),
@@ -237,19 +306,231 @@ function normalizeWebMode(mode: ResearchSearchMode | undefined) {
   return mode === "standard" || mode === "patent" ? mode : "web";
 }
 
+function isRecencyQuery(query: string) {
+  return /(最新|近期|近年|进展|趋势|前沿|recent|latest|current|advance|trend|state of the art)/i.test(
+    query,
+  );
+}
+
+function buildGeneralWebQuery(query: string) {
+  const parts = [query];
+  const academicQuery = buildAcademicSearchQuery(query);
+  if (academicQuery !== query) parts.push(academicQuery);
+  if (isRecencyQuery(query)) {
+    const year = new Date().getFullYear();
+    parts.push(`${year} ${year - 1}`);
+  }
+  return uniqueStrings(parts).join(" ");
+}
+
 function buildExternalWebQuery(query: string, mode: ResearchSearchMode) {
+  const webQuery = buildGeneralWebQuery(query);
   if (mode === "standard") {
     return [
-      query,
+      webQuery,
       "standard specification code regulation ISO ASTM ASME EN GB/T DNV ABS",
     ].join(" ");
   }
 
   if (mode === "patent") {
-    return [query, "patent publication invention applicant assignee"].join(" ");
+    return [webQuery, "patent publication invention applicant assignee"].join(
+      " ",
+    );
   }
 
-  return query;
+  return webQuery;
+}
+
+function hasCjkText(value: string) {
+  return /[\u3400-\u9fff]/.test(value);
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  const items: string[] = [];
+  values.forEach((value) => {
+    const item = value.replace(/\s+/g, " ").trim();
+    const key = item.toLowerCase();
+    if (!item || seen.has(key)) return;
+    seen.add(key);
+    items.push(item);
+  });
+  return items;
+}
+
+function buildAcademicSearchQuery(query: string) {
+  const normalized = query.replace(/\s+/g, " ").trim();
+  if (!hasCjkText(normalized)) return normalized;
+
+  const mappedTerms: string[] = [];
+  chineseAcademicTermMap.forEach(([term, translations]) => {
+    if (normalized.includes(term)) {
+      mappedTerms.push(...translations);
+    }
+  });
+
+  const asciiTerms = normalized.match(/[A-Za-z][A-Za-z0-9+/\-.]{1,}/g) ?? [];
+  const terms = uniqueStrings([...mappedTerms, ...asciiTerms]);
+  return terms.length ? terms.join(" ") : normalized;
+}
+
+function normalizeTerm(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9+\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function academicQueryTerms(originalQuery: string, providerQuery: string) {
+  const mappedTerms: string[] = [];
+  chineseAcademicTermMap.forEach(([term, translations]) => {
+    if (originalQuery.includes(term)) {
+      mappedTerms.push(...translations);
+    }
+  });
+
+  const wordTerms = normalizeTerm(providerQuery)
+    .split(/\s+/)
+    .filter(
+      (term) =>
+        term.length >= 4 && !academicStopWords.has(term) && !/^\d+$/.test(term),
+    );
+
+  return uniqueStrings([...mappedTerms, ...wordTerms]);
+}
+
+function resultText(result: ResearchSearchResult) {
+  return normalizeTerm(
+    [
+      result.title,
+      result.snippet,
+      result.source,
+      result.venue,
+      result.authors?.join(" "),
+      result.doi,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+}
+
+function scoreAcademicResult(
+  result: ResearchSearchResult,
+  terms: string[],
+  currentYear = new Date().getFullYear(),
+) {
+  const text = resultText(result);
+  const title = normalizeTerm(result.title);
+  const textWords = new Set(text.split(/\s+/).filter(Boolean));
+  const titleWords = new Set(title.split(/\s+/).filter(Boolean));
+  let score = 0;
+
+  terms.forEach((term) => {
+    const normalized = normalizeTerm(term);
+    if (!normalized) return;
+    const words = normalized.split(/\s+/);
+    const phraseMatched = words.length > 1 && text.includes(normalized);
+    if (phraseMatched) score += words.length + 4;
+    words.forEach((word) => {
+      if (word.length < 4 || academicStopWords.has(word)) return;
+      if (textWords.has(word)) score += 2;
+      if (titleWords.has(word)) score += 2;
+    });
+  });
+
+  if (typeof result.year === "number" && result.year >= currentYear - 3) {
+    score += 1;
+  }
+
+  return score;
+}
+
+function requiresCompositeTitleMatch(
+  originalQuery: string,
+  providerQuery: string,
+) {
+  return (
+    /复合材料|纤维增强|碳纤维|玻璃纤维|芳纶/i.test(originalQuery) ||
+    /\b(composite|composites|fiber|fibre|polymer|laminate|cfrp|gfrp)\b/i.test(
+      providerQuery,
+    )
+  );
+}
+
+function hasCompositeTitleMatch(result: ResearchSearchResult) {
+  const title = normalizeTerm(result.title);
+  const venue = normalizeTerm(result.venue || result.source || "");
+  const words = new Set(`${title} ${venue}`.split(/\s+/).filter(Boolean));
+  return [
+    "composite",
+    "composites",
+    "fiber",
+    "fibre",
+    "polymer",
+    "laminate",
+    "laminates",
+    "cfrp",
+    "gfrp",
+    "carbon",
+    "epoxy",
+  ].some((word) => words.has(word));
+}
+
+function filterAcademicResults(
+  originalQuery: string,
+  providerQuery: string,
+  results: ResearchSearchResult[],
+  maxResults: number,
+) {
+  const terms = academicQueryTerms(originalQuery, providerQuery);
+  if (!terms.length) return results.slice(0, maxResults);
+  const requireCompositeTitle = requiresCompositeTitleMatch(
+    originalQuery,
+    providerQuery,
+  );
+
+  return dedupeResearchResults(results)
+    .map((result) => ({
+      result,
+      score: scoreAcademicResult(result, terms),
+    }))
+    .filter(
+      (item) =>
+        item.score >= 4 &&
+        (!requireCompositeTitle || hasCompositeTitleMatch(item.result)),
+    )
+    .sort((left, right) => {
+      const yearDelta = (right.result.year || 0) - (left.result.year || 0);
+      return right.score - left.score || yearDelta;
+    })
+    .slice(0, maxResults)
+    .map((item) => item.result);
+}
+
+function dedupeResearchResults(results: ResearchSearchResult[]) {
+  const seen = new Set<string>();
+  const items: ResearchSearchResult[] = [];
+  results.forEach((result) => {
+    const key = (
+      result.doi ||
+      result.url ||
+      normalizeTerm(result.title)
+    ).toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    items.push(result);
+  });
+  return items;
+}
+
+export function getConfiguredResearchSearchProviders(mode: ResearchSearchMode) {
+  const providers =
+    mode === "academic" ? academicProviders : (["tavily"] as const);
+  return providers.filter((provider) => {
+    const modes = providerAllowedModes.get(provider);
+    return !!modes?.includes(mode) && isProviderConfigured(provider);
+  });
 }
 
 function compactString(value: unknown) {
@@ -491,9 +772,14 @@ async function runSemanticScholarSearch(input: z.infer<typeof requestSchema>) {
     process.env.SEMANTIC_SCHOLAR_BASE_URL?.trim() ||
     "https://api.semanticscholar.org/graph/v1";
   const maxResults = clampMaxResults(input.maxResults, "academic");
+  const candidateMaxResults = clampMaxResults(
+    maxResults * ACADEMIC_RESULT_CANDIDATE_MULTIPLIER,
+    "academic",
+  );
+  const searchQuery = buildAcademicSearchQuery(input.query);
   const url = new URL(`${baseUrl.replace(/\/$/, "")}/paper/search`);
-  url.searchParams.set("query", input.query);
-  url.searchParams.set("limit", String(maxResults));
+  url.searchParams.set("query", searchQuery);
+  url.searchParams.set("limit", String(candidateMaxResults));
   url.searchParams.set(
     "fields",
     [
@@ -554,7 +840,12 @@ async function runSemanticScholarSearch(input: z.infer<typeof requestSchema>) {
     provider: "semantic-scholar" as const,
     mode: "academic" as const,
     query: input.query,
-    results,
+    results: filterAcademicResults(
+      input.query,
+      searchQuery,
+      results,
+      maxResults,
+    ),
   };
 }
 
@@ -574,9 +865,14 @@ async function runElsevierScopusSearch(input: z.infer<typeof requestSchema>) {
   }
 
   const maxResults = clampMaxResults(input.maxResults, "academic");
+  const candidateMaxResults = clampMaxResults(
+    maxResults * ACADEMIC_RESULT_CANDIDATE_MULTIPLIER,
+    "academic",
+  );
+  const searchQuery = buildAcademicSearchQuery(input.query);
   const url = new URL("https://api.elsevier.com/content/search/scopus");
-  url.searchParams.set("query", normalizeScopusQuery(input.query));
-  url.searchParams.set("count", String(maxResults));
+  url.searchParams.set("query", normalizeScopusQuery(searchQuery));
+  url.searchParams.set("count", String(candidateMaxResults));
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -627,7 +923,12 @@ async function runElsevierScopusSearch(input: z.infer<typeof requestSchema>) {
     provider: "elsevier-scopus" as const,
     mode: "academic" as const,
     query: input.query,
-    results,
+    results: filterAcademicResults(
+      input.query,
+      searchQuery,
+      results,
+      maxResults,
+    ),
   };
 }
 
@@ -642,9 +943,14 @@ async function runSpringerOpenAccessSearch(
   }
 
   const maxResults = clampMaxResults(input.maxResults, "academic");
+  const candidateMaxResults = clampMaxResults(
+    maxResults * ACADEMIC_RESULT_CANDIDATE_MULTIPLIER,
+    "academic",
+  );
+  const searchQuery = buildAcademicSearchQuery(input.query);
   const url = new URL("https://api.springernature.com/openaccess/json");
-  url.searchParams.set("q", input.query);
-  url.searchParams.set("p", String(maxResults));
+  url.searchParams.set("q", searchQuery);
+  url.searchParams.set("p", String(candidateMaxResults));
   url.searchParams.set("api_key", apiKey);
 
   const response = await fetchSearchProvider(
@@ -693,7 +999,12 @@ async function runSpringerOpenAccessSearch(
     provider: "springer-openaccess" as const,
     mode: "academic" as const,
     query: input.query,
-    results,
+    results: filterAcademicResults(
+      input.query,
+      searchQuery,
+      results,
+      maxResults,
+    ),
   };
 }
 

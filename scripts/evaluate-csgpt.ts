@@ -4,7 +4,9 @@ import path from "node:path";
 import { extractTextFromFile } from "../app/utils/file-text-extractor";
 import {
   executeResearchSearch,
+  getConfiguredResearchSearchProviders,
   getResearchSearchToolCatalog,
+  type ResearchSearchResult,
 } from "../app/utils/research-search-registry";
 import {
   extractFileIdFromFileUrl,
@@ -314,6 +316,53 @@ async function evaluateOnlineResearch(cases: CasesFile["onlineResearch"]) {
   }
 }
 
+function isCompositeResearchResult(result: ResearchSearchResult) {
+  return /composite|composites|fiber|fibre|polymer|laminate|cfrp|gfrp|carbon|epoxy/i.test(
+    [result.title, result.venue, result.source].filter(Boolean).join(" "),
+  );
+}
+
+async function evaluateOnlineAcademicRelevance() {
+  if (process.env.CSGPT_EVAL_ONLINE !== "1") {
+    skip(
+      "online-research",
+      "中文复合材料学术检索相关性",
+      "设置 CSGPT_EVAL_ONLINE=1 后执行",
+    );
+    return;
+  }
+
+  await runCase("online-research", "中文复合材料学术检索相关性", async () => {
+    const query = "最新的复合材料研究进展有哪些？";
+    const providers = getConfiguredResearchSearchProviders("academic");
+    const results: ResearchSearchResult[] = [];
+
+    for (const provider of providers) {
+      try {
+        const search = await executeResearchSearch({
+          query,
+          mode: "academic",
+          provider,
+          maxResults: 3,
+        });
+        results.push(...search.results);
+      } catch {
+        continue;
+      }
+    }
+
+    assertCondition(results.length >= 3, `结果数量 ${results.length} 小于 3`);
+    const unrelated = results.filter(
+      (result) => !isCompositeResearchResult(result),
+    );
+    assertCondition(
+      unrelated.length === 0,
+      `存在不相关结果：${unrelated.map((item) => item.title).join("；")}`,
+    );
+    return `results=${results.length}`;
+  });
+}
+
 async function evaluateDatabaseMigrations(
   cases: CasesFile["databaseMigrations"],
 ) {
@@ -353,6 +402,7 @@ async function main() {
   await evaluateFileContextIds(cases.fileContextIds);
   await evaluateResearchModes(cases.researchModes);
   await evaluateOnlineResearch(cases.onlineResearch);
+  await evaluateOnlineAcademicRelevance();
   await evaluateDatabaseMigrations(cases.databaseMigrations);
 
   for (const result of results) {

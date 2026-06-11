@@ -1,6 +1,8 @@
 import {
   executeResearchSearch,
+  getConfiguredResearchSearchProviders,
   type ResearchSearchMode,
+  type ResearchSearchProvider,
   type ResearchSearchResult,
 } from "./research-search-registry";
 import { createResearchSource, type ResearchSource } from "./research-sources";
@@ -63,6 +65,43 @@ function mergeSources(results: ResearchSearchResult[]) {
   return results.map((result, index) => createResearchSource(result, index));
 }
 
+function dedupeSearchResults(results: ResearchSearchResult[]) {
+  const seen = new Set<string>();
+  const items: ResearchSearchResult[] = [];
+  results.forEach((result) => {
+    const key = (
+      result.doi ||
+      result.url ||
+      result.title.toLowerCase().replace(/\s+/g, " ").trim()
+    ).toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    items.push(result);
+  });
+  return items;
+}
+
+async function collectAcademicResults(
+  query: string,
+  providers: ResearchSearchProvider[],
+) {
+  const results: ResearchSearchResult[] = [];
+  for (const provider of providers) {
+    try {
+      const search = await executeResearchSearch({
+        query,
+        mode: "academic",
+        provider,
+        maxResults: 4,
+      });
+      results.push(...search.results);
+    } catch {
+      continue;
+    }
+  }
+  return dedupeSearchResults(results).slice(0, 8);
+}
+
 function getExternalWebSearchModes(query: string): ResearchSearchMode[] {
   const modes: ResearchSearchMode[] = [];
   if (
@@ -109,14 +148,13 @@ export async function buildExternalResearchContext(
   }
 
   if (options.academicSearchEnabled) {
-    const academicSearch = await executeResearchSearch({
+    const academicResults = await collectAcademicResults(
       query,
-      mode: "academic",
-      maxResults: 5,
-    });
-    const academicSources = mergeSources(academicSearch.results);
+      getConfiguredResearchSearchProviders("academic"),
+    );
+    const academicSources = mergeSources(academicResults);
     if (academicSources.length) {
-      blocks.push(renderSearchContext("academic", academicSearch.results));
+      blocks.push(renderSearchContext("academic", academicResults));
       sources.push(...academicSources);
     }
   }
