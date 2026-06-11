@@ -7,6 +7,7 @@ import {
 export type FileKnowledgeRecord = {
   recordId?: string;
   title: string;
+  fallbackTitle?: string;
   text?: string | null;
   fileIds?: string[];
 };
@@ -48,8 +49,35 @@ export const FILE_KNOWLEDGE_CHUNK_CHARS = 1200;
 const FILE_KNOWLEDGE_CONTEXT_CHARS = 6000;
 const MAX_VISIBLE_SOURCES = 6;
 
+function fileTitleBaseName(title: string) {
+  return title
+    .split(/[\\/]/)
+    .pop()
+    ?.replace(/\.[a-z0-9]{1,12}$/i, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isMachineGeneratedTitle(title: string) {
+  const baseName = fileTitleBaseName(title);
+  if (!baseName) return true;
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      baseName,
+    )
+  ) {
+    return true;
+  }
+  if (/^[0-9a-f]{20,}$/i.test(baseName)) return true;
+  if (/^c[a-z0-9]{20,}$/i.test(baseName)) return true;
+  return false;
+}
+
 function normalizeFileRecord(record: FileKnowledgeRecord) {
-  const title = String(record.title || "附件").trim() || "附件";
+  const fallbackTitle = String(record.fallbackTitle || "附件").trim() || "附件";
+  const rawTitle = String(record.title || "").trim();
+  const title =
+    rawTitle && !isMachineGeneratedTitle(rawTitle) ? rawTitle : fallbackTitle;
   const text = String(record.text || "").trim();
   return { title, text };
 }

@@ -331,7 +331,7 @@ const en: LocaleType = {
         Label: " (Built-in Composite Material Model)",
         SubTitle:
           "Fine-tuned on Qwen3-14B for composite materials, ready to use," +
-          " specializing in pressure vessels, ply design, and material selection",
+          " covering laminates, shells, stiffened panels, sandwich structures, wound structures, pressure vessels, and deep-sea external-pressure structures",
         ChatNow: "Start Now",
       },
       AccessCode: {

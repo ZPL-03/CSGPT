@@ -34,6 +34,7 @@ export async function buildUserFileRagContext(
     .map((chunk) => ({
       recordId: chunk.fileId,
       title: chunk.title,
+      fallbackTitle: "用户附件",
       text: chunk.text,
     }));
 
@@ -42,8 +43,7 @@ export async function buildUserFileRagContext(
     records,
     {
       contextTitle: "用户私有文件知识上下文",
-      scopeDescription:
-        "这些内容来自当前登录用户已上传附件的解析文本，不属于内部知识库，也不属于其他用户数据。",
+      scopeDescription: "来源层级：当前登录用户已解析附件索引。",
       sourcePrefix: "U",
     },
     (source) => ({

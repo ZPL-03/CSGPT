@@ -119,7 +119,7 @@ const requestSchema = z.object({
 export const RESEARCH_SEARCH_TOOL = {
   name: "run_research_search",
   description:
-    "执行联网搜索、标准规范检索、专利检索或学术论文检索，返回标题、来源、链接、时间和摘要片段。",
+    "执行联网搜索、标准规范检索、专利检索或学术论文检索，返回标题、来源、链接、时间和摘要。",
 };
 
 export class ResearchSearchConfigurationError extends Error {

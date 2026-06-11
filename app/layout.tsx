@@ -10,7 +10,8 @@ import { getServerSideConfig } from "./config/server";
 
 export const metadata: Metadata = {
   title: "CSGPT - 复合材料结构设计助手",
-  description: "基于大语言模型的复合材料压力壳智能设计平台",
+  description:
+    "面向复合材料结构概念设计、层合设计、材料体系选型、制造工艺约束、失效与稳定性分析、标准合规和工程验证的专业对话平台",
   appleWebApp: {
     title: "CSGPT",
     statusBarStyle: "default",

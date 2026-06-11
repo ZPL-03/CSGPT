@@ -20,12 +20,14 @@ function extractSessionFileRecord(record: SessionFileRecord) {
         recordId: record.messageId,
         fileIds: record.fileIds,
         title: match[1].trim(),
+        fallbackTitle: "会话附件",
         text: match[2].trim(),
       }
     : {
         recordId: record.messageId,
         fileIds: record.fileIds,
         title: "会话附件",
+        fallbackTitle: "会话附件",
         text,
       };
 
@@ -41,8 +43,7 @@ export function buildSessionFileRagContext(
     records.map(extractSessionFileRecord),
     {
       contextTitle: "当前会话附件知识上下文",
-      scopeDescription:
-        "这些内容来自当前会话中用户已发送附件的解析文本，不属于内部知识库。",
+      scopeDescription: "来源层级：当前会话中用户已发送附件的解析文本。",
       sourcePrefix: "F",
     },
     (source) => ({
