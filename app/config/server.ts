@@ -1,4 +1,5 @@
 import {
+  CSGPT_CONTEXT_LENGTH,
   CSGPT_DEFAULT_MODEL,
   CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
   DEFAULT_GA_ID,
@@ -280,21 +281,21 @@ export const getServerSideConfig = () => {
     csgptUpstreamModelName: process.env.CSGPT_CS1_UPSTREAM_MODEL_NAME,
     csgptContextLength: getPositiveInteger(
       process.env.CSGPT_CS1_CONTEXT_LENGTH,
-      16384,
+      CSGPT_CONTEXT_LENGTH,
     ),
     csgptCs2BaseUrl: process.env.CSGPT_CS2_BASE_URL,
     csgptCs2ApiKey: process.env.CSGPT_CS2_API_KEY,
     csgptCs2UpstreamModelName: process.env.CSGPT_CS2_UPSTREAM_MODEL_NAME,
     csgptCs2ContextLength: getPositiveInteger(
       process.env.CSGPT_CS2_CONTEXT_LENGTH,
-      16384,
+      CSGPT_CONTEXT_LENGTH,
     ),
     csgptCs3BaseUrl: process.env.CSGPT_CS3_BASE_URL,
     csgptCs3ApiKey: process.env.CSGPT_CS3_API_KEY,
     csgptCs3UpstreamModelName: process.env.CSGPT_CS3_UPSTREAM_MODEL_NAME,
     csgptCs3ContextLength: getPositiveInteger(
       process.env.CSGPT_CS3_CONTEXT_LENGTH,
-      16384,
+      CSGPT_CONTEXT_LENGTH,
     ),
 
     gtmId: process.env.GTM_ID,

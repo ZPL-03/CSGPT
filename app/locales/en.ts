@@ -614,7 +614,7 @@ const en: LocaleType = {
     MaxTokens: {
       Title: "Max Tokens",
       SubTitle:
-        "Target maximum tokens for one reply; input context shares the upstream window",
+        "Target maximum tokens for one reply, default 16384; input context shares the upstream window",
     },
     PresencePenalty: {
       Title: "Presence Penalty",

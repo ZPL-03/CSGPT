@@ -2,7 +2,11 @@
 // 复合材料结构设计助手英文模板
 
 import { BuiltinMask } from "./typing";
-import { CSGPT_DEFAULT_MODEL, ServiceProvider } from "../constant";
+import {
+  CSGPT_DEFAULT_MAX_TOKENS,
+  CSGPT_DEFAULT_MODEL,
+  ServiceProvider,
+} from "../constant";
 
 export const CSGPT_MASKS_EN: BuiltinMask[] = [
   {
@@ -52,7 +56,7 @@ Response guidelines:
       model: CSGPT_DEFAULT_MODEL,
       providerName: ServiceProvider.CSGPT,
       temperature: 0.7,
-      max_tokens: 8192,
+      max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
       presence_penalty: 0,
       frequency_penalty: 0,
       sendMemory: true,
@@ -106,7 +110,7 @@ Please provide professional layup design recommendations, including design basis
       model: CSGPT_DEFAULT_MODEL,
       providerName: ServiceProvider.CSGPT,
       temperature: 0.6,
-      max_tokens: 8192,
+      max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
       presence_penalty: 0,
       frequency_penalty: 0,
       sendMemory: true,
@@ -155,7 +159,7 @@ Please recommend suitable material systems based on operating conditions and exp
       model: CSGPT_DEFAULT_MODEL,
       providerName: ServiceProvider.CSGPT,
       temperature: 0.7,
-      max_tokens: 8192,
+      max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
       presence_penalty: 0,
       frequency_penalty: 0,
       sendMemory: true,
@@ -204,7 +208,7 @@ Please provide professional FEA modeling guidance. In ordinary chat, organize mo
       model: CSGPT_DEFAULT_MODEL,
       providerName: ServiceProvider.CSGPT,
       temperature: 0.5,
-      max_tokens: 8192,
+      max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
       presence_penalty: 0,
       frequency_penalty: 0,
       sendMemory: true,
@@ -256,7 +260,7 @@ Please organize compliance checks by structure type, application scenario, appli
       model: CSGPT_DEFAULT_MODEL,
       providerName: ServiceProvider.CSGPT,
       temperature: 0.3,
-      max_tokens: 8192,
+      max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
       presence_penalty: 0,
       frequency_penalty: 0,
       sendMemory: true,
@@ -305,7 +309,7 @@ Please provide detailed failure analysis reports and improvement recommendations
       model: CSGPT_DEFAULT_MODEL,
       providerName: ServiceProvider.CSGPT,
       temperature: 0.6,
-      max_tokens: 8192,
+      max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
       presence_penalty: 0,
       frequency_penalty: 0,
       sendMemory: true,

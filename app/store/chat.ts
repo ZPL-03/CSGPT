@@ -27,6 +27,7 @@ import {
   DEFAULT_INPUT_TEMPLATE,
   DEFAULT_MODELS,
   DEFAULT_SYSTEM_TEMPLATE,
+  CSGPT_CONTEXT_LENGTH,
   GEMINI_SUMMARIZE_MODEL,
   DEEPSEEK_SUMMARIZE_MODEL,
   KnowledgeCutOffDate,
@@ -72,8 +73,8 @@ import { parseControlledToolRecordsHeader } from "../utils/controlled-tool-recor
 import { extractFileIdsFromMessageContent } from "../utils/file-context-ids";
 
 const localStorage = safeLocalStorage();
-const CSGPT_CONTEXT_WINDOW_TOKENS = 16384;
-const CSGPT_CONTEXT_RESERVE_TOKENS = 2048;
+const CSGPT_CONTEXT_WINDOW_TOKENS = CSGPT_CONTEXT_LENGTH;
+const CSGPT_CONTEXT_RESERVE_TOKENS = 256;
 
 export type ChatMessageTool = {
   id: string;
@@ -986,7 +987,6 @@ export const useChatStore = createPersistStore(
             ? Math.max(
                 0,
                 CSGPT_CONTEXT_WINDOW_TOKENS -
-                  modelConfig.max_tokens -
                   fixedContextTokenCount -
                   CSGPT_CONTEXT_RESERVE_TOKENS,
               )

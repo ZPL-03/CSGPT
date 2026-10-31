@@ -4,6 +4,7 @@ import { getClientConfig } from "../config/client";
 import {
   DEFAULT_INPUT_TEMPLATE,
   CSGPT_DEFAULT_MODEL,
+  CSGPT_DEFAULT_MAX_TOKENS,
   DEFAULT_MODELS,
   DEFAULT_SIDEBAR_WIDTH,
   StoreKey,
@@ -28,7 +29,7 @@ export enum Theme {
 }
 
 const config = getClientConfig();
-const STORE_SCHEMA_VERSION = 2;
+const STORE_SCHEMA_VERSION = 3;
 
 export const DEFAULT_CONFIG = {
   lastUpdate: Date.now(), // 状态合并时间戳
@@ -57,7 +58,7 @@ export const DEFAULT_CONFIG = {
     providerName: ServiceProvider.CSGPT,
     temperature: 0.5,
     top_p: 1,
-    max_tokens: 8192,
+    max_tokens: CSGPT_DEFAULT_MAX_TOKENS,
     presence_penalty: 0,
     frequency_penalty: 0,
     enableRagKg: true,
@@ -227,9 +228,21 @@ export const useAppConfig = createPersistStore(
     },
 
     migrate(persistedState, version) {
-      return normalizeConfigState(persistedState as Partial<ChatConfig>, {
-        enforceDefaultRagKg: (version ?? 0) < 2,
-      }) as any;
+      const normalized = normalizeConfigState(
+        persistedState as Partial<ChatConfig>,
+        {
+          enforceDefaultRagKg: (version ?? 0) < 2,
+        },
+      );
+      if (
+        (version ?? 0) < 3 &&
+        normalized.modelConfig.providerName === ServiceProvider.CSGPT &&
+        normalized.modelConfig.max_tokens === 8192
+      ) {
+        normalized.modelConfig.max_tokens =
+          DEFAULT_CONFIG.modelConfig.max_tokens;
+      }
+      return normalized as any;
     },
   },
 );

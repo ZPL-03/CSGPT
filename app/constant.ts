@@ -380,6 +380,8 @@ export const CSGPT_MODEL_2 = "QWen3-14B-CS2";
 export const CSGPT_MODEL_2_DISPLAY_NAME = "QWen3-14B-CS2";
 export const CSGPT_MODEL_3 = "QWen3-14B-CS3";
 export const CSGPT_MODEL_3_DISPLAY_NAME = "QWen3-14B-CS3";
+export const CSGPT_CONTEXT_LENGTH = 16384;
+export const CSGPT_DEFAULT_MAX_TOKENS = CSGPT_CONTEXT_LENGTH;
 
 export const SUMMARIZE_MODEL = "gpt-4o-mini";
 export const GEMINI_SUMMARIZE_MODEL = "gemini-pro";

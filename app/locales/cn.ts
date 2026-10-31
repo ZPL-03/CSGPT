@@ -603,7 +603,8 @@ const cn = {
     },
     MaxTokens: {
       Title: "单次回复限制 (max_tokens)",
-      SubTitle: "单次回复的目标最大 Token 数；输入上下文受上游总窗口限制",
+      SubTitle:
+        "单次回复的目标最大 Token 数，默认 16384；输入上下文受上游总窗口限制",
     },
     PresencePenalty: {
       Title: "话题新鲜度 (presence_penalty)",

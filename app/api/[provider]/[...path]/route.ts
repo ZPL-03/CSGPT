@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSideConfig } from "@/app/config/server";
 import { getUserFromRequest } from "@/app/lib/auth";
 import {
+  CSGPT_CONTEXT_LENGTH,
+  CSGPT_DEFAULT_MAX_TOKENS,
   CSGPT_DEFAULT_MODEL,
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
@@ -72,9 +74,9 @@ type CSGPTUpstream = {
   contextLength: number;
 };
 
-const DEFAULT_CSGPT_CONTEXT_LENGTH = 16384;
+const DEFAULT_CSGPT_CONTEXT_LENGTH = CSGPT_CONTEXT_LENGTH;
 const CSGPT_CONTEXT_SAFETY_MARGIN = 256;
-const DEFAULT_CSGPT_OUTPUT_TOKENS = 8192;
+const DEFAULT_CSGPT_OUTPUT_TOKENS = CSGPT_DEFAULT_MAX_TOKENS;
 
 function getDedicatedCSGPTUpstream(
   model: string | undefined,
