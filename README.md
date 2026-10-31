@@ -145,6 +145,8 @@ data/csllm/
   provenance/file_manifest.jsonl
 ```
 
+运行包只包含 Web 服务端实际读取的文本块、关系、实体、统计信息和 provenance 清单，不包含向量矩阵、SQLite 检索索引或离线评测文件。
+
 知识图谱可视化读取同一套全局领域 KG 数据。没有关键词时显示代表性全局概览，有关键词时显示查询相关子图。用户文件内容保存在附件与用户文件正文检索块链路中。
 
 运行包校验：
@@ -173,14 +175,17 @@ CUSTOM_MODELS=
 CSGPT_CS1_BASE_URL=https://your-cs1-server/v1
 CSGPT_CS1_API_KEY=your-api-key
 CSGPT_CS1_UPSTREAM_MODEL_NAME=
+CSGPT_CS1_CONTEXT_LENGTH=16384
 
 CSGPT_CS2_BASE_URL=https://your-cs2-server/v1
 CSGPT_CS2_API_KEY=your-api-key
 CSGPT_CS2_UPSTREAM_MODEL_NAME=
+CSGPT_CS2_CONTEXT_LENGTH=16384
 
 CSGPT_CS3_BASE_URL=https://your-cs3-server/v1
 CSGPT_CS3_API_KEY=your-api-key
 CSGPT_CS3_UPSTREAM_MODEL_NAME=
+CSGPT_CS3_CONTEXT_LENGTH=16384
 
 TAVILY_API_KEY=
 AI4SCHOLAR_API_KEY=
@@ -191,6 +196,10 @@ ELSEVIER_API_KEY=
 ELSEVIER_INSTTOKEN=
 SPRINGER_OPENACCESS_API_KEY=
 ```
+
+`CSGPT_CS*_CONTEXT_LENGTH` 表示对应上游的总上下文窗口，输入消息和输出消息共用该窗口。CSGPT 上游默认按 16384 tokens 配置；如果上游服务使用其他窗口，应按实际服务能力填写。模型配置中的 `max_tokens` 是单次回复的目标输出预算，不是输入长度。服务端会估算实际输入长度、保留系统提示词和最新消息、裁剪最早的历史消息，并将输出预算限制在总上下文窗口剩余空间内。其他 Provider 的 `max_tokens` 请求不经过这套 CSGPT 专用预算处理。
+
+当系统提示词、检索上下文和最新消息本身超过上游总上下文窗口时，服务端返回明确的上下文超限错误；它不会发送一个必然被上游拒绝的请求。流式回答以 `length` 结束时，聊天记录会显示输出长度提示，用户可发送“继续”延续未完成内容。
 
 ## 本地运行
 

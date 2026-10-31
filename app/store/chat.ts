@@ -72,6 +72,8 @@ import { parseControlledToolRecordsHeader } from "../utils/controlled-tool-recor
 import { extractFileIdsFromMessageContent } from "../utils/file-context-ids";
 
 const localStorage = safeLocalStorage();
+const CSGPT_CONTEXT_WINDOW_TOKENS = 16384;
+const CSGPT_CONTEXT_RESERVE_TOKENS = 2048;
 
 export type ChatMessageTool = {
   id: string;
@@ -783,7 +785,7 @@ export const useChatStore = createPersistStore(
                 session.messages = session.messages.concat();
               });
             },
-            async onFinish(message, responseRes) {
+            async onFinish(message, responseRes, metadata) {
               botMessage.streaming = false;
               const ragKgSources = parseRagKgSourcesHeader(responseRes);
               if (ragKgSources.length) {
@@ -804,7 +806,10 @@ export const useChatStore = createPersistStore(
               }
               appendControlledToolRecords(botMessage, responseRes);
               if (message) {
-                botMessage.content = message;
+                botMessage.content =
+                  metadata?.finishReason === "length"
+                    ? `${message}\n\n${Locale.Store.ResponseLimit}`
+                    : message;
                 botMessage.date = new Date().toLocaleString();
                 get().onNewMessage(botMessage, session);
               } else {
@@ -967,7 +972,25 @@ export const useChatStore = createPersistStore(
           : shortTermMemoryStartIndex;
         // 如果用户清除了历史消息，同时排除记忆
         const contextStartIndex = Math.max(clearContextIndex, memoryStartIndex);
-        const maxTokenThreshold = modelConfig.max_tokens;
+        const fixedContextTokenCount = [
+          ...systemPrompts,
+          ...longTermMemoryPrompts,
+          ...contextPrompts,
+        ].reduce(
+          (total, message) =>
+            total + estimateTokenLength(getMessageTextContent(message)),
+          0,
+        );
+        const maxTokenThreshold =
+          modelConfig.providerName === ServiceProvider.CSGPT
+            ? Math.max(
+                0,
+                CSGPT_CONTEXT_WINDOW_TOKENS -
+                  modelConfig.max_tokens -
+                  fixedContextTokenCount -
+                  CSGPT_CONTEXT_RESERVE_TOKENS,
+              )
+            : modelConfig.max_tokens;
 
         // 在 token 限制内尽可能多地获取最近消息
         const reversedRecentMessages = [];

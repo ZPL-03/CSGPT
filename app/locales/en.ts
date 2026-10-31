@@ -613,7 +613,8 @@ const en: LocaleType = {
     },
     MaxTokens: {
       Title: "Max Tokens",
-      SubTitle: "Maximum length of input tokens and generated tokens",
+      SubTitle:
+        "Target maximum tokens for one reply; input context shares the upstream window",
     },
     PresencePenalty: {
       Title: "Presence Penalty",
@@ -630,6 +631,8 @@ const en: LocaleType = {
     DefaultTopic: "New Conversation",
     BotHello: "Hello! How can I assist you today?",
     Error: "Something went wrong, please try again later.",
+    ResponseLimit:
+      'This reply reached the output limit. Send "Continue" to continue.',
     Prompt: {
       History: (content: string) =>
         "This is a summary of the chat history as a recap: " + content,

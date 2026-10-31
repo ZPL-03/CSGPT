@@ -351,6 +351,7 @@ export function streamWithThink(
   ) => {
     isThinking: boolean;
     content: string | undefined;
+    finishReason?: string | null;
   },
   processToolMessage: (
     requestPayload: any,
@@ -367,6 +368,7 @@ export function streamWithThink(
   let responseRes: Response;
   let isInThinkingMode = false;
   let isInThinkTag = false;
+  let finishReason: string | null = null;
 
   function appendStreamSegment(content: string, isThinking: boolean) {
     if (!content) return;
@@ -519,7 +521,9 @@ export function streamWithThink(
         return;
       }
       finished = true;
-      options.onFinish(responseText + remainText, responseRes);
+      options.onFinish(responseText + remainText, responseRes, {
+        finishReason,
+      });
     }
   };
 
@@ -595,6 +599,9 @@ export function streamWithThink(
         }
         try {
           const chunk = parseSSE(text, runTools);
+          if (chunk?.finishReason) {
+            finishReason = chunk.finishReason;
+          }
           // 跳过空内容
           if (!chunk?.content || chunk.content.length === 0) {
             return;

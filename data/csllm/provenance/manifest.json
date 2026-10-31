@@ -1,6 +1,6 @@
 {
   "package": "csllm",
-  "generated_at": "2026-06-10T17:39:48.615493+00:00",
+  "generated_at": "2026-10-09T21:41:09.297553+00:00",
   "source_files": {
     "rag_chunks": "dataset/processed/rag/rag_chunks.jsonl",
     "relations": "dataset/processed/kg/relations.jsonl",
@@ -8,9 +8,10 @@
     "kg_stats": "dataset/processed/kg/kg_stats.json"
   },
   "record_counts": {
-    "rag_chunks": 51788,
-    "relations": 480899,
-    "entities": 2214
+    "rag_chunks": 173228,
+    "relations": 250606,
+    "entities": 2219,
+    "sources": 1931
   },
   "schemas": {
     "rag_chunks": [
@@ -22,6 +23,14 @@
       "title",
       "document_title",
       "section_title",
+      "retrieval_unit",
+      "chunk_level",
+      "parent_document_id",
+      "parent_section_id",
+      "sequence_index",
+      "sequence_count",
+      "previous_chunk_id",
+      "next_chunk_id",
       "title_path",
       "section_path",
       "doi",
@@ -32,12 +41,17 @@
       "chunk_type",
       "block_types",
       "block_ids",
+      "formula_ids",
+      "recovered_from_unreliable_table",
+      "filtered_table_row_count",
       "page_start",
       "page_end",
       "parse_quality_score",
       "load_case_tag",
       "physics_quantities_mentioned",
       "contains_explicit_formula",
+      "formula_validity",
+      "table_structure_status",
       "design_platform_scope",
       "content_markdown",
       "content_plain"
@@ -63,38 +77,38 @@
   "files": [
     {
       "path": "runtime/rag_chunks.compact.jsonl.gz",
-      "bytes": 50573944,
-      "sha256": "aef4e23f9d5468d2789d78bec6a7199a4c6f54c8c56d9585fc51ffacabb25285",
-      "records": 51788
+      "bytes": 98611333,
+      "sha256": "db3244dd36e1390e130f012f5b9b2dc6389b03bd46ceb692b71f27f931ff588c",
+      "records": 173228
     },
     {
       "path": "runtime/relations.compact.jsonl.gz",
-      "bytes": 10754411,
-      "sha256": "d20405ae5d13808de03e3ac13f4ba34d3db539f311f76c24394f00d7058fdc23",
-      "records": 480899
+      "bytes": 7094905,
+      "sha256": "66cd85a9c1a6cb230f0b7d4a4a6562fb6afceee9999ef36b7688c8c3e8e0ea16",
+      "records": 250606
     },
     {
       "path": "kg/entities.jsonl",
-      "bytes": 180093,
-      "sha256": "669a6c0480013dd405f2f34439343034c423115935e885e2380867e815e2c651",
-      "records": 2214
+      "bytes": 1707489,
+      "sha256": "fcad193d4a7fabf66cb1240b2467f21321ee05ad954ab072bc4ed0384477198b",
+      "records": 2219
     },
     {
       "path": "kg/kg_stats.json",
-      "bytes": 10535,
-      "sha256": "107e0fab3c26e7742a7a5f8b91a389506a25b1164ee5890d0aa076c8da0ffad8",
+      "bytes": 10081,
+      "sha256": "0d37297f966ced23d5053933716abfd7001d6ac077d9343e8b25af094acf8d57",
       "records": null
     },
     {
       "path": "provenance/README.md",
-      "bytes": 378,
-      "sha256": "efacf56c1c2b55f6f9e9af3dee38b41f5fa097adbb93969897850834db63d3a1",
+      "bytes": 504,
+      "sha256": "d229c9ef3dad28d68f07f3e5413912f6c68afee514293a365e3f0519e7391baf",
       "records": null
     },
     {
       "path": "provenance/file_manifest.jsonl",
-      "bytes": 720,
-      "sha256": "170c6b4c5a946e05c9a83d85c66f4d1795e9f6c628a2fca78168391b47cc36d1",
+      "bytes": 716,
+      "sha256": "757265da4fc1158ffa4778e6381994ab592b5c1d1024075e1405a4f48285a5eb",
       "records": 5
     }
   ]

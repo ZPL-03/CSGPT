@@ -1,5 +1,5 @@
-{"path":"runtime/rag_chunks.compact.jsonl.gz","bytes":50573944,"sha256":"aef4e23f9d5468d2789d78bec6a7199a4c6f54c8c56d9585fc51ffacabb25285","records":51788}
-{"path":"runtime/relations.compact.jsonl.gz","bytes":10754411,"sha256":"d20405ae5d13808de03e3ac13f4ba34d3db539f311f76c24394f00d7058fdc23","records":480899}
-{"path":"kg/entities.jsonl","bytes":180093,"sha256":"669a6c0480013dd405f2f34439343034c423115935e885e2380867e815e2c651","records":2214}
-{"path":"kg/kg_stats.json","bytes":10535,"sha256":"107e0fab3c26e7742a7a5f8b91a389506a25b1164ee5890d0aa076c8da0ffad8","records":null}
-{"path":"provenance/README.md","bytes":378,"sha256":"efacf56c1c2b55f6f9e9af3dee38b41f5fa097adbb93969897850834db63d3a1","records":null}
+{"path":"runtime/rag_chunks.compact.jsonl.gz","bytes":98611333,"sha256":"db3244dd36e1390e130f012f5b9b2dc6389b03bd46ceb692b71f27f931ff588c","records":173228}
+{"path":"runtime/relations.compact.jsonl.gz","bytes":7094905,"sha256":"66cd85a9c1a6cb230f0b7d4a4a6562fb6afceee9999ef36b7688c8c3e8e0ea16","records":250606}
+{"path":"kg/entities.jsonl","bytes":1707489,"sha256":"fcad193d4a7fabf66cb1240b2467f21321ee05ad954ab072bc4ed0384477198b","records":2219}
+{"path":"kg/kg_stats.json","bytes":10081,"sha256":"0d37297f966ced23d5053933716abfd7001d6ac077d9343e8b25af094acf8d57","records":null}
+{"path":"provenance/README.md","bytes":504,"sha256":"d229c9ef3dad28d68f07f3e5413912f6c68afee514293a365e3f0519e7391baf","records":null}

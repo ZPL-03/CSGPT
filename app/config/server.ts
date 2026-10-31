@@ -103,9 +103,12 @@ declare global {
       CSGPT_CS2_BASE_URL?: string; // CS2 上游服务地址
       CSGPT_CS2_API_KEY?: string; // CS2 上游 API 密钥
       CSGPT_CS2_UPSTREAM_MODEL_NAME?: string; // CS2 上游实际模型名称
+      CSGPT_CS2_CONTEXT_LENGTH?: string; // CS2 上游总上下文窗口
       CSGPT_CS3_BASE_URL?: string; // CS3 上游服务地址
       CSGPT_CS3_API_KEY?: string; // CS3 上游 API 密钥
       CSGPT_CS3_UPSTREAM_MODEL_NAME?: string; // CS3 上游实际模型名称
+      CSGPT_CS3_CONTEXT_LENGTH?: string; // CS3 上游总上下文窗口
+      CSGPT_CS1_CONTEXT_LENGTH?: string; // CS1 上游总上下文窗口
     }
   }
 }
@@ -121,6 +124,11 @@ function getApiKey(keys?: string) {
   const apiKey = apiKeys[randomIndex];
 
   return apiKey;
+}
+
+function getPositiveInteger(value: string | undefined, defaultValue: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
 function appendCustomModel(
@@ -270,12 +278,24 @@ export const getServerSideConfig = () => {
     csgptApiKey: process.env.CSGPT_CS1_API_KEY,
     csgptModelName,
     csgptUpstreamModelName: process.env.CSGPT_CS1_UPSTREAM_MODEL_NAME,
+    csgptContextLength: getPositiveInteger(
+      process.env.CSGPT_CS1_CONTEXT_LENGTH,
+      16384,
+    ),
     csgptCs2BaseUrl: process.env.CSGPT_CS2_BASE_URL,
     csgptCs2ApiKey: process.env.CSGPT_CS2_API_KEY,
     csgptCs2UpstreamModelName: process.env.CSGPT_CS2_UPSTREAM_MODEL_NAME,
+    csgptCs2ContextLength: getPositiveInteger(
+      process.env.CSGPT_CS2_CONTEXT_LENGTH,
+      16384,
+    ),
     csgptCs3BaseUrl: process.env.CSGPT_CS3_BASE_URL,
     csgptCs3ApiKey: process.env.CSGPT_CS3_API_KEY,
     csgptCs3UpstreamModelName: process.env.CSGPT_CS3_UPSTREAM_MODEL_NAME,
+    csgptCs3ContextLength: getPositiveInteger(
+      process.env.CSGPT_CS3_CONTEXT_LENGTH,
+      16384,
+    ),
 
     gtmId: process.env.GTM_ID,
     gaId: process.env.GA_ID || DEFAULT_GA_ID,

@@ -15,6 +15,7 @@ type ManifestFileEntry = {
 type RuntimeManifest = {
   package?: string;
   generated_at?: string;
+  source_files?: Record<string, string>;
   record_counts?: {
     rag_chunks?: number;
     relations?: number;
@@ -43,6 +44,7 @@ const REQUIRED_RUNTIME_FILES = [
   "runtime/relations.compact.jsonl.gz",
   "kg/entities.jsonl",
   "kg/kg_stats.json",
+  "provenance/README.md",
   "provenance/manifest.json",
   "provenance/file_manifest.jsonl",
 ] as const;
@@ -53,6 +55,16 @@ const REQUIRED_RELATION_FIELDS = [
   "evidence_source_url",
   "evidence_doi",
 ];
+
+const RUNTIME_PACKAGE_README = `# CSGPT 运行数据包
+
+\`runtime/rag_chunks.compact.jsonl.gz\` 保存 RAG 检索文本块。
+\`runtime/relations.compact.jsonl.gz\` 保存知识图谱关系及其证据来源。
+\`kg/entities.jsonl\` 和 \`kg/kg_stats.json\` 保存知识图谱实体与统计信息。
+\`provenance/manifest.json\` 和 \`provenance/file_manifest.jsonl\` 保存记录数、字节数和 SHA256。
+
+运行包面向 Web 服务端的文本检索和知识图谱读取，不包含离线向量矩阵、SQLite 检索索引或评测文件。
+`;
 
 function printUsage() {
   console.log(`Usage:
@@ -222,11 +234,17 @@ async function verifyEntry(
     );
   }
 
+  const isJsonl =
+    entry.path.endsWith(".jsonl") || entry.path.endsWith(".jsonl.gz");
   const actualRecords =
-    typeof entry.records === "number"
+    typeof entry.records === "number" && isJsonl
       ? await countJsonlRecords(filePath)
       : null;
-  if (typeof entry.records === "number" && actualRecords !== entry.records) {
+  if (
+    typeof entry.records === "number" &&
+    isJsonl &&
+    actualRecords !== entry.records
+  ) {
     throw new Error(
       `Record count mismatch for ${entry.path}: expected=${entry.records}, actual=${actualRecords}`,
     );
@@ -322,7 +340,91 @@ async function replaceDirectory(sourceRoot: string, targetRoot: string) {
 
   await fs.rm(tempRoot, { recursive: true, force: true });
   try {
-    await fs.cp(sourceRoot, tempRoot, { recursive: true, force: true });
+    const sourceManifest = await readJsonFile<RuntimeManifest>(
+      path.join(sourceRoot, "provenance/manifest.json"),
+    );
+    const sourceEntries = entryMap(sourceManifest.files || []);
+    const sourceFileManifestEntries = await readFileManifest(
+      path.join(sourceRoot, "provenance/file_manifest.jsonl"),
+    );
+    const sourceFileEntries = entryMap(sourceFileManifestEntries);
+    const dataPaths = REQUIRED_RUNTIME_FILES.filter(
+      (relativePath) =>
+        relativePath !== "provenance/manifest.json" &&
+        relativePath !== "provenance/file_manifest.jsonl",
+    );
+
+    await fs.mkdir(tempRoot, { recursive: true });
+    for (const relativePath of dataPaths) {
+      const sourceEntry =
+        sourceEntries.get(relativePath) || sourceFileEntries.get(relativePath);
+      if (!sourceEntry) {
+        throw new Error(
+          `Source manifest is missing file entry: ${relativePath}`,
+        );
+      }
+      const sourcePath = path.join(sourceRoot, relativePath);
+      const targetPath = path.join(tempRoot, relativePath);
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      if (relativePath === "provenance/README.md") {
+        await fs.writeFile(targetPath, RUNTIME_PACKAGE_README, "utf8");
+      } else {
+        await fs.copyFile(sourcePath, targetPath);
+      }
+    }
+
+    const filteredEntries = await Promise.all(
+      dataPaths.map(async (relativePath) => {
+        const entry =
+          sourceEntries.get(relativePath) ||
+          sourceFileEntries.get(relativePath);
+        if (!entry) {
+          throw new Error(
+            `Source manifest is missing file entry: ${relativePath}`,
+          );
+        }
+        const targetPath = path.join(tempRoot, relativePath);
+        const stat = await fs.stat(targetPath);
+        return {
+          ...entry,
+          bytes: stat.size,
+          sha256: await sha256File(targetPath),
+        };
+      }),
+    );
+    const fileManifestText =
+      filteredEntries.map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+    const fileManifestPath = path.join(
+      tempRoot,
+      "provenance/file_manifest.jsonl",
+    );
+    await fs.writeFile(fileManifestPath, fileManifestText, "utf8");
+    const fileManifestEntry: ManifestFileEntry = {
+      path: "provenance/file_manifest.jsonl",
+      bytes: Buffer.byteLength(fileManifestText),
+      sha256: createHash("sha256").update(fileManifestText).digest("hex"),
+      records: filteredEntries.length,
+    };
+    const sourceFileKeys = ["rag_chunks", "relations", "entities", "kg_stats"];
+    const filteredSourceFiles = Object.fromEntries(
+      sourceFileKeys
+        .filter((key) => sourceManifest.source_files?.[key])
+        .map((key) => [key, sourceManifest.source_files?.[key]]),
+    );
+    const filteredManifest = {
+      ...sourceManifest,
+      source_files: filteredSourceFiles,
+      schemas: {
+        rag_chunks: sourceManifest.schemas?.rag_chunks || [],
+        relations: sourceManifest.schemas?.relations || [],
+      },
+      files: [...filteredEntries, fileManifestEntry],
+    };
+    await fs.writeFile(
+      path.join(tempRoot, "provenance/manifest.json"),
+      `${JSON.stringify(filteredManifest, null, 2)}\n`,
+      "utf8",
+    );
     await verifyPackage(tempRoot);
     await fs.rm(targetRoot, { recursive: true, force: true });
     await fs.rename(tempRoot, targetRoot);

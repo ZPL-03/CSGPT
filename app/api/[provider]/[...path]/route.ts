@@ -40,6 +40,7 @@ import {
   encodeControlledToolRecordsHeader,
   type ControlledToolRecord,
 } from "@/app/utils/controlled-tool-records";
+import { estimateTokenLength } from "@/app/utils/token";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -68,7 +69,12 @@ type CSGPTUpstream = {
   baseUrl?: string;
   apiKey?: string;
   upstreamModelName?: string;
+  contextLength: number;
 };
+
+const DEFAULT_CSGPT_CONTEXT_LENGTH = 16384;
+const CSGPT_CONTEXT_SAFETY_MARGIN = 256;
+const DEFAULT_CSGPT_OUTPUT_TOKENS = 8192;
 
 function getDedicatedCSGPTUpstream(
   model: string | undefined,
@@ -83,6 +89,7 @@ function getDedicatedCSGPTUpstream(
       baseUrl: config.csgptCs2BaseUrl,
       apiKey: config.csgptCs2ApiKey,
       upstreamModelName: config.csgptCs2UpstreamModelName,
+      contextLength: config.csgptCs2ContextLength,
     },
     [CSGPT_MODEL_3]: {
       label: "CS3",
@@ -90,10 +97,115 @@ function getDedicatedCSGPTUpstream(
       baseUrl: config.csgptCs3BaseUrl,
       apiKey: config.csgptCs3ApiKey,
       upstreamModelName: config.csgptCs3UpstreamModelName,
+      contextLength: config.csgptCs3ContextLength,
     },
   };
 
   return upstreams[model] ?? null;
+}
+
+function getCSGPTContextLength(
+  model: string | undefined,
+  config: ReturnType<typeof getServerSideConfig>,
+) {
+  if (model === CSGPT_MODEL_2) return config.csgptCs2ContextLength;
+  if (model === CSGPT_MODEL_3) return config.csgptCs3ContextLength;
+  return config.csgptContextLength || DEFAULT_CSGPT_CONTEXT_LENGTH;
+}
+
+function estimateMessageTokens(message: any) {
+  return 4 + estimateTokenLength(normalizeContentToText(message?.content));
+}
+
+function estimateMessagesTokens(messages: any[]) {
+  return messages.reduce(
+    (total, message) => total + estimateMessageTokens(message),
+    0,
+  );
+}
+
+function retainMessagesWithinBudget(messages: any[], tokenBudget: number) {
+  const preservedIndexes = new Set<number>();
+  messages.forEach((message, index) => {
+    if (message?.role === "system" || message?.role === "developer") {
+      preservedIndexes.add(index);
+    }
+  });
+
+  const latestMessageIndex = messages.length - 1;
+  if (latestMessageIndex >= 0) preservedIndexes.add(latestMessageIndex);
+
+  const selectedIndexes = new Set<number>(preservedIndexes);
+  let tokenCount = [...preservedIndexes].reduce(
+    (total, index) => total + estimateMessageTokens(messages[index]),
+    0,
+  );
+
+  if (tokenCount > tokenBudget) {
+    throw new Error(
+      `CSGPT 请求输入约 ${Math.ceil(
+        tokenCount,
+      )} tokens，超过可用上下文空间 ${Math.floor(
+        tokenBudget,
+      )} tokens。请减少附件或关闭部分检索选项后重试。`,
+    );
+  }
+
+  for (let index = latestMessageIndex - 1; index >= 0; index -= 1) {
+    if (selectedIndexes.has(index)) continue;
+    const messageTokens = estimateMessageTokens(messages[index]);
+    if (tokenCount + messageTokens > tokenBudget) continue;
+    selectedIndexes.add(index);
+    tokenCount += messageTokens;
+  }
+
+  return messages.filter((_message, index) => selectedIndexes.has(index));
+}
+
+function applyCSGPTContextBudget(
+  messages: any[],
+  rest: Record<string, any>,
+  contextLength: number,
+) {
+  const requestedOutput =
+    typeof rest.max_completion_tokens === "number"
+      ? rest.max_completion_tokens
+      : typeof rest.max_tokens === "number"
+      ? rest.max_tokens
+      : DEFAULT_CSGPT_OUTPUT_TOKENS;
+  const normalizedOutput = Math.max(1, Math.floor(requestedOutput));
+  const inputBudget = Math.max(
+    1,
+    contextLength - 1 - CSGPT_CONTEXT_SAFETY_MARGIN,
+  );
+  const boundedMessages = retainMessagesWithinBudget(messages, inputBudget);
+  const inputTokens = estimateMessagesTokens(boundedMessages);
+  const availableOutput = Math.max(
+    1,
+    contextLength - inputTokens - CSGPT_CONTEXT_SAFETY_MARGIN,
+  );
+  const outputTokens = Math.max(
+    1,
+    Math.floor(Math.min(normalizedOutput, availableOutput)),
+  );
+  const boundedRest = { ...rest };
+
+  if (Object.prototype.hasOwnProperty.call(boundedRest, "max_tokens")) {
+    boundedRest.max_tokens = outputTokens;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(boundedRest, "max_completion_tokens")
+  ) {
+    boundedRest.max_completion_tokens = outputTokens;
+  }
+  if (
+    !Object.prototype.hasOwnProperty.call(boundedRest, "max_tokens") &&
+    !Object.prototype.hasOwnProperty.call(boundedRest, "max_completion_tokens")
+  ) {
+    boundedRest.max_tokens = outputTokens;
+  }
+
+  return { messages: boundedMessages, rest: boundedRest };
 }
 
 function getVisibleDedicatedCSGPTUpstreams(
@@ -698,8 +810,24 @@ async function handleDedicatedCSGPTChatCompletions(
     );
   }
 
+  let budgetedRequest: ReturnType<typeof applyCSGPTContextBudget>;
+  try {
+    budgetedRequest = applyCSGPTContextBudget(
+      preparedMessages.messages,
+      rest,
+      upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
+    );
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        error: true,
+        message: error?.message || "CSGPT 请求输入超出上下文窗口",
+      },
+      { status: 400 },
+    );
+  }
+
   const apiUrl = joinUrl(upstream.baseUrl, "chat/completions");
-  const upstreamMessages = normalizeMessagesToText(preparedMessages.messages);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -716,9 +844,9 @@ async function handleDedicatedCSGPTChatCompletions(
       headers,
       body: JSON.stringify({
         model: upstreamModel,
-        messages: upstreamMessages,
+        messages: normalizeMessagesToText(budgetedRequest.messages),
         stream,
-        ...rest,
+        ...budgetedRequest.rest,
       }),
     });
   } catch (fetchError: any) {
@@ -912,13 +1040,35 @@ async function handleChatCompletions(
     }
   }
 
+  let requestMessages = backend.isCSGPT
+    ? normalizeMessagesToText(processedMessages)
+    : processedMessages;
+  let requestRest = rest;
+  if (backend.isCSGPT) {
+    try {
+      const budgetedRequest = applyCSGPTContextBudget(
+        processedMessages,
+        rest,
+        getCSGPTContextLength(model, config),
+      );
+      requestMessages = normalizeMessagesToText(budgetedRequest.messages);
+      requestRest = budgetedRequest.rest;
+    } catch (error: any) {
+      return NextResponse.json(
+        {
+          error: true,
+          message: error?.message || "CSGPT 请求输入超出上下文窗口",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   const requestBody = {
     model: backend.isCSGPT ? resolveUpstreamCSGPTModel(model, config) : model,
-    messages: backend.isCSGPT
-      ? normalizeMessagesToText(processedMessages)
-      : processedMessages,
+    messages: requestMessages,
     stream,
-    ...rest,
+    ...requestRest,
   };
 
   const backendBaseUrl = customUpstreamBaseUrl || backend.baseUrl;

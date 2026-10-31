@@ -67,12 +67,20 @@ export interface ChatOptions {
   config: LLMConfig;
 
   onUpdate?: (message: string, chunk: string) => void;
-  onFinish: (message: string, responseRes: Response) => void;
+  onFinish: (
+    message: string,
+    responseRes: Response,
+    metadata?: ChatFinishMetadata,
+  ) => void;
   onError?: (err: Error) => void;
   onController?: (controller: AbortController) => void;
   onBeforeTool?: (tool: ChatMessageTool) => void;
   onAfterTool?: (tool: ChatMessageTool) => void;
 }
+
+export type ChatFinishMetadata = {
+  finishReason?: string | null;
+};
 
 export interface LLMUsage {
   used: number;

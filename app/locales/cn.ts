@@ -603,7 +603,7 @@ const cn = {
     },
     MaxTokens: {
       Title: "单次回复限制 (max_tokens)",
-      SubTitle: "单次交互所用的最大 Token 数",
+      SubTitle: "单次回复的目标最大 Token 数；输入上下文受上游总窗口限制",
     },
     PresencePenalty: {
       Title: "话题新鲜度 (presence_penalty)",
@@ -618,6 +618,7 @@ const cn = {
     DefaultTopic: "新的聊天",
     BotHello: "有什么可以帮你的吗",
     Error: "出错了，稍后重试吧",
+    ResponseLimit: "本次回复已达到输出长度上限，请发送“继续”以延续回答。",
     Prompt: {
       History: (content: string) => "这是历史聊天总结作为前情提要：" + content,
       Topic:

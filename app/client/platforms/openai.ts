@@ -456,6 +456,7 @@ export class ChatGPTApi implements LLMApi {
               };
             }
             const choices = json.choices as Array<{
+              finish_reason?: string | null;
               delta: {
                 content: string;
                 tool_calls: ChatMessageTool[];
@@ -463,7 +464,14 @@ export class ChatGPTApi implements LLMApi {
               };
             }>;
 
-            if (!choices?.length) return { isThinking: false, content: "" };
+            const finishReason = choices?.[0]?.finish_reason;
+            if (!choices?.length) {
+              return {
+                isThinking: false,
+                content: "",
+                finishReason,
+              };
+            }
 
             const tool_calls = choices[0]?.delta?.tool_calls;
             if (tool_calls?.length > 0) {
@@ -496,6 +504,7 @@ export class ChatGPTApi implements LLMApi {
               return {
                 isThinking: false,
                 content: "",
+                finishReason,
               };
             }
 
@@ -503,17 +512,20 @@ export class ChatGPTApi implements LLMApi {
               return {
                 isThinking: true,
                 content: reasoning,
+                finishReason,
               };
             } else if (content && content.length > 0) {
               return {
                 isThinking: false,
                 content: content,
+                finishReason,
               };
             }
 
             return {
               isThinking: false,
               content: "",
+              finishReason,
             };
           },
           // 处理工具消息：将 tool_calls 消息和工具调用结果合并到请求中
@@ -554,7 +566,9 @@ export class ChatGPTApi implements LLMApi {
 
         const resJson = await res.json();
         const message = await this.extractMessage(resJson);
-        options.onFinish(message, res);
+        options.onFinish(message, res, {
+          finishReason: resJson?.choices?.[0]?.finish_reason,
+        });
       }
     } catch (e) {
       console.error("[Request] failed to make a chat request", e);
