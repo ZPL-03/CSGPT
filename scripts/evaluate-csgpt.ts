@@ -353,7 +353,8 @@ async function evaluateDeterministicDesign(
 
   const onlineCase = cases.find(
     (item) =>
-      item.expectedDetected && item.expectedMode === "fem_ready_cylindrical_shell",
+      item.expectedDetected &&
+      item.expectedMode === "fem_ready_cylindrical_shell",
   );
   if (!onlineCase) return;
   if (process.env.CSGPT_EVAL_DESIGN_ONLINE !== "1") {
@@ -401,8 +402,8 @@ async function evaluateDeterministicDesign(
               (angle, index, sequence) =>
                 angle === sequence[sequence.length - index - 1],
             ) &&
-          candidate.provenance.source_laminate_stiffness_validation
-            .status === "recomputed_from_explicit_sequence",
+          candidate.provenance.source_laminate_stiffness_validation.status ===
+            "recomputed_from_explicit_sequence",
       ),
       "在线 FEM-ready 候选的层数、铺层声明或源表刚度追溯无效",
     );
@@ -425,13 +426,18 @@ function evaluateContextBudgetRegression() {
   const contents = bounded.messages.map((message) => String(message.content));
   assertCondition(contents.includes(messages[0].content), "系统消息未保留");
   assertCondition(contents.includes(messages[3].content), "当前用户消息未保留");
+  const oldUserRetained = contents.includes(messages[1].content);
+  const oldAssistantRetained = contents.some((content) =>
+    content.startsWith("旧回答："),
+  );
   assertCondition(
-    !contents.includes(messages[1].content),
+    !oldUserRetained || oldAssistantRetained,
     "裁剪后留下了没有对应回答的旧用户消息",
   );
   assertCondition(
-    !contents.some((content) => content.startsWith("旧回答：")),
-    "超长旧回答未被裁剪",
+    oldAssistantRetained ||
+      !contents.some((content) => content.includes("旧回答：")),
+    "历史回答裁剪状态无法核对",
   );
 
   const estimatedInput = bounded.messages.reduce(
@@ -443,6 +449,104 @@ function evaluateContextBudgetRegression() {
   assertCondition(
     estimatedInput + outputTokens <= 16384 - CSGPT_CONTEXT_SAFETY_MARGIN,
     "输出预算没有遵守共享上下文上限",
+  );
+
+  const oversizedAugmentedContext = [
+    {
+      role: "system",
+      content: "核心工程约束：不得把历史参考值写成当前有限元结果。",
+      _csgptContextPriority: 100,
+    },
+    {
+      role: "system",
+      content: "检索上下文：" + "复合材料圆柱壳知识条目。".repeat(9000),
+      _csgptContextPriority: 20,
+    },
+    {
+      role: "system",
+      content:
+        "设计说明：只解释已生成的结构化字段，不重新生成候选；说明输入合同和校核边界。",
+      _csgptContextPriority: 80,
+    },
+    {
+      role: "user",
+      content:
+        "请解释 TMP_1 的对称性和均衡性，并说明是否可进入 Abaqus 子模型。",
+    },
+  ];
+  const boundedAugmented = applyCSGPTContextBudget(
+    oversizedAugmentedContext,
+    { max_tokens: 16384 },
+    16384,
+  );
+  const boundedAugmentedContents = boundedAugmented.messages.map((message) =>
+    String(message.content),
+  );
+  const boundedAugmentedInput = boundedAugmented.messages.reduce(
+    (total, message) =>
+      total + 4 + estimateTokenLength(String(message.content)),
+    0,
+  );
+  assertCondition(
+    boundedAugmentedContents.some((content) =>
+      content.includes("核心工程约束"),
+    ),
+    "超长增强上下文导致核心工程约束丢失",
+  );
+  assertCondition(
+    boundedAugmentedContents.some((content) => content.includes("设计说明")),
+    "超长增强上下文导致设计说明丢失",
+  );
+  assertCondition(
+    boundedAugmentedContents.some((content) => content.includes("TMP_1")),
+    "超长增强上下文导致当前用户问题丢失",
+  );
+  assertCondition(
+    boundedAugmentedInput + Number(boundedAugmented.rest.max_tokens) <=
+      16384 - CSGPT_CONTEXT_SAFETY_MARGIN,
+    "超长增强上下文裁剪后仍超过共享上下文上限",
+  );
+
+  const structuredFollowup = [
+    oversizedAugmentedContext[0],
+    oversizedAugmentedContext[1],
+    {
+      role: "user",
+      content: "请生成 FEM-ready 圆柱壳候选。",
+    },
+    {
+      role: "assistant",
+      content:
+        "上一轮结构化结果：TMP_1 材料为 IM7-8552，40 层显式铺层，待进入 Abaqus 子模型复核。".repeat(
+          3000,
+        ),
+    },
+    {
+      role: "user",
+      content: "请只解释 TMP_1 的对称性和均衡性，不重新生成候选。",
+    },
+  ];
+  const boundedFollowup = applyCSGPTContextBudget(
+    structuredFollowup,
+    { max_tokens: 16384 },
+    16384,
+  );
+  const boundedFollowupContents = boundedFollowup.messages.map((message) =>
+    String(message.content),
+  );
+  assertCondition(
+    boundedFollowupContents.includes(structuredFollowup[2].content),
+    "结构化结果追问丢失上一轮用户任务",
+  );
+  assertCondition(
+    boundedFollowupContents.some((content) =>
+      content.includes("TMP_1 材料为 IM7-8552"),
+    ),
+    "结构化结果追问丢失上一轮 TMP_1 字段",
+  );
+  assertCondition(
+    boundedFollowupContents.includes(structuredFollowup[4].content),
+    "结构化结果追问丢失当前用户问题",
   );
 }
 

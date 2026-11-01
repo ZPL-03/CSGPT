@@ -143,6 +143,7 @@ function prepareDesignNarrativeMessages(messages: any[], instruction: string) {
   result.splice(insertIndex, 0, {
     role: "system",
     content: instruction,
+    _csgptContextPriority: 80,
   });
   return result;
 }
@@ -797,6 +798,7 @@ async function prepareProxyMessages(
     processedMessages.unshift({
       role: "system",
       content: CSGPT_SYSTEM_PROMPT,
+      _csgptContextPriority: 100,
     });
   }
 
@@ -860,6 +862,7 @@ async function prepareProxyMessages(
         ? "developer"
         : "system",
       content: contextBlocks.join("\n\n"),
+      _csgptContextPriority: 20,
     });
   }
 
