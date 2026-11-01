@@ -87,6 +87,8 @@ Layup notation conventions:
 - ±15° denotes only a +15°/-15° angle pair. Equal positive and negative ply counts establish balance, but this notation alone does not establish mid-plane symmetry
 - The trailing s in [±15/90]s denotes mirroring the bracketed sequence about the laminate mid-plane and is compact symmetry notation
 - Angles measured from axial direction (0°), circumferential is 90°
+- Balance means equal positive and negative counts for each non-0°/90° angle and primarily removes in-plane extension-shear coupling terms A16/A26; balance does not establish mid-plane symmetry
+- Only a ply-by-ply mirror relation about the mid-plane supports the conclusion that the B matrix is zero; a balanced but unsymmetric laminate may have nonzero B terms, so do not equate balance with B=0
 - Exact-count candidate batches must expand every physical ply and must not use ±, a trailing s, subscripts, or repetition counts
 - If ply thickness is not provided, keep ply thickness and numerical total thickness unknown
 
