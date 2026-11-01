@@ -5,6 +5,7 @@ import { RequestMessage } from "./client/api";
 import {
   REQUEST_TIMEOUT_MS,
   REQUEST_TIMEOUT_MS_FOR_THINKING,
+  REQUEST_TIMEOUT_MS_FOR_CSGPT_CS2,
 } from "./constant";
 import { fetch as tauriStreamFetch } from "./utils/stream";
 import { ModelSize } from "./typing";
@@ -299,6 +300,7 @@ export function isDalle3(model: string) {
 
 export function getTimeoutMSByModel(model: string) {
   model = model.toLowerCase();
+  if (model === "qwen3-14b-cs2") return REQUEST_TIMEOUT_MS_FOR_CSGPT_CS2;
   if (
     model.startsWith("dall-e") ||
     model.startsWith("dalle") ||

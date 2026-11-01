@@ -48,6 +48,7 @@ import {
   extractFileIdsFromMessageContent,
   uniqueFileIds,
 } from "@/app/utils/file-context-ids";
+import type { CSGPTDesignArtifactChunk } from "@/app/utils/structured-design";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -446,6 +447,10 @@ export class ChatGPTApi implements LLMApi {
           // parseSSE
           (text: string, runTools: ChatMessageTool[]) => {
             const json = JSON.parse(text);
+            const designArtifact = json.csgpt_design_artifact;
+            const designArtifactChunk = json.csgpt_design_artifact_chunk as
+              | CSGPTDesignArtifactChunk
+              | undefined;
             if (json.error) {
               return {
                 isThinking: false,
@@ -453,6 +458,8 @@ export class ChatGPTApi implements LLMApi {
                   error: true,
                   message: json.error.message || String(json.error),
                 }),
+                designArtifact,
+                designArtifactChunk,
               };
             }
             const choices = json.choices as Array<{
@@ -470,6 +477,8 @@ export class ChatGPTApi implements LLMApi {
                 isThinking: false,
                 content: "",
                 finishReason,
+                designArtifact,
+                designArtifactChunk,
               };
             }
 
@@ -505,6 +514,8 @@ export class ChatGPTApi implements LLMApi {
                 isThinking: false,
                 content: "",
                 finishReason,
+                designArtifact,
+                designArtifactChunk,
               };
             }
 
@@ -513,12 +524,16 @@ export class ChatGPTApi implements LLMApi {
                 isThinking: true,
                 content: reasoning,
                 finishReason,
+                designArtifact,
+                designArtifactChunk,
               };
             } else if (content && content.length > 0) {
               return {
                 isThinking: false,
                 content: content,
                 finishReason,
+                designArtifact,
+                designArtifactChunk,
               };
             }
 
@@ -526,6 +541,8 @@ export class ChatGPTApi implements LLMApi {
               isThinking: false,
               content: "",
               finishReason,
+              designArtifact,
+              designArtifactChunk,
             };
           },
           // 处理工具消息：将 tool_calls 消息和工具调用结果合并到请求中
@@ -568,6 +585,7 @@ export class ChatGPTApi implements LLMApi {
         const message = await this.extractMessage(resJson);
         options.onFinish(message, res, {
           finishReason: resJson?.choices?.[0]?.finish_reason,
+          designArtifact: resJson?.csgpt_design_artifact,
         });
       }
     } catch (e) {

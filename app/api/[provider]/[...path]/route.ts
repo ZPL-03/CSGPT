@@ -3,7 +3,6 @@ import { getServerSideConfig } from "@/app/config/server";
 import { getUserFromRequest } from "@/app/lib/auth";
 import {
   CSGPT_CONTEXT_LENGTH,
-  CSGPT_DEFAULT_MAX_TOKENS,
   CSGPT_DEFAULT_MODEL,
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
@@ -42,7 +41,23 @@ import {
   encodeControlledToolRecordsHeader,
   type ControlledToolRecord,
 } from "@/app/utils/controlled-tool-records";
-import { estimateTokenLength } from "@/app/utils/token";
+import {
+  buildDesignNarrativeInstruction,
+  detectDeterministicDesignIntent,
+  detectFEMReadyDesignIntent,
+  renderDeterministicDesignAppendix,
+  requestDeterministicDesign,
+  type DesignServiceResponse,
+} from "@/app/utils/server-deterministic-design";
+import {
+  CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD,
+  CSGPT_DESIGN_ARTIFACT_FIELD,
+  CSGPT_DESIGN_ARTIFACT_HEADER,
+  encodeCSGPTDesignArtifactHeader,
+  toCSGPTDesignArtifact,
+  type CSGPTDesignArtifact,
+} from "@/app/utils/structured-design";
+import { applyCSGPTContextBudget } from "@/app/utils/csgpt-context-budget";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -75,8 +90,9 @@ type CSGPTUpstream = {
 };
 
 const DEFAULT_CSGPT_CONTEXT_LENGTH = CSGPT_CONTEXT_LENGTH;
-const CSGPT_CONTEXT_SAFETY_MARGIN = 256;
-const DEFAULT_CSGPT_OUTPUT_TOKENS = CSGPT_DEFAULT_MAX_TOKENS;
+const DESIGN_NARRATIVE_MAX_TOKENS = 1600;
+const SYNTHETIC_STREAM_CHUNK_CHARS = 1200;
+const DESIGN_ARTIFACT_STREAM_CHUNK_CHARS = 12000;
 
 function getDedicatedCSGPTUpstream(
   model: string | undefined,
@@ -115,99 +131,214 @@ function getCSGPTContextLength(
   return config.csgptContextLength || DEFAULT_CSGPT_CONTEXT_LENGTH;
 }
 
-function estimateMessageTokens(message: any) {
-  return 4 + estimateTokenLength(normalizeContentToText(message?.content));
-}
-
-function estimateMessagesTokens(messages: any[]) {
-  return messages.reduce(
-    (total, message) => total + estimateMessageTokens(message),
-    0,
-  );
-}
-
-function retainMessagesWithinBudget(messages: any[], tokenBudget: number) {
-  const preservedIndexes = new Set<number>();
-  messages.forEach((message, index) => {
-    if (message?.role === "system" || message?.role === "developer") {
-      preservedIndexes.add(index);
-    }
+function prepareDesignNarrativeMessages(messages: any[], instruction: string) {
+  const result = [...messages];
+  let insertIndex = 0;
+  while (
+    insertIndex < result.length &&
+    ["developer", "system"].includes(result[insertIndex]?.role)
+  ) {
+    insertIndex += 1;
+  }
+  result.splice(insertIndex, 0, {
+    role: "system",
+    content: instruction,
   });
-
-  const latestMessageIndex = messages.length - 1;
-  if (latestMessageIndex >= 0) preservedIndexes.add(latestMessageIndex);
-
-  const selectedIndexes = new Set<number>(preservedIndexes);
-  let tokenCount = [...preservedIndexes].reduce(
-    (total, index) => total + estimateMessageTokens(messages[index]),
-    0,
-  );
-
-  if (tokenCount > tokenBudget) {
-    throw new Error(
-      `CSGPT 请求输入约 ${Math.ceil(
-        tokenCount,
-      )} tokens，超过可用上下文空间 ${Math.floor(
-        tokenBudget,
-      )} tokens。请减少附件或关闭部分检索选项后重试。`,
-    );
-  }
-
-  for (let index = latestMessageIndex - 1; index >= 0; index -= 1) {
-    if (selectedIndexes.has(index)) continue;
-    const messageTokens = estimateMessageTokens(messages[index]);
-    if (tokenCount + messageTokens > tokenBudget) continue;
-    selectedIndexes.add(index);
-    tokenCount += messageTokens;
-  }
-
-  return messages.filter((_message, index) => selectedIndexes.has(index));
+  return result;
 }
 
-function applyCSGPTContextBudget(
-  messages: any[],
-  rest: Record<string, any>,
-  contextLength: number,
+function prepareDesignNarrativeRest(rest: Record<string, any>) {
+  const result = { ...rest };
+  delete result.max_completion_tokens;
+  result.max_tokens = DESIGN_NARRATIVE_MAX_TOKENS;
+  const requestedTemperature = Number(rest.temperature);
+  result.temperature = Number.isFinite(requestedTemperature)
+    ? Math.min(Math.max(requestedTemperature, 0), 0.3)
+    : 0.2;
+  return result;
+}
+
+function openAIStreamEvent(payload: unknown) {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+function appendDesignToOpenAIStream(
+  upstreamBody: ReadableStream<Uint8Array>,
+  appendix: string,
+  model: string,
+  designArtifact: CSGPTDesignArtifact,
 ) {
-  const requestedOutput =
-    typeof rest.max_completion_tokens === "number"
-      ? rest.max_completion_tokens
-      : typeof rest.max_tokens === "number"
-      ? rest.max_tokens
-      : DEFAULT_CSGPT_OUTPUT_TOKENS;
-  const normalizedOutput = Math.max(1, Math.floor(requestedOutput));
-  const inputBudget = Math.max(
-    1,
-    contextLength - 1 - CSGPT_CONTEXT_SAFETY_MARGIN,
-  );
-  const boundedMessages = retainMessagesWithinBudget(messages, inputBudget);
-  const inputTokens = estimateMessagesTokens(boundedMessages);
-  const availableOutput = Math.max(
-    1,
-    contextLength - inputTokens - CSGPT_CONTEXT_SAFETY_MARGIN,
-  );
-  const outputTokens = Math.max(
-    1,
-    Math.floor(Math.min(normalizedOutput, availableOutput)),
-  );
-  const boundedRest = { ...rest };
+  const reader = upstreamBody.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const completionId = `chatcmpl-csgpt-design-${Date.now()}`;
+  const created = Math.floor(Date.now() / 1000);
 
-  if (Object.prototype.hasOwnProperty.call(boundedRest, "max_tokens")) {
-    boundedRest.max_tokens = outputTokens;
-  }
-  if (
-    Object.prototype.hasOwnProperty.call(boundedRest, "max_completion_tokens")
-  ) {
-    boundedRest.max_completion_tokens = outputTokens;
-  }
-  if (
-    !Object.prototype.hasOwnProperty.call(boundedRest, "max_tokens") &&
-    !Object.prototype.hasOwnProperty.call(boundedRest, "max_completion_tokens")
-  ) {
-    boundedRest.max_tokens = outputTokens;
-  }
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let buffer = "";
+      let upstreamFinishReason: string | null = null;
+      const forwardEvent = (event: string) => {
+        const lines = event.split(/\r?\n/).flatMap((line) => {
+          if (line.trim() === "data: [DONE]") return [];
+          if (!line.startsWith("data:")) return [line];
+          const rawPayload = line.slice(5).trim();
+          try {
+            const payload = JSON.parse(rawPayload);
+            if (Array.isArray(payload?.choices)) {
+              payload.choices = payload.choices.map((choice: any) => {
+                if (choice?.finish_reason) {
+                  upstreamFinishReason = String(choice.finish_reason);
+                }
+                return choice;
+              });
+              return [`data: ${JSON.stringify(payload)}`];
+            }
+          } catch {
+            // 非 JSON 数据保持上游原样；正式 OpenAI SSE 数据应为单行 JSON。
+          }
+          return [line];
+        });
+        if (lines.some((line) => line.trim())) {
+          controller.enqueue(encoder.encode(`${lines.join("\n")}\n\n`));
+        }
+      };
 
-  return { messages: boundedMessages, rest: boundedRest };
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          let separator = buffer.match(/\r?\n\r?\n/);
+          while (separator?.index !== undefined) {
+            const event = buffer.slice(0, separator.index);
+            buffer = buffer.slice(separator.index + separator[0].length);
+            forwardEvent(event);
+            separator = buffer.match(/\r?\n\r?\n/);
+          }
+          if (done) break;
+        }
+        if (buffer.trim()) forwardEvent(buffer);
+
+        for (
+          let offset = 0;
+          offset < appendix.length;
+          offset += SYNTHETIC_STREAM_CHUNK_CHARS
+        ) {
+          controller.enqueue(
+            encoder.encode(
+              openAIStreamEvent({
+                id: completionId,
+                object: "chat.completion.chunk",
+                created,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      content: appendix.slice(
+                        offset,
+                        offset + SYNTHETIC_STREAM_CHUNK_CHARS,
+                      ),
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              }),
+            ),
+          );
+        }
+        const serializedArtifact = JSON.stringify(designArtifact);
+        const artifactChunkTotal = Math.ceil(
+          serializedArtifact.length / DESIGN_ARTIFACT_STREAM_CHUNK_CHARS,
+        );
+        for (let index = 0; index < artifactChunkTotal; index += 1) {
+          controller.enqueue(
+            encoder.encode(
+              openAIStreamEvent({
+                id: completionId,
+                object: "chat.completion.chunk",
+                created,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {},
+                    finish_reason: null,
+                  },
+                ],
+                [CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD]: {
+                  id: completionId,
+                  index,
+                  total: artifactChunkTotal,
+                  data: serializedArtifact.slice(
+                    index * DESIGN_ARTIFACT_STREAM_CHUNK_CHARS,
+                    (index + 1) * DESIGN_ARTIFACT_STREAM_CHUNK_CHARS,
+                  ),
+                },
+              }),
+            ),
+          );
+        }
+        controller.enqueue(
+          encoder.encode(
+            openAIStreamEvent({
+              id: completionId,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [
+                {
+                  index: 0,
+                  delta: {},
+                  finish_reason: upstreamFinishReason || "stop",
+                },
+              ],
+            }),
+          ),
+        );
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+}
+
+function appendDesignToOpenAICompletion(
+  data: any,
+  appendix: string,
+  designArtifact: CSGPTDesignArtifact,
+) {
+  const choice = data?.choices?.[0];
+  if (
+    !choice ||
+    !choice.message ||
+    typeof choice.message.content !== "string"
+  ) {
+    throw new Error("CS2 上游返回的非流式消息结构无效。");
+  }
+  return {
+    ...data,
+    [CSGPT_DESIGN_ARTIFACT_FIELD]: designArtifact,
+    choices: data.choices.map((item: any, index: number) =>
+      index === 0
+        ? {
+            ...item,
+            message: {
+              ...item.message,
+              content: `${item.message.content}${appendix}`,
+            },
+            finish_reason: item.finish_reason || "stop",
+          }
+        : item,
+    ),
+  };
 }
 
 function getVisibleDedicatedCSGPTUpstreams(
@@ -791,6 +922,39 @@ async function handleDedicatedCSGPTChatCompletions(
     );
   }
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
+  const designIntent =
+    model === CSGPT_MODEL_2
+      ? detectFEMReadyDesignIntent(messages) ||
+        detectDeterministicDesignIntent(messages)
+      : null;
+  let designResponse: DesignServiceResponse | null = null;
+  if (designIntent) {
+    if (!config.csgptCs2DesignBaseUrl) {
+      return NextResponse.json(
+        {
+          error: true,
+          message: "CS2 确定性设计服务地址未配置，不能生成严格批量候选。",
+        },
+        { status: 500 },
+      );
+    }
+    try {
+      designResponse = await requestDeterministicDesign(designIntent, {
+        baseUrl: config.csgptCs2DesignBaseUrl,
+        apiKey: config.csgptCs2DesignApiKey,
+      });
+    } catch (error: any) {
+      return NextResponse.json(
+        {
+          error: true,
+          message: `确定性方案生成失败：${
+            error?.message || "设计服务未返回有效结果"
+          }`,
+        },
+        { status: 502 },
+      );
+    }
+  }
 
   let preparedMessages: Awaited<ReturnType<typeof prepareProxyMessages>>;
   try {
@@ -812,11 +976,43 @@ async function handleDedicatedCSGPTChatCompletions(
     );
   }
 
+  let requestMessages = preparedMessages.messages;
+  let requestRest = rest;
+  const controlledToolRecords = [...preparedMessages.controlledToolRecords];
+  let designAppendix = "";
+  let designArtifact: CSGPTDesignArtifact | null = null;
+  if (designIntent && designResponse) {
+    requestMessages = prepareDesignNarrativeMessages(
+      requestMessages,
+      buildDesignNarrativeInstruction(designIntent, designResponse),
+    );
+    requestRest = prepareDesignNarrativeRest(rest);
+    designAppendix = renderDeterministicDesignAppendix(
+      designIntent,
+      designResponse,
+    );
+    designArtifact = toCSGPTDesignArtifact(
+      designResponse as unknown as Record<string, unknown>,
+    );
+    const record = createControlledToolRecord({
+      id: "csgpt-deterministic-design",
+      name: "确定性方案生成",
+      enabled: true,
+      count: designIntent.candidateCount,
+      unit: "组候选",
+      content:
+        designResponse.generation_mode === "fem_ready_cylindrical_shell"
+          ? `FEM-ready 设计合同已生成并校验 ${designIntent.candidateCount} 组圆柱壳候选`
+          : `确定性设计引擎 v${designResponse.engine_version} 已生成并校验 ${designIntent.candidateCount} 组概念候选`,
+    });
+    if (record) controlledToolRecords.push(record);
+  }
+
   let budgetedRequest: ReturnType<typeof applyCSGPTContextBudget>;
   try {
     budgetedRequest = applyCSGPTContextBudget(
-      preparedMessages.messages,
-      rest,
+      requestMessages,
+      requestRest,
       upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
     );
   } catch (error: any) {
@@ -874,7 +1070,13 @@ async function handleDedicatedCSGPTChatCompletions(
     );
   }
 
-  if (stream && response.body) {
+  if (stream) {
+    if (!response.body) {
+      return NextResponse.json(
+        { error: true, message: `${upstream.label} 后端没有返回 SSE 响应体` },
+        { status: 502 },
+      );
+    }
     const responseHeaders = new Headers({
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -894,18 +1096,50 @@ async function handleDedicatedCSGPTChatCompletions(
       responseHeaders,
       preparedMessages.userFileSources,
     );
-    attachControlledToolRecordsHeader(
-      responseHeaders,
-      preparedMessages.controlledToolRecords,
-    );
-    return new Response(response.body, {
+    attachControlledToolRecordsHeader(responseHeaders, controlledToolRecords);
+    const responseBody =
+      designAppendix && designResponse && designArtifact
+        ? appendDesignToOpenAIStream(
+            response.body,
+            designAppendix,
+            model,
+            designArtifact,
+          )
+        : response.body;
+    if (designArtifact) {
+      responseHeaders.set(
+        CSGPT_DESIGN_ARTIFACT_HEADER,
+        encodeCSGPTDesignArtifactHeader(designArtifact),
+      );
+    }
+    return new Response(responseBody, {
       status: 200,
       headers: responseHeaders,
     });
   }
 
-  const data = await response.json();
+  let data = await response.json();
+  if (designAppendix && designResponse && designArtifact) {
+    try {
+      data = appendDesignToOpenAICompletion(
+        data,
+        designAppendix,
+        designArtifact,
+      );
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: true, message: error?.message || "CS2 上游响应结构无效" },
+        { status: 502 },
+      );
+    }
+  }
   const nextResponse = NextResponse.json(data);
+  if (designArtifact) {
+    nextResponse.headers.set(
+      CSGPT_DESIGN_ARTIFACT_HEADER,
+      encodeCSGPTDesignArtifactHeader(designArtifact),
+    );
+  }
   attachRagKgSourcesHeader(nextResponse.headers, preparedMessages.ragKgSources);
   attachResearchSourcesHeader(
     nextResponse.headers,
@@ -921,7 +1155,7 @@ async function handleDedicatedCSGPTChatCompletions(
   );
   attachControlledToolRecordsHeader(
     nextResponse.headers,
-    preparedMessages.controlledToolRecords,
+    controlledToolRecords,
   );
   return nextResponse;
 }

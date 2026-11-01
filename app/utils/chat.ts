@@ -1,17 +1,18 @@
-import {
-  FILES_URL_PREFIX,
-  FILE_UPLOAD_CHUNK_SIZE,
-  REQUEST_TIMEOUT_MS,
-} from "@/app/constant";
+import { FILES_URL_PREFIX, FILE_UPLOAD_CHUNK_SIZE } from "@/app/constant";
 import { MultimodalContent, RequestMessage } from "@/app/client/api";
 import Locale from "@/app/locales";
 import { useUserStore } from "@/app/store/user";
+import { getTimeoutMSByModel } from "@/app/utils";
 import {
   EventStreamContentType,
   fetchEventSource,
 } from "@fortaine/fetch-event-source";
 import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
+import type {
+  CSGPTDesignArtifact,
+  CSGPTDesignArtifactChunk,
+} from "./structured-design";
 import { THINKING_BLOCK_END, THINKING_BLOCK_START } from "./thinking";
 
 const MODEL_IMAGE_DATA_URL_LIMIT = 2 * 1024 * 1024;
@@ -352,6 +353,8 @@ export function streamWithThink(
     isThinking: boolean;
     content: string | undefined;
     finishReason?: string | null;
+    designArtifact?: CSGPTDesignArtifact;
+    designArtifactChunk?: CSGPTDesignArtifactChunk;
   },
   processToolMessage: (
     requestPayload: any,
@@ -369,6 +372,45 @@ export function streamWithThink(
   let isInThinkingMode = false;
   let isInThinkTag = false;
   let finishReason: string | null = null;
+  let designArtifact: CSGPTDesignArtifact | undefined;
+  const designArtifactChunks = new Map<
+    string,
+    { total: number; parts: string[] }
+  >();
+
+  function acceptDesignArtifactChunk(chunk: CSGPTDesignArtifactChunk) {
+    if (
+      !chunk ||
+      typeof chunk.id !== "string" ||
+      !Number.isInteger(chunk.index) ||
+      !Number.isInteger(chunk.total) ||
+      chunk.index < 0 ||
+      chunk.total <= 0 ||
+      chunk.index >= chunk.total ||
+      typeof chunk.data !== "string"
+    ) {
+      return;
+    }
+    const current = designArtifactChunks.get(chunk.id) || {
+      total: chunk.total,
+      parts: Array.from({ length: chunk.total }, () => ""),
+    };
+    if (current.total !== chunk.total) return;
+    current.parts[chunk.index] = chunk.data;
+    designArtifactChunks.set(chunk.id, current);
+    if (current.parts.every((part) => part.length > 0)) {
+      try {
+        designArtifact = JSON.parse(
+          current.parts.join(""),
+        ) as CSGPTDesignArtifact;
+      } catch (error) {
+        console.error(
+          "[Request] structured design artifact parse error",
+          error,
+        );
+      }
+    }
+  }
 
   function appendStreamSegment(content: string, isThinking: boolean) {
     if (!content) return;
@@ -523,6 +565,7 @@ export function streamWithThink(
       finished = true;
       options.onFinish(responseText + remainText, responseRes, {
         finishReason,
+        designArtifact,
       });
     }
   };
@@ -546,7 +589,9 @@ export function streamWithThink(
     };
     const requestTimeoutId = setTimeout(
       () => controller.abort(),
-      REQUEST_TIMEOUT_MS,
+      getTimeoutMSByModel(
+        options?.config?.model || requestPayload?.model || "",
+      ),
     );
     fetchEventSource(chatPath, {
       fetch: tauriFetch as any,
@@ -601,6 +646,12 @@ export function streamWithThink(
           const chunk = parseSSE(text, runTools);
           if (chunk?.finishReason) {
             finishReason = chunk.finishReason;
+          }
+          if (chunk?.designArtifact) {
+            designArtifact = chunk.designArtifact;
+          }
+          if (chunk?.designArtifactChunk) {
+            acceptDesignArtifactChunk(chunk.designArtifactChunk);
           }
           // 跳过空内容
           if (!chunk?.content || chunk.content.length === 0) {

@@ -78,6 +78,7 @@ export async function GET(
             researchSources: m.researchSources,
             sessionFileSources: m.sessionFileSources,
             userFileSources: m.userFileSources,
+            designArtifact: m.designArtifact,
             fileContent:
               m.fileContent ||
               buildFileContentFromMessage(m.content, filesById),

@@ -161,6 +161,14 @@ npm run verify:csllm
 npm run sync:csllm -- --source "<csllm-runtime-package-dir>"
 ```
 
+## CS2 工程候选
+
+`QWen3-14B-CS2` 对复合材料耐压壳、压力容器等任务中的精确批量候选请求使用组合生产路径。服务端先解析用户明确给定的候选数量和工程条件，再调用统一设计接口；CS2 只生成需求说明、筛选依据、数据流和安全性边界。RAG、知识图谱、附件知识和外部检索仍可为工程解释提供证据。
+
+具备水深或外压、圆柱段长度和内半径的批量圆柱耐压壳任务进入 FEM-ready 合同。每个候选来自指纹固定的正式有限元表格参数域，包含 `CSDM_cph` 当前圆柱壳子模型所需的几何、40 层显式铺层、材料属性、初始缺陷、载荷、边界、目标和 `design_revision_id`。历史有限元值只用于筛选参考，当前 Abaqus 求解完成前不声明候选通过；金属封头和连接未显式建模时不声明整机安全。
+
+缺少 FEM 必需工况的铺层探索任务进入概念组合合同，只证明精确数量、连续编号、逐个物理层展开、唯一铺层、允许/排除角、层数、对称性、均衡性和厚度算术。输入未给定单层厚度时，表格保持单层厚度与数值总厚度未知。任一合同调用失败或结果未通过校验时，请求明确失败，不回退到大模型自由枚举。`QWen3-14B-CS1` 和 `QWen3-14B-CS3` 不经过该路径。
+
 ## 环境变量
 
 ```env
@@ -181,6 +189,8 @@ CSGPT_CS2_BASE_URL=https://your-cs2-server/v1
 CSGPT_CS2_API_KEY=your-api-key
 CSGPT_CS2_UPSTREAM_MODEL_NAME=
 CSGPT_CS2_CONTEXT_LENGTH=16384
+CSGPT_CS2_DESIGN_BASE_URL=https://your-cs2-server/v1
+CSGPT_CS2_DESIGN_API_KEY=your-api-key
 
 CSGPT_CS3_BASE_URL=https://your-cs3-server/v1
 CSGPT_CS3_API_KEY=your-api-key
@@ -198,6 +208,10 @@ SPRINGER_OPENACCESS_API_KEY=
 ```
 
 `CSGPT_CS*_CONTEXT_LENGTH` 表示对应上游的总上下文窗口，输入消息和输出消息共用该窗口。CSGPT 上游默认按 16384 tokens 配置；如果上游服务使用其他窗口，应按实际服务能力填写。CSGPT 模型的 `max_tokens` 默认目标输出预算为 16384，不是输入长度。服务端会估算实际输入长度、保留系统提示词和最新消息、裁剪最早的历史消息，并将输出预算限制在总上下文窗口剩余空间内。其他 Provider 的 `max_tokens` 请求不经过这套 CSGPT 专用预算处理。
+
+`CSGPT_CS2_DESIGN_BASE_URL` 和 `CSGPT_CS2_DESIGN_API_KEY` 是 CS2 统一设计接口配置。未填写时分别复用 `CSGPT_CS2_BASE_URL` 和 `CSGPT_CS2_API_KEY`；浏览器只访问 CSGPT 服务端代理，不接收上游密钥。
+
+CS2 客户端请求超时为 5 分钟，以覆盖确定性候选生成、知识库上下文和长表格响应所需的等待时间。流式响应仍以服务端返回的 `[DONE]` 作为完成标志。
 
 当系统提示词、检索上下文和最新消息本身超过上游总上下文窗口时，服务端返回明确的上下文超限错误；它不会发送一个必然被上游拒绝的请求。流式回答以 `length` 结束时，聊天记录会显示输出长度提示，用户可发送“继续”延续未完成内容。
 

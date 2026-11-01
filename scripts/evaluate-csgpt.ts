@@ -17,6 +17,16 @@ import {
   buildInternalKnowledgeContext,
   queryKnowledgeGraph,
 } from "../app/utils/server-rag-kg";
+import {
+  detectDeterministicDesignIntent,
+  detectFEMReadyDesignIntent,
+  requestDeterministicDesign,
+} from "../app/utils/server-deterministic-design";
+import {
+  CSGPT_CONTEXT_SAFETY_MARGIN,
+  applyCSGPTContextBudget,
+} from "../app/utils/csgpt-context-budget";
+import { estimateTokenLength } from "../app/utils/token";
 import type { RagKgDocumentSource } from "../app/utils/rag-kg-sources";
 
 type EvalFailure = {
@@ -57,6 +67,27 @@ type CasesFile = {
     name: string;
     urls: string[];
     expectedIds: string[];
+  }>;
+  deterministicDesign: Array<{
+    name: string;
+    prompt: string;
+    expectedDetected: boolean;
+    expectedMode?: "concept_layup_enumeration" | "fem_ready_cylindrical_shell";
+    expectedCandidateCount?: number;
+    expectedLayerCount?: number;
+    expectedAllowedAngles?: number[];
+    expectedPlyThickness?: number | null;
+    expectedSymmetric?: boolean;
+    expectedBalanced?: boolean;
+    expectedParameters?: Record<
+      string,
+      Array<string | number | boolean | null>
+    >;
+    expectedLengthMm?: number;
+    expectedRadiusMm?: number;
+    expectedServiceDepthM?: number;
+    expectedExternalPressureMPa?: number;
+    expectedFEMPlyCount?: number;
   }>;
   researchModes: Array<{
     name: string;
@@ -248,6 +279,173 @@ async function evaluateFileContextIds(cases: CasesFile["fileContextIds"]) {
   }
 }
 
+async function evaluateDeterministicDesign(
+  cases: CasesFile["deterministicDesign"],
+) {
+  for (const item of cases) {
+    await runCase("deterministic-design", item.name, () => {
+      const messages = [{ role: "user", content: item.prompt }];
+      const intent =
+        detectFEMReadyDesignIntent(messages) ||
+        detectDeterministicDesignIntent(messages);
+      if (!item.expectedDetected) {
+        assertCondition(!intent, "不应触发确定性候选生成");
+        return "not-detected";
+      }
+      assertCondition(intent, "未识别严格批量候选请求");
+      assertCondition(
+        intent.mode === item.expectedMode,
+        `mode=${intent.mode}，期望 ${item.expectedMode}`,
+      );
+      assertCondition(
+        intent.candidateCount === item.expectedCandidateCount,
+        `candidateCount=${intent.candidateCount}，期望 ${item.expectedCandidateCount}`,
+      );
+      if (intent.mode === "fem_ready_cylindrical_shell") {
+        assertCondition(
+          intent.payload.geometry.length_mm === item.expectedLengthMm,
+          `length=${intent.payload.geometry.length_mm}，期望 ${item.expectedLengthMm}`,
+        );
+        assertCondition(
+          intent.payload.geometry.radius_mm === item.expectedRadiusMm,
+          `radius=${intent.payload.geometry.radius_mm}，期望 ${item.expectedRadiusMm}`,
+        );
+        assertCondition(
+          intent.payload.load_conditions.service_depth_m ===
+            item.expectedServiceDepthM,
+          `depth=${intent.payload.load_conditions.service_depth_m}，期望 ${item.expectedServiceDepthM}`,
+        );
+        return `count=${intent.candidateCount}, mode=${intent.mode}`;
+      }
+      assertCondition(
+        intent.payload.layer_count === item.expectedLayerCount,
+        `layerCount=${intent.payload.layer_count}，期望 ${item.expectedLayerCount}`,
+      );
+      assertCondition(
+        JSON.stringify(intent.payload.allowed_angles_deg) ===
+          JSON.stringify(item.expectedAllowedAngles),
+        `allowedAngles=${JSON.stringify(intent.payload.allowed_angles_deg)}`,
+      );
+      assertCondition(
+        intent.payload.ply_thickness_mm === item.expectedPlyThickness,
+        `plyThickness=${intent.payload.ply_thickness_mm}，期望 ${item.expectedPlyThickness}`,
+      );
+      if (item.expectedSymmetric !== undefined) {
+        assertCondition(
+          intent.payload.symmetric === item.expectedSymmetric,
+          `symmetric=${intent.payload.symmetric}，期望 ${item.expectedSymmetric}`,
+        );
+      }
+      if (item.expectedBalanced !== undefined) {
+        assertCondition(
+          intent.payload.balanced === item.expectedBalanced,
+          `balanced=${intent.payload.balanced}，期望 ${item.expectedBalanced}`,
+        );
+      }
+      assertCondition(
+        JSON.stringify(intent.payload.parameter_values) ===
+          JSON.stringify(item.expectedParameters || {}),
+        `parameterValues=${JSON.stringify(intent.payload.parameter_values)}`,
+      );
+      return `count=${intent.candidateCount}, layers=${intent.payload.layer_count}`;
+    });
+  }
+
+  const onlineCase = cases.find(
+    (item) =>
+      item.expectedDetected && item.expectedMode === "fem_ready_cylindrical_shell",
+  );
+  if (!onlineCase) return;
+  if (process.env.CSGPT_EVAL_DESIGN_ONLINE !== "1") {
+    skip(
+      "deterministic-design",
+      "真实确定性设计服务",
+      "设置 CSGPT_EVAL_DESIGN_ONLINE=1 后执行",
+    );
+    return;
+  }
+  const baseUrl =
+    process.env.CSGPT_CS2_DESIGN_BASE_URL || process.env.CSGPT_CS2_BASE_URL;
+  const apiKey =
+    process.env.CSGPT_CS2_DESIGN_API_KEY || process.env.CSGPT_CS2_API_KEY;
+  await runCase("deterministic-design", "真实确定性设计服务", async () => {
+    assertCondition(baseUrl, "CS2 确定性设计服务地址未配置");
+    const messages = [{ role: "user", content: onlineCase.prompt }];
+    const intent =
+      detectFEMReadyDesignIntent(messages) ||
+      detectDeterministicDesignIntent(messages);
+    assertCondition(intent, "在线用例未识别为严格批量候选请求");
+    const response = await requestDeterministicDesign(intent, {
+      baseUrl,
+      apiKey,
+    });
+    assertCondition(
+      response.generation_mode === "fem_ready_cylindrical_shell",
+      `在线响应模式错误：${response.generation_mode}`,
+    );
+    assertCondition(
+      typeof onlineCase.expectedExternalPressureMPa === "number" &&
+        Math.abs(
+          response.result.request.load_conditions.external_pressure_MPa -
+            onlineCase.expectedExternalPressureMPa,
+        ) < 1e-6,
+      "在线响应静水压力不匹配",
+    );
+    assertCondition(
+      response.result.candidates.every(
+        (candidate) =>
+          candidate.layup.ply_count === onlineCase.expectedFEMPlyCount &&
+          candidate.layup.balanced === true &&
+          candidate.layup.symmetric ===
+            candidate.layup.angles_deg.every(
+              (angle, index, sequence) =>
+                angle === sequence[sequence.length - index - 1],
+            ) &&
+          candidate.provenance.source_laminate_stiffness_validation
+            .status === "recomputed_from_explicit_sequence",
+      ),
+      "在线 FEM-ready 候选的层数、铺层声明或源表刚度追溯无效",
+    );
+    return `count=${response.result.candidate_count}, fingerprint=${response.result.design_fingerprint}`;
+  });
+}
+
+function evaluateContextBudgetRegression() {
+  const messages = [
+    { role: "system", content: "系统约束：必须如实说明证据边界。" },
+    { role: "user", content: "旧问题：请解释材料和边界条件。" },
+    { role: "assistant", content: "旧回答：" + "历史回答内容。".repeat(5000) },
+    { role: "user", content: "当前问题：请保留当前输入并给出完整回答。" },
+  ];
+  const bounded = applyCSGPTContextBudget(
+    messages,
+    { max_tokens: 16384 },
+    16384,
+  );
+  const contents = bounded.messages.map((message) => String(message.content));
+  assertCondition(contents.includes(messages[0].content), "系统消息未保留");
+  assertCondition(contents.includes(messages[3].content), "当前用户消息未保留");
+  assertCondition(
+    !contents.includes(messages[1].content),
+    "裁剪后留下了没有对应回答的旧用户消息",
+  );
+  assertCondition(
+    !contents.some((content) => content.startsWith("旧回答：")),
+    "超长旧回答未被裁剪",
+  );
+
+  const estimatedInput = bounded.messages.reduce(
+    (total, message) =>
+      total + 4 + estimateTokenLength(String(message.content)),
+    0,
+  );
+  const outputTokens = Number(bounded.rest.max_tokens);
+  assertCondition(
+    estimatedInput + outputTokens <= 16384 - CSGPT_CONTEXT_SAFETY_MARGIN,
+    "输出预算没有遵守共享上下文上限",
+  );
+}
+
 async function evaluateResearchModes(cases: CasesFile["researchModes"]) {
   const catalog = getResearchSearchToolCatalog();
   for (const mode of ["web", "academic", "standard", "patent"] as const) {
@@ -400,6 +598,11 @@ async function main() {
   await evaluateKnowledgeGraph(cases.knowledgeGraph);
   await evaluateFileExtraction(cases.fileExtraction);
   await evaluateFileContextIds(cases.fileContextIds);
+  await runCase("context-budget", "历史轮次裁剪与共享窗口预算", () => {
+    evaluateContextBudgetRegression();
+    return "system/current preserved; orphan history removed";
+  });
+  await evaluateDeterministicDesign(cases.deterministicDesign);
   await evaluateResearchModes(cases.researchModes);
   await evaluateOnlineResearch(cases.onlineResearch);
   await evaluateOnlineAcademicRelevance();

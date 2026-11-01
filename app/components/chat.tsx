@@ -34,6 +34,7 @@ import CancelIcon from "../icons/cancel.svg";
 import ImageIcon from "../icons/image.svg";
 import GraphIcon from "../icons/graph.svg";
 import SearchIcon from "../icons/search.svg";
+import DownloadIcon from "../icons/download.svg";
 
 import LightIcon from "../icons/light.svg";
 import DarkIcon from "../icons/dark.svg";
@@ -61,6 +62,7 @@ import {
 import {
   autoGrowTextArea,
   copyToClipboard,
+  downloadAs,
   getMessageFiles,
   getMessageImages,
   getMessageTextContent,
@@ -348,6 +350,47 @@ function UserFileSourcesView({
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function StructuredDesignArtifactView({
+  artifact,
+}: {
+  artifact?: ChatMessage["designArtifact"];
+}) {
+  if (!artifact) return null;
+
+  const result = artifact.result || {};
+  const candidateCount =
+    typeof result.candidate_count === "number" ? result.candidate_count : 0;
+  const fingerprint =
+    typeof result.design_fingerprint === "string"
+      ? result.design_fingerprint
+      : "未提供";
+  const isFEMReady = artifact.generation_mode === "fem_ready_cylindrical_shell";
+  const filePrefix = isFEMReady ? "fem-ready-candidates" : "design-candidates";
+
+  return (
+    <div className={styles["chat-message-design-artifact"]}>
+      <div className={styles["chat-message-design-artifact-info"]}>
+        <strong>
+          {isFEMReady ? "FEM-ready 结构化候选" : "结构化设计候选"}
+        </strong>
+        <span>
+          {candidateCount} 组，指纹 {fingerprint.slice(0, 16)}
+        </span>
+      </div>
+      <ChatAction
+        text={isFEMReady ? "下载 FEM JSON" : "下载候选 JSON"}
+        icon={<DownloadIcon />}
+        onClick={() =>
+          void downloadAs(
+            JSON.stringify(artifact, null, 2),
+            `${filePrefix}-${fingerprint.slice(0, 16)}.json`,
+          )
+        }
+      />
     </div>
   );
 }
@@ -2519,6 +2562,11 @@ function _Chat() {
                                 );
                               })}
                             </div>
+                          )}
+                          {!isUser && (
+                            <StructuredDesignArtifactView
+                              artifact={message.designArtifact}
+                            />
                           )}
                           {!isUser && (
                             <RagKgSourcesView sources={message.ragKgSources} />

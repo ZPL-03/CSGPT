@@ -26,10 +26,7 @@
       "fileName": "pressure-vessel-notes.txt",
       "mimeType": "text/plain",
       "content": "复合材料压力容器外压屈曲设计记录\\n半径 1200 mm，深度 6000 m。",
-      "expectedIncludes": [
-        "复合材料压力容器",
-        "6000 m"
-      ],
+      "expectedIncludes": ["复合材料压力容器", "6000 m"],
       "parser": "text"
     },
     {
@@ -37,10 +34,7 @@
       "fileName": "layup-table.csv",
       "mimeType": "text/csv",
       "content": "angle,thickness,material\\n90,0.25,T700/Epoxy\\n45,0.25,T700/Epoxy\\n",
-      "expectedIncludes": [
-        "angle",
-        "T700/Epoxy"
-      ],
+      "expectedIncludes": ["angle", "T700/Epoxy"],
       "parser": "csv"
     }
   ],
@@ -53,10 +47,64 @@
         "/api/other/cm-file-003",
         "/api/files/cm-file-001"
       ],
-      "expectedIds": [
-        "cm-file-001",
-        "cm-file-002"
-      ]
+      "expectedIds": ["cm-file-001", "cm-file-002"]
+    }
+  ],
+  "deterministicDesign": [
+    {
+      "name": "深海耐压壳 50 组严格候选",
+      "prompt": "我现在想要设计一款能够在5000米水深下安全使用的复合材料耐压壳，其结构形式两端为金属封头，中间是采用缠绕工艺制备的复合材料圆柱壳。圆柱壳长度为600mm，内半径为150mm，你来直接生成满足这种设计要求的50组方案，并详细解释方案生成的过程。",
+      "expectedDetected": true,
+      "expectedMode": "fem_ready_cylindrical_shell",
+      "expectedCandidateCount": 50,
+      "expectedLengthMm": 600,
+      "expectedRadiusMm": 150,
+      "expectedServiceDepthM": 5000,
+      "expectedExternalPressureMPa": 50.259081,
+      "expectedFEMPlyCount": 40
+    },
+    {
+      "name": "自然限定语中的 FEM-ready 50 组候选",
+      "prompt": "请针对以下任务生成50组可直接进入有限元校核流程的候选方案：5000米水深，复合材料圆柱壳长度600 mm、内半径150 mm，两端为金属封头，制造工艺为纤维缠绕。",
+      "expectedDetected": true,
+      "expectedMode": "fem_ready_cylindrical_shell",
+      "expectedCandidateCount": 50,
+      "expectedLengthMm": 600,
+      "expectedRadiusMm": 150,
+      "expectedServiceDepthM": 5000,
+      "expectedExternalPressureMPa": 50.259081,
+      "expectedFEMPlyCount": 40
+    },
+    {
+      "name": "显式层数角度厚度和材料",
+      "prompt": "请为复合材料压力容器生成12组候选方案。要求总层数48层，允许铺层角度15°、45°、90°，不使用0°，单层厚度0.2mm，材料T700/EP。",
+      "expectedDetected": true,
+      "expectedMode": "concept_layup_enumeration",
+      "expectedCandidateCount": 12,
+      "expectedLayerCount": 48,
+      "expectedAllowedAngles": [15, 45, 90],
+      "expectedPlyThickness": 0.2,
+      "expectedParameters": {},
+      "expectedSymmetric": true,
+      "expectedBalanced": true
+    },
+    {
+      "name": "非对称载荷不覆盖对称铺层要求",
+      "prompt": "请为承受非对称载荷的复合材料圆柱壳生成3组候选方案，要求铺层对称且均衡。",
+      "expectedDetected": true,
+      "expectedMode": "concept_layup_enumeration",
+      "expectedCandidateCount": 3,
+      "expectedLayerCount": 60,
+      "expectedAllowedAngles": [30, 45, 60, 90],
+      "expectedPlyThickness": null,
+      "expectedParameters": {},
+      "expectedSymmetric": true,
+      "expectedBalanced": true
+    },
+    {
+      "name": "非批量解释不触发确定性枚举",
+      "prompt": "请解释复合材料耐压壳为什么需要考虑初始缺陷和非线性屈曲。",
+      "expectedDetected": false
     }
   ],
   "researchModes": [

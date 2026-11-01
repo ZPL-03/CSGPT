@@ -74,6 +74,7 @@ model Message {
   researchSources    Json?
   sessionFileSources Json?
   userFileSources    Json?
+  designArtifact     Json?
   createdAt          DateTime     @default(now())
 
   @@index([conversationId])

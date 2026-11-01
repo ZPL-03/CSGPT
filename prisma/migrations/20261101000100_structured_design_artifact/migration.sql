@@ -1,0 +1,2 @@
+ALTER TABLE "Message"
+ADD COLUMN IF NOT EXISTS "designArtifact" JSONB;

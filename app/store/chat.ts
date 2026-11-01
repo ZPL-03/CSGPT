@@ -71,6 +71,7 @@ import {
 } from "../utils/user-file-sources";
 import { parseControlledToolRecordsHeader } from "../utils/controlled-tool-records";
 import { extractFileIdsFromMessageContent } from "../utils/file-context-ids";
+import type { CSGPTDesignArtifact } from "../utils/structured-design";
 
 const localStorage = safeLocalStorage();
 const CSGPT_CONTEXT_WINDOW_TOKENS = CSGPT_CONTEXT_LENGTH;
@@ -103,6 +104,8 @@ export type ChatMessage = RequestMessage & {
   researchSources?: ResearchSource[];
   sessionFileSources?: SessionFileSource[];
   userFileSources?: UserFileSource[];
+  /** 结构化设计候选；Markdown 仅是其可读视图。 */
+  designArtifact?: CSGPTDesignArtifact;
 };
 
 function appendControlledToolRecords(
@@ -806,6 +809,9 @@ export const useChatStore = createPersistStore(
                 botMessage.userFileSources = userFileSources;
               }
               appendControlledToolRecords(botMessage, responseRes);
+              if (metadata?.designArtifact) {
+                botMessage.designArtifact = metadata.designArtifact;
+              }
               if (message) {
                 botMessage.content =
                   metadata?.finishReason === "length"

@@ -147,6 +147,7 @@ export async function loadAllConversationsFromDB(): Promise<any[]> {
               researchSources: m.researchSources,
               sessionFileSources: m.sessionFileSources,
               userFileSources: m.userFileSources,
+              designArtifact: m.designArtifact,
               streaming: false,
             })),
             stat: { tokenCount: 0, wordCount: 0, charCount: 0 },

@@ -105,6 +105,8 @@ declare global {
       CSGPT_CS2_API_KEY?: string; // CS2 上游 API 密钥
       CSGPT_CS2_UPSTREAM_MODEL_NAME?: string; // CS2 上游实际模型名称
       CSGPT_CS2_CONTEXT_LENGTH?: string; // CS2 上游总上下文窗口
+      CSGPT_CS2_DESIGN_BASE_URL?: string; // CS2 统一设计服务地址
+      CSGPT_CS2_DESIGN_API_KEY?: string; // CS2 统一设计服务密钥
       CSGPT_CS3_BASE_URL?: string; // CS3 上游服务地址
       CSGPT_CS3_API_KEY?: string; // CS3 上游 API 密钥
       CSGPT_CS3_UPSTREAM_MODEL_NAME?: string; // CS3 上游实际模型名称
@@ -290,6 +292,10 @@ export const getServerSideConfig = () => {
       process.env.CSGPT_CS2_CONTEXT_LENGTH,
       CSGPT_CONTEXT_LENGTH,
     ),
+    csgptCs2DesignBaseUrl:
+      process.env.CSGPT_CS2_DESIGN_BASE_URL || process.env.CSGPT_CS2_BASE_URL,
+    csgptCs2DesignApiKey:
+      process.env.CSGPT_CS2_DESIGN_API_KEY || process.env.CSGPT_CS2_API_KEY,
     csgptCs3BaseUrl: process.env.CSGPT_CS3_BASE_URL,
     csgptCs3ApiKey: process.env.CSGPT_CS3_API_KEY,
     csgptCs3UpstreamModelName: process.env.CSGPT_CS3_UPSTREAM_MODEL_NAME,

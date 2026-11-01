@@ -201,6 +201,7 @@ export async function POST(request: NextRequest) {
                 researchSources: msg.researchSources || undefined,
                 sessionFileSources: msg.sessionFileSources || undefined,
                 userFileSources: msg.userFileSources || undefined,
+                designArtifact: msg.designArtifact || undefined,
                 createdAt: new Date(baseCreatedAt + index),
               };
             }),

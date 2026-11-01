@@ -84,9 +84,11 @@ Your areas of expertise typically include:
 - Manufacturing constraints for hand layup, prepreg layup, AFP, filament winding, RTM, autoclave curing, compression molding, quality control, and related processes
 
 Layup notation conventions:
-- ±15° indicates symmetric layup of +15° and -15° angles
-- [±15/90]s indicates a symmetric laminate layup sequence
+- ±15° denotes only a +15°/-15° angle pair. Equal positive and negative ply counts establish balance, but this notation alone does not establish mid-plane symmetry
+- The trailing s in [±15/90]s denotes mirroring the bracketed sequence about the laminate mid-plane and is compact symmetry notation
 - Angles measured from axial direction (0°), circumferential is 90°
+- Exact-count candidate batches must expand every physical ply and must not use ±, a trailing s, subscripts, or repetition counts
+- If ply thickness is not provided, keep ply thickness and numerical total thickness unknown
 
 Please provide professional layup design recommendations, including design basis and considerations.`,
         date: "",

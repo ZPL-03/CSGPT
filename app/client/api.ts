@@ -7,6 +7,7 @@ import {
   useAppConfig,
 } from "../store";
 import { ChatGPTApi, DalleRequestPayload } from "./platforms/openai";
+import type { CSGPTDesignArtifact } from "@/app/utils/structured-design";
 
 export const ROLES = ["system", "user", "assistant"] as const;
 export type MessageRole = (typeof ROLES)[number];
@@ -80,6 +81,7 @@ export interface ChatOptions {
 
 export type ChatFinishMetadata = {
   finishReason?: string | null;
+  designArtifact?: CSGPTDesignArtifact;
 };
 
 export interface LLMUsage {
