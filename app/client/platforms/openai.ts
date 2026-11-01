@@ -307,8 +307,15 @@ export class ChatGPTApi implements LLMApi {
               ? fileContent + "\n\n" + content
               : [{ type: "text", text: fileContent }, ...content];
         }
-        if (!(isO1OrO3 && v.role === "system"))
-          messages.push({ role: v.role, content });
+        if (!(isO1OrO3 && v.role === "system")) {
+          const requestMessage = { role: v.role, content } as any;
+          if (typeof (v as any)._csgptContextPriority === "number") {
+            requestMessage._csgptContextPriority = (
+              v as any
+            )._csgptContextPriority;
+          }
+          messages.push(requestMessage);
+        }
       }
 
       // O1 系列模型的协议不包含图片、工具调用、system 角色、流式和 temperature 等参数。

@@ -9,7 +9,7 @@ import {
 import { ChatGPTApi, DalleRequestPayload } from "./platforms/openai";
 import type { CSGPTDesignArtifact } from "@/app/utils/structured-design";
 
-export const ROLES = ["system", "user", "assistant"] as const;
+export const ROLES = ["system", "developer", "user", "assistant"] as const;
 export type MessageRole = (typeof ROLES)[number];
 
 export type ChatModel = ModelType;
@@ -34,6 +34,7 @@ export interface MultimodalContent {
 export interface RequestMessage {
   role: MessageRole;
   content: string | MultimodalContent[];
+  _csgptContextPriority?: number;
 }
 
 export type ChatSessionFileRecord = {

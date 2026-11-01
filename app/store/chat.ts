@@ -122,6 +122,82 @@ function appendControlledToolRecords(
   message.tools = [...(message.tools || []), ...nextRecords];
 }
 
+function buildStructuredDesignContext(messages: ChatMessage[]) {
+  const source = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.designArtifact);
+  const artifact = source?.designArtifact;
+  if (!artifact || !artifact.result) return null;
+
+  const result = artifact.result as Record<string, unknown>;
+  const candidates = Array.isArray(result.candidates)
+    ? result.candidates.map((candidate) => {
+        const value = candidate as Record<string, any>;
+        const layup = value.layup as Record<string, unknown> | undefined;
+        const material = value.material_system as
+          | Record<string, unknown>
+          | undefined;
+        const provenance = value.provenance as
+          | Record<string, unknown>
+          | undefined;
+        return {
+          candidate_id: value.candidate_id,
+          design_revision_id: value.design_revision_id,
+          geometry: value.geometry,
+          layup: layup
+            ? {
+                ply_count: layup.ply_count,
+                angles_deg: layup.angles_deg,
+                ply_thickness_mm: layup.ply_thickness_mm,
+                symmetric: layup.symmetric,
+                balanced: layup.balanced,
+              }
+            : {
+                layer_count: value.layer_count,
+                layup_deg: value.layup_deg,
+                ply_thickness_mm: value.ply_thickness_mm,
+                total_thickness_mm: value.total_thickness_mm,
+                symmetric: value.symmetric,
+                balanced: value.balanced,
+              },
+          material: material
+            ? { name: material.name, material_key: material.material_key }
+            : value.material,
+          load_conditions: value.load_conditions,
+          boundary_conditions: value.boundary_conditions,
+          design_targets: value.design_targets,
+          provenance: provenance
+            ? {
+                source_row_number: provenance.source_row_number,
+                source_sha256: provenance.source_sha256,
+                geometry_match: provenance.geometry_match,
+                historical_fem_reference: provenance.historical_fem_reference,
+              }
+            : undefined,
+        };
+      })
+    : [];
+
+  return {
+    role: "developer" as const,
+    _csgptContextPriority: 90,
+    content: [
+      "上一轮确定性设计工件的结构化事实（优先于上一轮自然语言表格）：",
+      JSON.stringify({
+        generation_mode: artifact.generation_mode,
+        contract_version: artifact.contract_version,
+        engine_version: artifact.engine_version,
+        engine_fingerprint: artifact.engine_fingerprint,
+        candidate_count: result.candidate_count,
+        design_fingerprint: result.design_fingerprint,
+        candidates,
+      }),
+      "只引用上述字段解释；不得重新生成、改写或补充候选，也不得把历史参考值写成当前 Abaqus 结果。",
+    ].join("\n"),
+    date: "",
+  } as ChatMessage;
+}
+
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
   return {
     id: nanoid(),
@@ -919,6 +995,7 @@ export const useChatStore = createPersistStore(
 
         // 上下文预置提示词
         const contextPrompts = session.mask.context.slice();
+        const structuredDesignContext = buildStructuredDesignContext(messages);
 
         // 系统提示词，用于模拟 ChatGPT Web 体验
         const shouldInjectSystemPrompts =
@@ -1007,6 +1084,7 @@ export const useChatStore = createPersistStore(
         ) {
           const msg = messages[i];
           if (!msg || msg.isError) continue;
+          if (msg.role === "assistant" && msg.designArtifact) continue;
           tokenCount += estimateTokenLength(getMessageTextContent(msg));
           reversedRecentMessages.push(msg);
         }
@@ -1015,6 +1093,7 @@ export const useChatStore = createPersistStore(
           ...systemPrompts,
           ...longTermMemoryPrompts,
           ...contextPrompts,
+          ...(structuredDesignContext ? [structuredDesignContext] : []),
           ...reversedRecentMessages.reverse(),
         ];
 
