@@ -26,6 +26,10 @@ import {
   CSGPT_CONTEXT_SAFETY_MARGIN,
   applyCSGPTContextBudget,
 } from "../app/utils/csgpt-context-budget";
+import {
+  buildDeterministicLaminateAnalysis,
+  detectLaminateAnalysisIntent,
+} from "../app/utils/server-laminate-analysis";
 import { estimateTokenLength } from "../app/utils/token";
 import type { RagKgDocumentSource } from "../app/utils/rag-kg-sources";
 
@@ -550,6 +554,36 @@ function evaluateContextBudgetRegression() {
   );
 }
 
+function evaluateLaminateDeterministicFacts() {
+  const messages = [
+    {
+      role: "assistant",
+      content:
+        "| 编号 | 对称 | 均衡 | 40 层显式铺层（外到内） |\n|---|---|---|---|\n| TMP_1 | 否 | 是 | [90°/90°/90°/90°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/25°/-25°/80°/-80°/90°/90°/90°/90°] |",
+    },
+    {
+      role: "user",
+      content:
+        "请解释 TMP_1 的 ABD、对称性和均衡性，不要重新生成候选，也不要猜测当前 Abaqus 结果。",
+    },
+  ];
+  assertCondition(
+    detectLaminateAnalysisIntent(messages),
+    "未识别层合板事实核验问题",
+  );
+  const answer = buildDeterministicLaminateAnalysis(messages);
+  assertCondition(
+    answer.includes("TMP_1：40 层；逐层复算为 symmetric=false, balanced=true"),
+    "没有按显式层序复算 TMP_1 的布尔属性",
+  );
+  assertCondition(answer.includes("第 5 层"), "没有暴露对称性首个不一致位置");
+  assertCondition(
+    answer.includes("不能推出 B=0") &&
+      answer.includes("不是当前 Abaqus 求解结果"),
+    "没有保留 B 矩阵和当前 FEM 证据边界",
+  );
+}
+
 async function evaluateResearchModes(cases: CasesFile["researchModes"]) {
   const catalog = getResearchSearchToolCatalog();
   for (const mode of ["web", "academic", "standard", "patent"] as const) {
@@ -705,6 +739,10 @@ async function main() {
   await runCase("context-budget", "历史轮次裁剪与共享窗口预算", () => {
     evaluateContextBudgetRegression();
     return "system/current preserved; orphan history removed";
+  });
+  await runCase("laminate-analysis", "显式铺层序列事实复核", () => {
+    evaluateLaminateDeterministicFacts();
+    return "sequence symmetry/balance and ABD evidence boundary preserved";
   });
   await evaluateDeterministicDesign(cases.deterministicDesign);
   await evaluateResearchModes(cases.researchModes);
