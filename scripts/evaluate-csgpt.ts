@@ -606,6 +606,43 @@ function evaluateLaminateDeterministicFacts() {
       !contextRecovered.includes("第 1 层 90° 与第 40 层 90°"),
     "没有跳过缺少显式铺层的摘要表并恢复原始候选层序",
   );
+
+  const structuredContext = [
+    {
+      role: "system",
+      content: "上一轮结果摘要不含逐层铺层。",
+    },
+    {
+      role: "developer",
+      content: `上一轮结构化设计工件：${JSON.stringify({
+        result: {
+          candidates: [
+            {
+              candidate_id: "TMP_1",
+              layup: {
+                angles_deg: [
+                  90, 90, 90, 90, 25, -25, 80, -80, 25, -25, 80, -80,
+                  25, -25, 80, -80, 25, -25, 80, -80, 25, -25, 80, -80,
+                  25, -25, 80, -80, 25, -25, 80, -80, 25, -25, 80, -80,
+                  90, 90, 90, 90,
+                ],
+                symmetric: false,
+                balanced: true,
+              },
+            },
+          ],
+        },
+      })}`,
+    },
+    fieldNameFollowup[1],
+    fieldNameFollowup[2],
+  ];
+  const structuredAnswer = buildDeterministicLaminateAnalysis(structuredContext);
+  assertCondition(
+    structuredAnswer.includes("TMP_1：40 层；逐层复算为 symmetric=false, balanced=true") &&
+      structuredAnswer.includes("第 5 层"),
+    "没有从结构化设计工件复算显式层序",
+  );
 }
 
 async function evaluateResearchModes(cases: CasesFile["researchModes"]) {

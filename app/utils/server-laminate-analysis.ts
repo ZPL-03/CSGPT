@@ -53,6 +53,40 @@ function parseSequence(value: string | undefined) {
   );
 }
 
+function extractEmbeddedJson(text: string): unknown {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}" && --depth === 0) {
+      try {
+        return JSON.parse(text.slice(start, index + 1));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 function isSymmetric(sequence: number[]) {
   return (
     sequence.length > 0 &&
@@ -90,6 +124,48 @@ function findSymmetryMismatch(sequence: number[]) {
   return undefined;
 }
 
+function parseStructuredCandidates(text: string): LaminateCandidate[] {
+  const root = extractEmbeddedJson(text) as {
+    result?: { candidates?: unknown[] };
+    candidates?: unknown[];
+  } | null;
+  const candidates = root?.result?.candidates || root?.candidates;
+  if (!Array.isArray(candidates)) return [];
+
+  return candidates.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const candidate = value as {
+      candidate_id?: unknown;
+      layup?: { angles_deg?: unknown; symmetric?: unknown; balanced?: unknown };
+    };
+    const candidateId = String(candidate.candidate_id || "");
+    const angles = candidate.layup?.angles_deg;
+    if (!/^TMP_\d+$/i.test(candidateId) || !Array.isArray(angles)) {
+      return [];
+    }
+    const sequence = angles
+      .map((angle) => (typeof angle === "number" ? angle : Number(angle)))
+      .filter((angle) => Number.isFinite(angle));
+    if (!sequence.length) return [];
+    const parsed: LaminateCandidate = {
+      candidateId,
+      sequence,
+      declaredSymmetric:
+        typeof candidate.layup?.symmetric === "boolean"
+          ? candidate.layup.symmetric
+          : null,
+      declaredBalanced:
+        typeof candidate.layup?.balanced === "boolean"
+          ? candidate.layup.balanced
+          : null,
+      symmetric: isSymmetric(sequence),
+      balanced: isBalanced(sequence),
+      mismatch: findSymmetryMismatch(sequence),
+    };
+    return [parsed];
+  });
+}
+
 function parseCandidates(text: string): LaminateCandidate[] {
   const lines = text.split(/\r?\n/);
   let headers: string[] | null = null;
@@ -121,7 +197,7 @@ function parseCandidates(text: string): LaminateCandidate[] {
       mismatch: findSymmetryMismatch(sequence),
     });
   }
-  return candidates;
+  return candidates.length ? candidates : parseStructuredCandidates(text);
 }
 
 function latestUserText(messages: any[]) {
@@ -140,7 +216,13 @@ function latestCandidateContext(messages: any[]) {
       (text) =>
         /\|\s*TMP_\d+\s*\|/.test(text) &&
         /(?:显式铺层|铺层.*外到内)/i.test(text),
-    ) || ""
+    ) ||
+    messageTexts.find(
+      (text) =>
+        /"(?:result"\s*:\s*)?candidates"\s*:\s*\[/i.test(text) &&
+        /"angles_deg"\s*:/i.test(text),
+    ) ||
+    ""
   );
 }
 
