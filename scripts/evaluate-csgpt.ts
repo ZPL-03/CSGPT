@@ -582,6 +582,19 @@ function evaluateLaminateDeterministicFacts() {
       answer.includes("不是当前 Abaqus 求解结果"),
     "没有保留 B 矩阵和当前 FEM 证据边界",
   );
+
+  const fieldNameFollowup = [
+    messages[0],
+    {
+      role: "user",
+      content:
+        "只核验已生成的 TMP_1 和 TMP_23，不要重新生成候选，也不要改变原候选表：分别返回两者的 symmetric、balanced；对每个 symmetric=false 的候选指出从外到内的第一个镜像不一致层位及两侧角度；明确当前 Abaqus 数值结果未知、FEM 校核仍为待运行。",
+    },
+  ];
+  assertCondition(
+    detectLaminateAnalysisIntent(fieldNameFollowup),
+    "未识别使用 symmetric/balanced/mirror 字段的层合板事实核验问题",
+  );
 }
 
 async function evaluateResearchModes(cases: CasesFile["researchModes"]) {

@@ -151,7 +151,7 @@ export function detectLaminateAnalysisIntent(messages: any[]) {
   ) {
     return false;
   }
-  return /(?:A\s*[,、/]?\s*B\s*[,、/]?\s*D|ABD|层合板|铺层|laminate|layup|对称性|均衡性|B\s*矩阵)/i.test(
+  return /(?:A\s*[,、/]?\s*B\s*[,、/]?\s*D|ABD|层合板|铺层|laminate|layup|对称性|均衡性|symmetric|balanced|mirror|镜像|B\s*矩阵)/i.test(
     text,
   );
 }
