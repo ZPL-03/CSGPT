@@ -586,6 +586,11 @@ function evaluateLaminateDeterministicFacts() {
   const fieldNameFollowup = [
     messages[0],
     {
+      role: "assistant",
+      content:
+        "## 核验结果\n\n| 编号 | 材料 | 对称 | 均衡 | 第一个镜像不一致位置 |\n|---|---|---|---|---|\n| TMP_1 | M40J/TDE-85 | 否 | 是 | 外到内第 1 层与第 40 层，角度分别为 90° 与 90° |",
+    },
+    {
       role: "user",
       content:
         "只核验已生成的 TMP_1 和 TMP_23，不要重新生成候选，也不要改变原候选表：分别返回两者的 symmetric、balanced；对每个 symmetric=false 的候选指出从外到内的第一个镜像不一致层位及两侧角度；明确当前 Abaqus 数值结果未知、FEM 校核仍为待运行。",
@@ -594,6 +599,12 @@ function evaluateLaminateDeterministicFacts() {
   assertCondition(
     detectLaminateAnalysisIntent(fieldNameFollowup),
     "未识别使用 symmetric/balanced/mirror 字段的层合板事实核验问题",
+  );
+  const contextRecovered = buildDeterministicLaminateAnalysis(fieldNameFollowup);
+  assertCondition(
+    contextRecovered.includes("第 5 层") &&
+      !contextRecovered.includes("第 1 层 90° 与第 40 层 90°"),
+    "没有跳过缺少显式铺层的摘要表并恢复原始候选层序",
   );
 }
 

@@ -135,7 +135,13 @@ function latestCandidateContext(messages: any[]) {
   const messageTexts = [...messages]
     .reverse()
     .map((message) => normalizeContent(message?.content));
-  return messageTexts.find((text) => /\|\s*TMP_\d+\s*\|/.test(text)) || "";
+  return (
+    messageTexts.find(
+      (text) =>
+        /\|\s*TMP_\d+\s*\|/.test(text) &&
+        /(?:显式铺层|铺层.*外到内)/i.test(text),
+    ) || ""
+  );
 }
 
 export function detectLaminateAnalysisIntent(messages: any[]) {
