@@ -282,3 +282,34 @@ export function applyCSGPTContextBudget(
 
   return { messages: boundedMessages, rest: boundedRest };
 }
+
+export function reconcileCSGPTMeasuredBudget(
+  request: ReturnType<typeof applyCSGPTContextBudget>,
+  measuredInputTokens: number,
+  contextLength: number,
+) {
+  if (
+    !Number.isSafeInteger(measuredInputTokens) ||
+    measuredInputTokens < 1 ||
+    !Number.isSafeInteger(contextLength) ||
+    contextLength < 1
+  ) {
+    throw new Error("后端分词计数无效，无法确认上下文预算。");
+  }
+  const requested =
+    request.rest.max_completion_tokens ?? request.rest.max_tokens;
+  const available =
+    contextLength - measuredInputTokens - CSGPT_CONTEXT_SAFETY_MARGIN;
+  if (available < Math.min(requested, CSGPT_MIN_OUTPUT_RESERVE)) {
+    throw new Error(
+      `后端确认输入为 ${measuredInputTokens} tokens，当前窗口没有足够回答空间。请减少历史或附件内容。`,
+    );
+  }
+  const outputTokens = Math.min(requested, available);
+  const rest = { ...request.rest };
+  for (const key of ["max_tokens", "max_completion_tokens"]) {
+    if (Object.prototype.hasOwnProperty.call(rest, key))
+      rest[key] = outputTokens;
+  }
+  return { messages: request.messages, rest };
+}

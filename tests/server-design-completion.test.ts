@@ -2,6 +2,64 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectLaminateAnalysisIntent } from "../app/utils/server-laminate-analysis";
 import {
+  applyCSGPTContextBudget,
+  reconcileCSGPTMeasuredBudget,
+} from "../app/utils/csgpt-context-budget";
+import { countVLLMChatTokens } from "../app/utils/server-vllm-tokenizer";
+
+test("实际分词约束共享窗口且不覆盖当前消息", () => {
+  const messages = [{ role: "user", content: "请总结候选及证据边界" }];
+  const request = applyCSGPTContextBudget(
+    messages,
+    { max_tokens: 3153 },
+    16384,
+  );
+  const result = reconcileCSGPTMeasuredBudget(request, 13806, 16384);
+  assert.equal(result.rest.max_tokens, 2066);
+  assert.deepEqual(result.messages, messages);
+  assert.throws(
+    () => reconcileCSGPTMeasuredBudget(request, 16000, 16384),
+    /没有足够/,
+  );
+  assert.throws(
+    () => reconcileCSGPTMeasuredBudget(request, NaN, 16384),
+    /无效/,
+  );
+});
+
+test("分词请求使用上游模型和实际消息，失败不回退为估算", async () => {
+  const original = globalThis.fetch;
+  let payload: any;
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "https://example.invalid/tokenize");
+    payload = JSON.parse(String(init?.body));
+    return Response.json({ count: 123, max_model_len: 8192 });
+  };
+  try {
+    const result = await countVLLMChatTokens({
+      baseUrl: "https://example.invalid/v1",
+      model: "adapter",
+      messages: [{ role: "user", content: "问题" }],
+      contextLength: 16384,
+    });
+    assert.deepEqual(result, { inputTokens: 123, contextLength: 8192 });
+    assert.equal(payload.model, "adapter");
+    assert.equal(payload.add_generation_prompt, true);
+    globalThis.fetch = async () => new Response("", { status: 503 });
+    await assert.rejects(
+      countVLLMChatTokens({
+        baseUrl: "https://example.invalid/v1",
+        model: "adapter",
+        messages: [],
+        contextLength: 16384,
+      }),
+      /分词请求失败/,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+import {
   buildDesignNarrativeInstruction,
   detectDeterministicDesignIntent,
   detectFEMReadyDesignIntent,

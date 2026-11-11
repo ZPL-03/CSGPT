@@ -60,7 +60,14 @@ import {
   appendDesignToOpenAIStream,
   prepareDesignNarrativeRest,
 } from "@/app/utils/server-design-completion";
-import { applyCSGPTContextBudget } from "@/app/utils/csgpt-context-budget";
+import {
+  applyCSGPTContextBudget,
+  reconcileCSGPTMeasuredBudget,
+} from "@/app/utils/csgpt-context-budget";
+import {
+  countVLLMChatTokens,
+  VLLMTokenizerError,
+} from "@/app/utils/server-vllm-tokenizer";
 import {
   buildDeterministicLaminateAnalysis,
   detectLaminateAnalysisIntent,
@@ -254,12 +261,16 @@ function getVisibleDedicatedCSGPTUpstreams(
 function resolveUpstreamCSGPTModel(
   requestedModel: string | undefined,
   config: ReturnType<typeof getServerSideConfig>,
-) {
+): string {
   const publicDefaultModel = getPublicCSGPTModel(config);
 
   const dedicatedUpstream = getDedicatedCSGPTUpstream(requestedModel, config);
   if (dedicatedUpstream) {
-    return dedicatedUpstream.upstreamModelName || requestedModel;
+    return (
+      dedicatedUpstream.upstreamModelName ||
+      requestedModel ||
+      publicDefaultModel
+    );
   }
 
   if (!requestedModel || requestedModel === publicDefaultModel) {
@@ -955,13 +966,27 @@ async function handleDedicatedCSGPTChatCompletions(
       requestRest,
       upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
     );
+    if (model === CSGPT_MODEL_2) {
+      const measured = await countVLLMChatTokens({
+        baseUrl: upstream.baseUrl,
+        apiKey: upstream.apiKey,
+        model: upstreamModel,
+        messages: normalizeMessagesToText(budgetedRequest.messages),
+        contextLength: upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
+      });
+      budgetedRequest = reconcileCSGPTMeasuredBudget(
+        budgetedRequest,
+        measured.inputTokens,
+        measured.contextLength,
+      );
+    }
   } catch (error: any) {
     return NextResponse.json(
       {
         error: true,
         message: error?.message || "CSGPT 请求输入超出上下文窗口",
       },
-      { status: 400 },
+      { status: error instanceof VLLMTokenizerError ? 502 : 400 },
     );
   }
 
