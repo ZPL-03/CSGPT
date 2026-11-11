@@ -50,9 +50,11 @@ export const useUserStore = create<UserState>()(
           const res = await fetch("/api/auth/me", {
             headers: { Authorization: `Bearer ${token}` },
           });
+          if (get().token !== token) return;
 
           if (res.ok) {
             const data = await res.json();
+            if (get().token !== token) return;
             set({ user: data.user, isLoggedIn: true });
           } else if (res.status === 401 || res.status === 404) {
             // 令牌无效，清除登录状态

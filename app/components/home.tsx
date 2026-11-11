@@ -145,6 +145,7 @@ function Screen() {
   const isAuth = location.pathname === Path.Auth;
 
   const userStore = useUserStore();
+  const { token, fetchUser } = userStore;
 
   const isMobileScreen = useMobileScreen();
   const shouldTightBorder =
@@ -152,10 +153,10 @@ function Screen() {
 
   useEffect(() => {
     // 验证用户令牌有效性
-    if (userStore.token) {
-      userStore.fetchUser();
+    if (token) {
+      fetchUser();
     }
-  }, [userStore]);
+  }, [token, fetchUser]);
 
   // 登录后从数据库加载对话，阻塞渲染直到数据就绪
   const [serverDataReady, setServerDataReady] = useState(false);
