@@ -37,7 +37,7 @@ export type FEMReadyDesignPayload = {
     seawater_density_kg_per_m3?: number;
     gravity_m_per_s2?: number;
   };
-  boundary_conditions: {
+  boundary_conditions?: {
     type: "END_CLAMPED" | "END_SIMPLY_SUPPORTED" | "FLANGE_CONSTRAINED";
   };
   materials?: string[];
@@ -125,6 +125,12 @@ type FEMReadyCandidate = {
       max_abs_error: number;
       absolute_tolerance: number;
     };
+  };
+  screening: {
+    candidate_role:
+      | "historically_screened_baseline"
+      | "exact_geometry_exploration"
+      | "nearest_neighbor_transfer_exploration";
   };
   fem_readiness: {
     current_fem_run_required: boolean;
@@ -355,14 +361,15 @@ function extractSafetyFactor(text: string) {
 
 function extractBoundaryType(
   text: string,
-): FEMReadyDesignPayload["boundary_conditions"]["type"] {
+): NonNullable<FEMReadyDesignPayload["boundary_conditions"]>["type"] | null {
   if (/(?:简支|simply\s*supported|SSSS)/i.test(text)) {
     return "END_SIMPLY_SUPPORTED";
   }
   if (/(?:固支|固定端|clamped|CCCC)/i.test(text)) {
     return "END_CLAMPED";
   }
-  return "FLANGE_CONSTRAINED";
+  if (/(?:法兰|flange)/i.test(text)) return "FLANGE_CONSTRAINED";
+  return null;
 }
 
 export function detectFEMReadyDesignIntent(
@@ -432,6 +439,9 @@ export function detectFEMReadyDesignIntent(
   if (totalThickness !== null) facts.push(`总厚度 ${totalThickness} mm`);
   if (materials.length) facts.push(`材料限定 ${materials.join("、")}`);
   if (safetyFactor !== null) facts.push(`安全系数 ${safetyFactor}`);
+  if (boundaryType !== null) facts.push(`端部边界 ${boundaryType}`);
+  if (explicitLayerCount !== null)
+    facts.push(`完整物理层数 ${explicitLayerCount}`);
   if (/金属封头/.test(text)) {
     facts.push("结构形式为两端金属封头与中间复合材料圆柱壳");
   }
@@ -439,7 +449,13 @@ export function detectFEMReadyDesignIntent(
   const assumptions = [
     "候选来自正式有限元表格参数域，表中历史结果只用于筛选参考，所有候选必须由当前 Abaqus 模型重新求解。",
     "当前计算合同只覆盖复合材料圆柱壳子模型；金属封头、法兰和连接细节未显式建模。",
+    "40 层顺序来自源表铺层模板，单层厚度由源行总厚度除以 40 得到，不是用户给定层厚。",
   ];
+  if (boundaryType === null) {
+    assumptions.push(
+      "端部边界未指定，圆柱壳子模型采用端部法兰等效约束，属于待确认的建模假设。",
+    );
+  }
   if (safetyFactor === null) {
     assumptions.push(
       "安全系数未给定，极限压力最低目标暂按服务外压设置，不能据此声明整机安全。 ",
@@ -464,7 +480,9 @@ export function detectFEMReadyDesignIntent(
         ? { external_pressure_MPa: externalPressure }
         : {}),
     },
-    boundary_conditions: { type: boundaryType },
+    ...(boundaryType !== null
+      ? { boundary_conditions: { type: boundaryType } }
+      : {}),
     ...(materials.length ? { materials } : {}),
     ...(safetyFactor !== null
       ? { design_targets: { safety_factor: safetyFactor } }
@@ -908,6 +926,11 @@ export function validateFEMReadyDesignResponse(
       !Number.isFinite(candidate.design_targets.ultimate_pressure_min_MPa) ||
       candidate.design_targets.ultimate_pressure_min_MPa <= 0 ||
       candidate.provenance.source_sha256 !== FEM_TABLE_SHA256 ||
+      ![
+        "historically_screened_baseline",
+        "exact_geometry_exploration",
+        "nearest_neighbor_transfer_exploration",
+      ].includes(candidate.screening?.candidate_role) ||
       candidate.provenance.historical_fem_reference.status !==
         "screening_reference_only_not_current_run" ||
       candidate.provenance.source_laminate_stiffness_validation.status !==
@@ -1044,6 +1067,17 @@ export function buildDesignNarrativeInstruction(
   ) {
     const request = response.result.request;
     const coverage = response.result.coverage;
+    const roleCounts = response.result.candidates.reduce(
+      (counts, candidate) => {
+        counts[candidate.screening.candidate_role] += 1;
+        return counts;
+      },
+      {
+        historically_screened_baseline: 0,
+        exact_geometry_exploration: 0,
+        nearest_neighbor_transfer_exploration: 0,
+      },
+    );
     return `当前请求由 CSGPT 工程设计路径处理。结构化引擎已从指纹固定的真实有限元表格中生成并校验 ${
       intent.candidateCount
     } 组可进入 CSDM_cph 圆柱壳子模型的候选。你只负责工程解释，不得重新枚举、删改或补写候选。
@@ -1051,12 +1085,18 @@ export function buildDesignNarrativeInstruction(
 请用简体中文写四个简洁但完整的小节：
 1. “任务与 FEM 输入”：说明圆柱段几何、服务外压 ${
       request.load_conditions.external_pressure_MPa
-    } MPa、边界条件、材料范围、40 层显式铺层、总厚度和初始缺陷均已进入结构化候选。
+    } MPa、边界条件、材料范围、40 层显式铺层、总厚度和初始缺陷均已进入结构化候选。40 层来自源表模板，不得把模型或源表默认值说成用户输入；形成输入包不表示已导入 CSDM_cph 或运行有限元。
 2. “候选来源与筛选”：说明正式表格共 ${
       response.result.source_table.row_count
     } 行；目标几何有 ${coverage.exact_geometry_row_count} 行，其中 ${
       coverage.exact_geometry_reference_at_or_above_target_count
-    } 行历史参考极限压力不低于当前目标。必须明确历史值只用于筛选，不是当前 Abaqus 结果；超出完全匹配案例数量的候选采用表格域内最近邻参数组合迁移，并固定为用户几何后重新校核。
+    } 行历史参考极限压力不低于当前目标。实际选中的候选角色为：同几何历史基线 ${
+      roleCounts.historically_screened_baseline
+    } 组，同几何探索 ${
+      roleCounts.exact_geometry_exploration
+    } 组，最近邻迁移探索 ${
+      roleCounts.nearest_neighbor_transfer_exploration
+    } 组。三者分别说明，不得把同几何探索写成几何迁移。历史值只用于筛选，不是当前 Abaqus 结果；只有最近邻迁移探索固定为用户几何后需要重新评估来源几何差异。
 3. “数据流”：说明每个候选包含稳定 design_revision_id、几何、40 个逐层角度、材料属性、缺陷、载荷、边界和目标，可作为 CSDM_cph 当前圆柱壳校核的输入；有限元结果必须按 design_revision_id 回写。
 4. “适用边界”：明确当前只建模复合材料圆柱壳，未显式建模金属封头、法兰和连接；未完成当前 Abaqus 求解、网格收敛、缺陷敏感性、渐进损伤、制造偏差和试验验证前，不得宣称整机在目标水深安全。
 

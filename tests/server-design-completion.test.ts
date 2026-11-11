@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildDesignNarrativeInstruction,
+  detectFEMReadyDesignIntent,
+  type FEMReadyDesignServiceResponse,
+} from "../app/utils/server-deterministic-design";
+import {
   appendDesignToOpenAICompletion,
   appendDesignToOpenAIStream,
   prepareDesignNarrativeRest,
@@ -31,6 +36,65 @@ const artifact: CSGPTDesignArtifact = {
   },
 };
 const narrative = "需求与边界\n圆柱段长度 600 mm。";
+
+const designRequest =
+  "生成50组复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm，两端金属封头。";
+test("未指定的边界和层数不会归为用户输入", () => {
+  const intent = detectFEMReadyDesignIntent([
+    { role: "user", content: designRequest },
+  ]);
+  assert.ok(intent);
+  assert.equal(intent.payload.boundary_conditions, undefined);
+  assert.ok(intent.assumptions.some((item) => item.includes("法兰等效约束")));
+  assert.ok(intent.assumptions.some((item) => item.includes("40 层")));
+  assert.ok(
+    !intent.facts.some(
+      (item) => item.includes("40") || item.includes("FLANGE"),
+    ),
+  );
+  const explicit = detectFEMReadyDesignIntent([
+    { role: "user", content: designRequest + "两端固支，完整物理层数40层。" },
+  ]);
+  assert.equal(explicit?.payload.boundary_conditions?.type, "END_CLAMPED");
+  assert.ok(explicit?.facts.some((item) => item.includes("40")));
+});
+
+test("设计说明按实际选中角色区分同几何探索和迁移探索", () => {
+  const intent = detectFEMReadyDesignIntent([
+    { role: "user", content: designRequest },
+  ]);
+  assert.ok(intent);
+  const response = {
+    generation_mode: "fem_ready_cylindrical_shell",
+    result: {
+      request: { load_conditions: { external_pressure_MPa: 50.259081 } },
+      source_table: { row_count: 5857 },
+      coverage: {
+        exact_geometry_row_count: 48,
+        exact_geometry_reference_at_or_above_target_count: 8,
+      },
+      candidates: [
+        ...Array.from({ length: 8 }, () => ({
+          screening: { candidate_role: "historically_screened_baseline" },
+        })),
+        ...Array.from({ length: 40 }, () => ({
+          screening: { candidate_role: "exact_geometry_exploration" },
+        })),
+        ...Array.from({ length: 2 }, () => ({
+          screening: {
+            candidate_role: "nearest_neighbor_transfer_exploration",
+          },
+        })),
+      ],
+    },
+  } as unknown as FEMReadyDesignServiceResponse;
+  const instruction = buildDesignNarrativeInstruction(intent, response);
+  assert.match(
+    instruction,
+    /同几何历史基线 8 组，同几何探索 40 组，最近邻迁移探索 2 组/,
+  );
+  assert.match(instruction, /不表示已导入 CSDM_cph 或运行有限元/);
+});
 const appendix =
   "\n" +
   candidates.map((item) => `| ${item.candidate_id} | 待校核 |`).join("\n");
