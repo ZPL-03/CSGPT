@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "eval:csgpt": "tsx scripts/evaluate-csgpt.ts",
+    "test:design-completion": "tsx --test tests/server-design-completion.test.ts",
     "verify:csllm": "tsx scripts/sync-csllm-runtime.ts --verify",
     "sync:csllm": "tsx scripts/sync-csllm-runtime.ts",
     "db:migrate": "prisma migrate deploy",

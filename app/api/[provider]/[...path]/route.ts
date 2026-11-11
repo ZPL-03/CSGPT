@@ -50,13 +50,16 @@ import {
   type DesignServiceResponse,
 } from "@/app/utils/server-deterministic-design";
 import {
-  CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD,
-  CSGPT_DESIGN_ARTIFACT_FIELD,
   CSGPT_DESIGN_ARTIFACT_HEADER,
   encodeCSGPTDesignArtifactHeader,
   toCSGPTDesignArtifact,
   type CSGPTDesignArtifact,
 } from "@/app/utils/structured-design";
+import {
+  appendDesignToOpenAICompletion,
+  appendDesignToOpenAIStream,
+  prepareDesignNarrativeRest,
+} from "@/app/utils/server-design-completion";
 import { applyCSGPTContextBudget } from "@/app/utils/csgpt-context-budget";
 import {
   buildDeterministicLaminateAnalysis,
@@ -94,17 +97,7 @@ type CSGPTUpstream = {
 };
 
 const DEFAULT_CSGPT_CONTEXT_LENGTH = CSGPT_CONTEXT_LENGTH;
-const DESIGN_NARRATIVE_MAX_TOKENS = 1600;
 const SYNTHETIC_STREAM_CHUNK_CHARS = 1200;
-const DESIGN_ARTIFACT_STREAM_CHUNK_CHARS = 12000;
-
-function getDesignCompletionFinishReason(upstreamFinishReason: string | null) {
-  // 确定性候选附录已经独立完整校验；上游 length 只表示说明文字达到预算。
-  // 其他完成原因继续向客户端暴露，避免把上游异常静默转换为成功。
-  return !upstreamFinishReason || upstreamFinishReason === "length"
-    ? "stop"
-    : upstreamFinishReason;
-}
 
 function buildSyntheticCSGPTStream(content: string, model: string) {
   const encoder = new TextEncoder();
@@ -244,201 +237,8 @@ function prepareDesignNarrativeMessages(messages: any[], instruction: string) {
   return result;
 }
 
-function prepareDesignNarrativeRest(rest: Record<string, any>) {
-  const result = { ...rest };
-  delete result.max_completion_tokens;
-  result.max_tokens = DESIGN_NARRATIVE_MAX_TOKENS;
-  const requestedTemperature = Number(rest.temperature);
-  result.temperature = Number.isFinite(requestedTemperature)
-    ? Math.min(Math.max(requestedTemperature, 0), 0.3)
-    : 0.2;
-  return result;
-}
-
 function openAIStreamEvent(payload: unknown) {
   return `data: ${JSON.stringify(payload)}\n\n`;
-}
-
-function appendDesignToOpenAIStream(
-  upstreamBody: ReadableStream<Uint8Array>,
-  appendix: string,
-  model: string,
-  designArtifact: CSGPTDesignArtifact,
-) {
-  const reader = upstreamBody.getReader();
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  const completionId = `chatcmpl-csgpt-design-${Date.now()}`;
-  const created = Math.floor(Date.now() / 1000);
-
-  return new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let buffer = "";
-      let upstreamFinishReason: string | null = null;
-      const forwardEvent = (event: string) => {
-        const lines = event.split(/\r?\n/).flatMap((line) => {
-          if (line.trim() === "data: [DONE]") return [];
-          if (!line.startsWith("data:")) return [line];
-          const rawPayload = line.slice(5).trim();
-          try {
-            const payload = JSON.parse(rawPayload);
-            if (Array.isArray(payload?.choices)) {
-              payload.choices = payload.choices.map((choice: any) => {
-                if (choice?.finish_reason) {
-                  upstreamFinishReason = String(choice.finish_reason);
-                }
-                return choice;
-              });
-              return [`data: ${JSON.stringify(payload)}`];
-            }
-          } catch {
-            // 非 JSON 数据保持上游原样；正式 OpenAI SSE 数据应为单行 JSON。
-          }
-          return [line];
-        });
-        if (lines.some((line) => line.trim())) {
-          controller.enqueue(encoder.encode(`${lines.join("\n")}\n\n`));
-        }
-      };
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          buffer += decoder.decode(value, { stream: !done });
-          let separator = buffer.match(/\r?\n\r?\n/);
-          while (separator?.index !== undefined) {
-            const event = buffer.slice(0, separator.index);
-            buffer = buffer.slice(separator.index + separator[0].length);
-            forwardEvent(event);
-            separator = buffer.match(/\r?\n\r?\n/);
-          }
-          if (done) break;
-        }
-        if (buffer.trim()) forwardEvent(buffer);
-
-        for (
-          let offset = 0;
-          offset < appendix.length;
-          offset += SYNTHETIC_STREAM_CHUNK_CHARS
-        ) {
-          controller.enqueue(
-            encoder.encode(
-              openAIStreamEvent({
-                id: completionId,
-                object: "chat.completion.chunk",
-                created,
-                model,
-                choices: [
-                  {
-                    index: 0,
-                    delta: {
-                      content: appendix.slice(
-                        offset,
-                        offset + SYNTHETIC_STREAM_CHUNK_CHARS,
-                      ),
-                    },
-                    finish_reason: null,
-                  },
-                ],
-              }),
-            ),
-          );
-        }
-        const serializedArtifact = JSON.stringify(designArtifact);
-        const artifactChunkTotal = Math.ceil(
-          serializedArtifact.length / DESIGN_ARTIFACT_STREAM_CHUNK_CHARS,
-        );
-        for (let index = 0; index < artifactChunkTotal; index += 1) {
-          controller.enqueue(
-            encoder.encode(
-              openAIStreamEvent({
-                id: completionId,
-                object: "chat.completion.chunk",
-                created,
-                model,
-                choices: [
-                  {
-                    index: 0,
-                    delta: {},
-                    finish_reason: null,
-                  },
-                ],
-                [CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD]: {
-                  id: completionId,
-                  index,
-                  total: artifactChunkTotal,
-                  data: serializedArtifact.slice(
-                    index * DESIGN_ARTIFACT_STREAM_CHUNK_CHARS,
-                    (index + 1) * DESIGN_ARTIFACT_STREAM_CHUNK_CHARS,
-                  ),
-                },
-              }),
-            ),
-          );
-        }
-        controller.enqueue(
-          encoder.encode(
-            openAIStreamEvent({
-              id: completionId,
-              object: "chat.completion.chunk",
-              created,
-              model,
-              choices: [
-                {
-                  index: 0,
-                  delta: {},
-                  finish_reason:
-                    getDesignCompletionFinishReason(upstreamFinishReason),
-                },
-              ],
-            }),
-          ),
-        );
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        controller.close();
-      } catch (error) {
-        controller.error(error);
-      } finally {
-        reader.releaseLock();
-      }
-    },
-    cancel(reason) {
-      return reader.cancel(reason);
-    },
-  });
-}
-
-function appendDesignToOpenAICompletion(
-  data: any,
-  appendix: string,
-  designArtifact: CSGPTDesignArtifact,
-) {
-  const choice = data?.choices?.[0];
-  if (
-    !choice ||
-    !choice.message ||
-    typeof choice.message.content !== "string"
-  ) {
-    throw new Error("CS2 上游返回的非流式消息结构无效。");
-  }
-  return {
-    ...data,
-    [CSGPT_DESIGN_ARTIFACT_FIELD]: designArtifact,
-    choices: data.choices.map((item: any, index: number) =>
-      index === 0
-        ? {
-            ...item,
-            message: {
-              ...item.message,
-              content: `${item.message.content}${appendix}`,
-            },
-            finish_reason: getDesignCompletionFinishReason(
-              item.finish_reason || null,
-            ),
-          }
-        : item,
-    ),
-  };
 }
 
 function getVisibleDedicatedCSGPTUpstreams(
@@ -1124,7 +924,6 @@ async function handleDedicatedCSGPTChatCompletions(
       requestMessages,
       buildDesignNarrativeInstruction(designIntent, designResponse),
     );
-    requestRest = prepareDesignNarrativeRest(rest);
     designAppendix = renderDeterministicDesignAppendix(
       designIntent,
       designResponse,
@@ -1148,6 +947,9 @@ async function handleDedicatedCSGPTChatCompletions(
 
   let budgetedRequest: ReturnType<typeof applyCSGPTContextBudget>;
   try {
+    if (designIntent && designResponse) {
+      requestRest = prepareDesignNarrativeRest(rest);
+    }
     budgetedRequest = applyCSGPTContextBudget(
       requestMessages,
       requestRest,
