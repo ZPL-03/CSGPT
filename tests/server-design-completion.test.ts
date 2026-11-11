@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { detectLaminateAnalysisIntent } from "../app/utils/server-laminate-analysis";
 import {
   buildDesignNarrativeInstruction,
+  detectDeterministicDesignIntent,
   detectFEMReadyDesignIntent,
   type FEMReadyDesignServiceResponse,
 } from "../app/utils/server-deterministic-design";
@@ -39,6 +41,23 @@ const narrative = "需求与边界\n圆柱段长度 600 mm。";
 
 const designRequest =
   "生成50组复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm，两端金属封头。";
+test("摘要与历史消息不会触发候选生成", () => {
+  for (const role of ["system", "assistant", "tool"]) {
+    const messages = [
+      { role: "user", content: designRequest },
+      { role, content: "请总结以上对话" },
+    ];
+    assert.equal(detectFEMReadyDesignIntent(messages), null);
+    assert.equal(detectDeterministicDesignIntent(messages), null);
+    assert.equal(
+      detectLaminateAnalysisIntent([
+        { role: "user", content: "请核对铺层的 ABD 和对称性" },
+        { role, content: "请总结以上对话" },
+      ]),
+      false,
+    );
+  }
+});
 test("未指定的边界和层数不会归为用户输入", () => {
   const intent = detectFEMReadyDesignIntent([
     { role: "user", content: designRequest },
@@ -67,7 +86,10 @@ test("设计说明按实际选中角色区分同几何探索和迁移探索", ()
   const response = {
     generation_mode: "fem_ready_cylindrical_shell",
     result: {
-      request: { load_conditions: { external_pressure_MPa: 50.259081 } },
+      request: {
+        load_conditions: { external_pressure_MPa: 50.259081 },
+        materials: ["T700/Epoxy", "M40J/TDE-85"],
+      },
       source_table: { row_count: 5857 },
       coverage: {
         exact_geometry_row_count: 48,
@@ -94,6 +116,7 @@ test("设计说明按实际选中角色区分同几何探索和迁移探索", ()
     /同几何历史基线 8 组，同几何探索 40 组，最近邻迁移探索 2 组/,
   );
   assert.match(instruction, /不表示已导入 CSDM_cph 或运行有限元/);
+  assert.match(instruction, /材料范围严格为 T700\/Epoxy、M40J\/TDE-85/);
 });
 const appendix =
   "\n" +

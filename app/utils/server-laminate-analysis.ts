@@ -201,10 +201,8 @@ function parseCandidates(text: string): LaminateCandidate[] {
 }
 
 function latestUserText(messages: any[]) {
-  return normalizeContent(
-    [...messages].reverse().find((message) => message?.role === "user")
-      ?.content,
-  );
+  const message = messages.at(-1);
+  return message?.role === "user" ? normalizeContent(message.content) : "";
 }
 
 function latestCandidateContext(messages: any[]) {

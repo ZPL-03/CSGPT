@@ -209,11 +209,8 @@ function contentToText(content: unknown) {
 }
 
 function latestUserText(messages: unknown[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index] as { role?: unknown; content?: unknown };
-    if (message?.role === "user") return contentToText(message.content).trim();
-  }
-  return "";
+  const message = messages.at(-1) as { role?: unknown; content?: unknown };
+  return message?.role === "user" ? contentToText(message.content).trim() : "";
 }
 
 function parseChineseInteger(value: string) {
@@ -1085,7 +1082,9 @@ export function buildDesignNarrativeInstruction(
 请用简体中文写四个简洁但完整的小节：
 1. “任务与 FEM 输入”：说明圆柱段几何、服务外压 ${
       request.load_conditions.external_pressure_MPa
-    } MPa、边界条件、材料范围、40 层显式铺层、总厚度和初始缺陷均已进入结构化候选。40 层来自源表模板，不得把模型或源表默认值说成用户输入；形成输入包不表示已导入 CSDM_cph 或运行有限元。
+    } MPa、边界条件、材料范围、40 层显式铺层、总厚度和初始缺陷均已进入结构化候选。材料范围严格为 ${request.materials.join(
+      "、",
+    )}，不得补入其他材料体系；材料名称不证明材料常数的试验来源。40 层来自源表模板，不得把模型或源表默认值说成用户输入；形成输入包不表示已导入 CSDM_cph 或运行有限元。
 2. “候选来源与筛选”：说明正式表格共 ${
       response.result.source_table.row_count
     } 行；目标几何有 ${coverage.exact_geometry_row_count} 行，其中 ${
