@@ -9,9 +9,12 @@ import {
 } from "@fortaine/fetch-event-source";
 import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
-import type {
-  CSGPTDesignArtifact,
-  CSGPTDesignArtifactChunk,
+import {
+  CSGPTDesignArtifactAssembler,
+  parseCSGPTDesignArtifactHeader,
+  validateCSGPTDesignArtifact,
+  type CSGPTDesignArtifact,
+  type CSGPTDesignArtifactChunk,
 } from "./structured-design";
 import { THINKING_BLOCK_END, THINKING_BLOCK_START } from "./thinking";
 
@@ -373,43 +376,21 @@ export function streamWithThink(
   let isInThinkTag = false;
   let finishReason: string | null = null;
   let designArtifact: CSGPTDesignArtifact | undefined;
-  const designArtifactChunks = new Map<
-    string,
-    { total: number; parts: string[] }
-  >();
+  const designArtifactChunks = new CSGPTDesignArtifactAssembler();
 
   function acceptDesignArtifactChunk(chunk: CSGPTDesignArtifactChunk) {
-    if (
-      !chunk ||
-      typeof chunk.id !== "string" ||
-      !Number.isInteger(chunk.index) ||
-      !Number.isInteger(chunk.total) ||
-      chunk.index < 0 ||
-      chunk.total <= 0 ||
-      chunk.index >= chunk.total ||
-      typeof chunk.data !== "string"
-    ) {
-      return;
-    }
-    const current = designArtifactChunks.get(chunk.id) || {
-      total: chunk.total,
-      parts: Array.from({ length: chunk.total }, () => ""),
-    };
-    if (current.total !== chunk.total) return;
-    current.parts[chunk.index] = chunk.data;
-    designArtifactChunks.set(chunk.id, current);
-    if (current.parts.every((part) => part.length > 0)) {
-      try {
-        designArtifact = JSON.parse(
-          current.parts.join(""),
-        ) as CSGPTDesignArtifact;
-      } catch (error) {
-        console.error(
-          "[Request] structured design artifact parse error",
-          error,
-        );
-      }
-    }
+    const completed = designArtifactChunks.accept(chunk);
+    if (completed) designArtifact = completed;
+  }
+
+  function fail(error: unknown) {
+    if (finished) return;
+    finished = true;
+    options.onUpdate?.(responseText + remainText, "");
+    options.onError?.(
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    controller.abort();
   }
 
   function appendStreamSegment(content: string, isThinking: boolean) {
@@ -492,6 +473,19 @@ export function streamWithThink(
 
   const finish = () => {
     if (!finished) {
+      const expected = parseCSGPTDesignArtifactHeader(responseRes);
+      if (
+        !controller.signal.aborted &&
+        (expected || designArtifactChunks.started)
+      ) {
+        try {
+          if (!finishReason) throw new Error("设计回答缺少完成状态。");
+          validateCSGPTDesignArtifact(designArtifact, expected);
+        } catch (error) {
+          fail(error);
+          return;
+        }
+      }
       if (isInThinkingMode) {
         remainText += THINKING_BLOCK_END;
         isInThinkingMode = false;
@@ -660,15 +654,14 @@ export function streamWithThink(
 
           appendStreamChunk(chunk.content, chunk.isThinking);
         } catch (e) {
-          console.error("[Request] parse error", text, msg, e);
-          // 解析失败仅记录日志，不抛出异常
+          fail(e);
         }
       },
       onclose() {
         finish();
       },
       onerror(e) {
-        options?.onError?.(e);
+        fail(e);
         throw e;
       },
       openWhenHidden: true,

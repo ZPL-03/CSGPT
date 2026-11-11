@@ -8,6 +8,9 @@ import {
 import {
   CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD,
   CSGPT_DESIGN_ARTIFACT_FIELD,
+  CSGPTDesignArtifactAssembler,
+  summarizeCSGPTDesignArtifact,
+  validateCSGPTDesignArtifact,
   type CSGPTDesignArtifact,
 } from "../app/utils/structured-design";
 
@@ -21,7 +24,11 @@ const candidates = Array.from({ length: 50 }, (_, index) => ({
 const artifact: CSGPTDesignArtifact = {
   status: "passed",
   generation_mode: "fem_ready_cylindrical_shell",
-  result: { candidate_count: 50, candidates },
+  result: {
+    candidate_count: 50,
+    candidates,
+    design_fingerprint: "test-design-fingerprint",
+  },
 };
 const narrative = "需求与边界\n圆柱段长度 600 mm。";
 const appendix =
@@ -110,6 +117,16 @@ for (const reason of ["stop", "length", "content_filter", "tool_calls"]) {
         JSON.parse(chunks.map((item) => item.data).join("")),
         artifact,
       );
+      const assembler = new CSGPTDesignArtifactAssembler();
+      let assembled: CSGPTDesignArtifact | undefined;
+      for (const item of chunks) assembled = assembler.accept(item);
+      assert.deepEqual(
+        validateCSGPTDesignArtifact(
+          assembled,
+          summarizeCSGPTDesignArtifact(artifact),
+        ),
+        artifact,
+      );
     });
   }
 }
@@ -195,4 +212,88 @@ test("说明输出预算受共享窗口约束且尊重较小用户预算", () =>
   assert.equal(result.temperature, 0.3);
   assert.equal("max_completion_tokens" in result, false);
   assert.throws(() => prepareDesignNarrativeRest({ n: 2 }), /单个/);
+});
+
+test("合同分片按编号重组且缺片不能视为完整合同", () => {
+  const serialized = JSON.stringify(artifact);
+  const a = new CSGPTDesignArtifactAssembler();
+  assert.equal(a.started, false);
+  const partial = a.accept({
+    id: "design",
+    index: 1,
+    total: 2,
+    data: serialized.slice(20),
+  });
+  assert.equal(partial, undefined);
+  assert.equal(a.started, true);
+  assert.throws(
+    () =>
+      validateCSGPTDesignArtifact(
+        partial,
+        summarizeCSGPTDesignArtifact(artifact),
+      ),
+    /缺失/,
+  );
+  assert.deepEqual(
+    a.accept({
+      id: "design",
+      index: 0,
+      total: 2,
+      data: serialized.slice(0, 20),
+    }),
+    artifact,
+  );
+});
+for (const invalid of [
+  { id: "design", index: -1, total: 2, data: "x" },
+  { id: "design", index: 2, total: 2, data: "x" },
+  { id: "design", index: 0, total: 0, data: "x" },
+  { id: "", index: 0, total: 1, data: "x" },
+  { id: "design", index: 0, total: 1, data: "" },
+]) {
+  test(`无效合同分片明确报错 ${JSON.stringify(invalid)}`, () => {
+    assert.throws(
+      () => new CSGPTDesignArtifactAssembler().accept(invalid),
+      /分片无效/,
+    );
+  });
+}
+for (const conflict of [
+  { id: "other", index: 1, total: 2, data: "x" },
+  { id: "design", index: 1, total: 3, data: "x" },
+  { id: "design", index: 0, total: 2, data: "x" },
+]) {
+  test(`冲突合同分片明确报错 ${JSON.stringify(conflict)}`, () => {
+    const a = new CSGPTDesignArtifactAssembler();
+    a.accept({ id: "design", index: 0, total: 2, data: "{" });
+    assert.throws(() => a.accept(conflict), /冲突/);
+  });
+}
+test("合同解析及正文与响应头不一致不能静默通过", () => {
+  assert.throws(() =>
+    new CSGPTDesignArtifactAssembler().accept({
+      id: "design",
+      index: 0,
+      total: 1,
+      data: "{broken}",
+    }),
+  );
+  assert.throws(
+    () =>
+      validateCSGPTDesignArtifact({
+        ...artifact,
+        result: { ...artifact.result, candidate_count: 49 },
+      }),
+    /数量/,
+  );
+  const summary = summarizeCSGPTDesignArtifact(artifact);
+  for (const mismatch of [
+    { ...summary, candidate_count: 49 },
+    { ...summary, design_fingerprint: "other" },
+    { ...summary, generation_mode: "other" },
+  ])
+    assert.throws(
+      () => validateCSGPTDesignArtifact(artifact, mismatch),
+      /不一致/,
+    );
 });
