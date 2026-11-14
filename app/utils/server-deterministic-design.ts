@@ -258,7 +258,7 @@ function extractCandidateCount(text: string) {
     "\\s*(?:组|个|套)\\s*[^。！？\\n]{0,96}?(?:初步|初始|候选|设计)?\\s*(?:方案|候选)";
   const patterns = [
     new RegExp(
-      `(?:生成|给出|列出|提供|输出|设计|提出|构造|generate|create|provide|list)[^。！？\\n]{0,96}?${number}${chineseCandidateTail}`,
+      `(?:生成|枚举|给出|列出|提供|输出|设计|提出|构造|generate|enumerat|create|provide|list)[^。！？\\n]{0,96}?${number}${chineseCandidateTail}`,
       "i",
     ),
     new RegExp(`${number}${chineseCandidateTail}`, "i"),
@@ -374,6 +374,12 @@ export function detectFEMReadyDesignIntent(
 ): FEMReadyDesignIntent | null {
   const text = latestUserText(messages);
   if (!text) return null;
+  if (
+    !/(?:FEM[-_ ]?ready|可直接进入有限元校核|(?:有限元|Abaqus).{0,8}(?:输入包|输入文件|候选包)|CSDM_cph)/i.test(
+      text,
+    )
+  )
+    return null;
   const count = extractCandidateCount(text);
   if (!count || count < 2) return null;
   if (
@@ -383,7 +389,7 @@ export function detectFEMReadyDesignIntent(
     !/(?:耐压壳|压力壳|圆柱壳|壳体|pressure\s+hull|cylindrical\s+shell)/i.test(
       text,
     ) ||
-    !/(?:生成|给出|列出|提供|输出|设计|提出|构造|generate|create|provide|list)/i.test(
+    !/(?:生成|枚举|给出|列出|提供|输出|设计|提出|构造|generate|enumerat|create|provide|list)/i.test(
       text,
     )
   ) {
@@ -515,6 +521,12 @@ export function detectDeterministicDesignIntent(
 ): DeterministicDesignIntent | null {
   const text = latestUserText(messages);
   if (!text) return null;
+  const explicitEnumeration = /(?:枚举|按规则|确定性生成|enumerat)/i.test(text);
+  const hasLayupSpecification =
+    /(?:完整物理层数|总层数|铺层层数|层数)\s*(?:为|是|=|:|：)?\s*\d+\s*层/.test(
+      text,
+    ) && extractAngles(text).length > 0;
+  if (!explicitEnumeration && !hasLayupSpecification) return null;
   const count = extractCandidateCount(text);
   if (!count || count < 2) return null;
   if (
@@ -524,7 +536,7 @@ export function detectDeterministicDesignIntent(
     !/(?:耐压壳|压力壳|压力容器|圆柱壳|壳体|储氢瓶|COPV|pressure\s+(?:hull|vessel)|cylinder)/i.test(
       text,
     ) ||
-    !/(?:生成|给出|列出|提供|输出|设计|提出|构造|generate|create|provide|list)/i.test(
+    !/(?:生成|枚举|给出|列出|提供|输出|设计|提出|构造|generate|enumerat|create|provide|list)/i.test(
       text,
     )
   ) {

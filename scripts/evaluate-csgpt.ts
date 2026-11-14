@@ -27,7 +27,7 @@ import {
   applyCSGPTContextBudget,
 } from "../app/utils/csgpt-context-budget";
 import {
-  buildDeterministicLaminateAnalysis,
+  buildLaminateCalculationContext,
   detectLaminateAnalysisIntent,
 } from "../app/utils/server-laminate-analysis";
 import { estimateTokenLength } from "../app/utils/token";
@@ -554,7 +554,7 @@ function evaluateContextBudgetRegression() {
   );
 }
 
-function evaluateLaminateDeterministicFacts() {
+async function evaluateLaminateDeterministicFacts() {
   const messages = [
     {
       role: "assistant",
@@ -571,16 +571,15 @@ function evaluateLaminateDeterministicFacts() {
     detectLaminateAnalysisIntent(messages),
     "未识别层合板事实核验问题",
   );
-  const answer = buildDeterministicLaminateAnalysis(messages);
+  const answer = await buildLaminateCalculationContext(messages);
   assertCondition(
-    answer.includes("TMP_1：40 层；逐层复算为 symmetric=false, balanced=true"),
+    answer!.includes("TMP_1：40 层；角度序列对称=false，正负角层数均衡=true"),
     "没有按显式层序复算 TMP_1 的布尔属性",
   );
-  assertCondition(answer.includes("第 5 层"), "没有暴露对称性首个不一致位置");
+  assertCondition(answer!.includes("第 5 层"), "没有暴露对称性首个不一致位置");
   assertCondition(
-    answer.includes("不能推出 B=0") &&
-      answer.includes("不是当前 Abaqus 求解结果"),
-    "没有保留 B 矩阵和当前 FEM 证据边界",
+    answer!.includes("不能仅据此判定 B 矩阵"),
+    "没有限定角度序列核验的计算范围",
   );
 
   const fieldNameFollowup = [
@@ -593,17 +592,18 @@ function evaluateLaminateDeterministicFacts() {
     {
       role: "user",
       content:
-        "只核验已生成的 TMP_1 和 TMP_23，不要重新生成候选，也不要改变原候选表：分别返回两者的 symmetric、balanced；对每个 symmetric=false 的候选指出从外到内的第一个镜像不一致层位及两侧角度；明确当前 Abaqus 数值结果未知、FEM 校核仍为待运行。",
+        "只核验已生成的 TMP_1，不要生成候选或改变候选表：返回其 symmetric、balanced；若 symmetric=false，指出从外到内的第一个镜像不一致层位及两侧角度。",
     },
   ];
   assertCondition(
     detectLaminateAnalysisIntent(fieldNameFollowup),
     "未识别使用 symmetric/balanced/mirror 字段的层合板事实核验问题",
   );
-  const contextRecovered = buildDeterministicLaminateAnalysis(fieldNameFollowup);
+  const contextRecovered =
+    await buildLaminateCalculationContext(fieldNameFollowup);
   assertCondition(
-    contextRecovered.includes("第 5 层") &&
-      !contextRecovered.includes("第 1 层 90° 与第 40 层 90°"),
+    contextRecovered!.includes("第 5 层") &&
+      !contextRecovered!.includes("第 1 层 90° 与第 40 层 90°"),
     "没有跳过缺少显式铺层的摘要表并恢复原始候选层序",
   );
 
@@ -621,10 +621,9 @@ function evaluateLaminateDeterministicFacts() {
               candidate_id: "TMP_1",
               layup: {
                 angles_deg: [
-                  90, 90, 90, 90, 25, -25, 80, -80, 25, -25, 80, -80,
-                  25, -25, 80, -80, 25, -25, 80, -80, 25, -25, 80, -80,
-                  25, -25, 80, -80, 25, -25, 80, -80, 25, -25, 80, -80,
-                  90, 90, 90, 90,
+                  90, 90, 90, 90, 25, -25, 80, -80, 25, -25, 80, -80, 25, -25,
+                  80, -80, 25, -25, 80, -80, 25, -25, 80, -80, 25, -25, 80, -80,
+                  25, -25, 80, -80, 25, -25, 80, -80, 90, 90, 90, 90,
                 ],
                 symmetric: false,
                 balanced: true,
@@ -637,10 +636,12 @@ function evaluateLaminateDeterministicFacts() {
     fieldNameFollowup[1],
     fieldNameFollowup[2],
   ];
-  const structuredAnswer = buildDeterministicLaminateAnalysis(structuredContext);
+  const structuredAnswer =
+    await buildLaminateCalculationContext(structuredContext);
   assertCondition(
-    structuredAnswer.includes("TMP_1：40 层；逐层复算为 symmetric=false, balanced=true") &&
-      structuredAnswer.includes("第 5 层"),
+    structuredAnswer!.includes(
+      "TMP_1：40 层；角度序列对称=false，正负角层数均衡=true",
+    ) && structuredAnswer!.includes("第 5 层"),
     "没有从结构化设计工件复算显式层序",
   );
 }
@@ -801,10 +802,15 @@ async function main() {
     evaluateContextBudgetRegression();
     return "system/current preserved; orphan history removed";
   });
-  await runCase("laminate-analysis", "显式铺层序列事实复核", () => {
-    evaluateLaminateDeterministicFacts();
-    return "sequence symmetry/balance and ABD evidence boundary preserved";
-  });
+  if (process.env.CSGPT_EVAL_DESIGN_ONLINE === "1") {
+    await runCase("laminate-analysis", "显式铺层序列事实复核", () => {
+      return evaluateLaminateDeterministicFacts().then(
+        () => "sequence symmetry/balance and ABD evidence boundary preserved",
+      );
+    });
+  } else {
+    skip("laminate-analysis", "显式铺层序列事实复核", "设置 CSGPT_EVAL_DESIGN_ONLINE=1 后执行");
+  }
   await evaluateDeterministicDesign(cases.deterministicDesign);
   await evaluateResearchModes(cases.researchModes);
   await evaluateOnlineResearch(cases.onlineResearch);

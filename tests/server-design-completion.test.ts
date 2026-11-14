@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectLaminateAnalysisIntent } from "../app/utils/server-laminate-analysis";
+import {
+  buildLaminateCalculationContext,
+  detectLaminateAnalysisIntent,
+} from "../app/utils/server-laminate-analysis";
 import {
   applyCSGPTContextBudget,
   reconcileCSGPTMeasuredBudget,
@@ -98,7 +101,14 @@ const artifact: CSGPTDesignArtifact = {
 const narrative = "需求与边界\n圆柱段长度 600 mm。";
 
 const designRequest =
-  "生成50组复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm，两端金属封头。";
+  "生成50组 FEM-ready 复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm，两端金属封头。";
+test("普通批量设计问答不强制进入源表或固定层数的工具路径", () => {
+  const messages = [
+    { role: "user", content: designRequest.replace("FEM-ready ", "") },
+  ];
+  assert.equal(detectFEMReadyDesignIntent(messages), null);
+  assert.equal(detectDeterministicDesignIntent(messages), null);
+});
 test("摘要与历史消息不会触发候选生成", () => {
   for (const role of ["system", "assistant", "tool"]) {
     const messages = [
@@ -114,6 +124,98 @@ test("摘要与历史消息不会触发候选生成", () => {
       ]),
       false,
     );
+  }
+});
+test("层合板数值请求使用统一服务并保留带符号 ABD 结果", async () => {
+  const original = globalThis.fetch;
+  let requestPayload: any;
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "http://design.test/v1/design/laminate-stiffness");
+    requestPayload = JSON.parse(String(init?.body));
+    return Response.json({
+      status: "passed",
+      contract_version: "2",
+      calculation_mode: "laminate_abd_coupling",
+      engine_version: 2,
+      engine_fingerprint: "a".repeat(64),
+      calculation_fingerprint: "b".repeat(64),
+      result: {
+        schema_version: "2",
+        calculation_mode: "laminate_abd_coupling",
+        reference_plane: "geometric_midplane",
+        layer_order: "negative_z_to_positive_z",
+        coupling_units: { A: "N/mm", B: "N", D: "N*mm" },
+        cases: [
+          {
+            case_id: "A",
+            layer_count: 4,
+            sequence_deg: [35, -35, -35, 35],
+            angle_sequence_symmetric: true,
+            angle_count_balanced: true,
+            symmetry_mismatch: null,
+            calculated_coupling: {
+              A16: 0,
+              A26: 0,
+              B16: 0,
+              B26: 0,
+              D16: 1328.4,
+              D26: 820.8,
+            },
+          },
+        ],
+      },
+    });
+  };
+  process.env.CSGPT_CS2_DESIGN_BASE_URL = "http://design.test";
+  try {
+    const content = await buildLaminateCalculationContext([
+      {
+        role: "user",
+        content:
+          "请复算以下层合截面的 ABD：" +
+          JSON.stringify({
+            cases: [
+              {
+                case_id: "A",
+                layers: [
+                  {
+                    angle_deg: 35,
+                    thickness_mm: 0.3,
+                    Qbar16_MPa: 12300,
+                    Qbar26_MPa: 7600,
+                  },
+                  {
+                    angle_deg: -35,
+                    thickness_mm: 0.3,
+                    Qbar16_MPa: -12300,
+                    Qbar26_MPa: -7600,
+                  },
+                  {
+                    angle_deg: -35,
+                    thickness_mm: 0.3,
+                    Qbar16_MPa: -12300,
+                    Qbar26_MPa: -7600,
+                  },
+                  {
+                    angle_deg: 35,
+                    thickness_mm: 0.3,
+                    Qbar16_MPa: 12300,
+                    Qbar26_MPa: 7600,
+                  },
+                ],
+              },
+            ],
+          }),
+      },
+    ]);
+    assert.ok(content);
+    assert.match(content, /D16=1328\.4/);
+    assert.match(content, /D26=820\.8/);
+    assert.equal(requestPayload.calculation_mode, "laminate_abd_coupling");
+    assert.equal(requestPayload.cases[0].layers.length, 4);
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.CSGPT_CS2_DESIGN_BASE_URL;
   }
 });
 test("未指定的边界和层数不会归为用户输入", () => {

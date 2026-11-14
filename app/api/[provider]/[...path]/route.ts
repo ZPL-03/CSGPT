@@ -68,10 +68,7 @@ import {
   countVLLMChatTokens,
   VLLMTokenizerError,
 } from "@/app/utils/server-vllm-tokenizer";
-import {
-  buildDeterministicLaminateAnalysis,
-  detectLaminateAnalysisIntent,
-} from "@/app/utils/server-laminate-analysis";
+import { buildLaminateCalculationContext } from "@/app/utils/server-laminate-analysis";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -104,91 +101,6 @@ type CSGPTUpstream = {
 };
 
 const DEFAULT_CSGPT_CONTEXT_LENGTH = CSGPT_CONTEXT_LENGTH;
-const SYNTHETIC_STREAM_CHUNK_CHARS = 1200;
-
-function buildSyntheticCSGPTStream(content: string, model: string) {
-  const encoder = new TextEncoder();
-  const completionId = `chatcmpl-csgpt-laminate-${Date.now()}`;
-  const created = Math.floor(Date.now() / 1000);
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(
-        encoder.encode(
-          openAIStreamEvent({
-            id: completionId,
-            object: "chat.completion.chunk",
-            created,
-            model,
-            choices: [
-              {
-                index: 0,
-                delta: { role: "assistant", content: "" },
-                finish_reason: null,
-              },
-            ],
-          }),
-        ),
-      );
-      for (
-        let offset = 0;
-        offset < content.length;
-        offset += SYNTHETIC_STREAM_CHUNK_CHARS
-      ) {
-        controller.enqueue(
-          encoder.encode(
-            openAIStreamEvent({
-              id: completionId,
-              object: "chat.completion.chunk",
-              created,
-              model,
-              choices: [
-                {
-                  index: 0,
-                  delta: {
-                    content: content.slice(
-                      offset,
-                      offset + SYNTHETIC_STREAM_CHUNK_CHARS,
-                    ),
-                  },
-                  finish_reason: null,
-                },
-              ],
-            }),
-          ),
-        );
-      }
-      controller.enqueue(
-        encoder.encode(
-          openAIStreamEvent({
-            id: completionId,
-            object: "chat.completion.chunk",
-            created,
-            model,
-            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-          }),
-        ),
-      );
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      controller.close();
-    },
-  });
-}
-
-function buildSyntheticCSGPTCompletion(content: string, model: string) {
-  return {
-    id: `chatcmpl-csgpt-laminate-${Date.now()}`,
-    object: "chat.completion",
-    created: Math.floor(Date.now() / 1000),
-    model,
-    choices: [
-      {
-        index: 0,
-        message: { role: "assistant", content },
-        finish_reason: "stop",
-      },
-    ],
-  };
-}
 
 function getDedicatedCSGPTUpstream(
   model: string | undefined,
@@ -840,41 +752,16 @@ async function handleDedicatedCSGPTChatCompletions(
       ? detectFEMReadyDesignIntent(messages) ||
         detectDeterministicDesignIntent(messages)
       : null;
-  const laminateAnalysisIntent =
-    model === CSGPT_MODEL_2 &&
-    !designIntent &&
-    detectLaminateAnalysisIntent(messages);
-  if (laminateAnalysisIntent) {
-    const content = buildDeterministicLaminateAnalysis(messages);
-    const syntheticModel =
-      resolveUpstreamCSGPTModel(model, config) || model || CSGPT_MODEL_2;
-    const record = createControlledToolRecord({
-      id: "csgpt-laminate-analysis",
-      name: "层合板确定性事实核验",
-      enabled: true,
-      count: 1,
-      unit: "个事实核验",
-      content: "按显式物理层序列复核对称性、均衡性和 ABD 结论边界",
-    });
-    const controlledToolRecords = record ? [record] : [];
-    if (stream) {
-      const responseHeaders = new Headers({
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      });
-      attachControlledToolRecordsHeader(responseHeaders, controlledToolRecords);
-      return new Response(buildSyntheticCSGPTStream(content, syntheticModel), {
-        status: 200,
-        headers: responseHeaders,
-      });
+  let laminateContext: string | null = null;
+  if (model === CSGPT_MODEL_2 && !designIntent) {
+    try {
+      laminateContext = await buildLaminateCalculationContext(messages);
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: true, message: error?.message || "层合板计算失败。" },
+        { status: 502 },
+      );
     }
-    const response = NextResponse.json(
-      buildSyntheticCSGPTCompletion(content, syntheticModel),
-    );
-    attachControlledToolRecordsHeader(response.headers, controlledToolRecords);
-    return response;
   }
   let designResponse: DesignServiceResponse | null = null;
   if (designIntent) {
@@ -928,6 +815,27 @@ async function handleDedicatedCSGPTChatCompletions(
   let requestMessages = preparedMessages.messages;
   let requestRest = rest;
   const controlledToolRecords = [...preparedMessages.controlledToolRecords];
+  if (laminateContext) {
+    requestMessages = [
+      ...requestMessages.slice(0, -1),
+      {
+        role: "system",
+        content:
+          "以下是按用户输入得到的计算工具结果，仅作为回答依据。解释理论与结果时保留单位、层序、参考面和计算范围。\n" +
+          laminateContext,
+      },
+      requestMessages.at(-1),
+    ];
+    const record = createControlledToolRecord({
+      id: "csgpt-laminate-analysis",
+      name: "层合板计算",
+      enabled: true,
+      count: 1,
+      unit: "次计算",
+      content: "逐层积分或显式层序核对",
+    });
+    if (record) controlledToolRecords.push(record);
+  }
   let designAppendix = "";
   let designArtifact: CSGPTDesignArtifact | null = null;
   if (designIntent && designResponse) {
