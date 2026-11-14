@@ -209,7 +209,7 @@ ELSEVIER_INSTTOKEN=
 SPRINGER_OPENACCESS_API_KEY=
 ```
 
-`CSGPT_CS*_CONTEXT_LENGTH` 表示对应上游的总上下文窗口，输入消息和输出消息共用该窗口。CSGPT 上游默认按 16384 tokens 配置；如果上游服务使用其他窗口，应按实际服务能力填写。CSGPT 模型的 `max_tokens` 默认目标输出预算为 16384，不是输入长度。服务端会估算实际输入长度、保留系统提示词和最新消息、裁剪最早的历史消息，并将输出预算限制在总上下文窗口剩余空间内。其他 Provider 的 `max_tokens` 请求不经过这套 CSGPT 专用预算处理。
+`CSGPT_CS*_CONTEXT_LENGTH` 表示对应上游的总上下文窗口，输入消息和输出消息共用该窗口。CSGPT 上游默认按 16384 tokens 配置；如果上游服务使用其他窗口，应按实际服务能力填写。CSGPT 模型的 `max_tokens` 默认目标输出预算为 16384，不是输入长度。服务端保留最新消息，按估算的 token 数优先为系统上下文分配空间，必要时压缩上下文或裁剪较早的历史轮次，再分配剩余输出预算。CS2 还会调用上游 `/tokenize`，按实际输入 token 数和后端上下文窗口校核预算；分词失败或回答空间不足时不发送生成请求。其他 Provider 的 `max_tokens` 请求不经过这套 CSGPT 专用预算处理。
 
 `CSGPT_CS2_DESIGN_BASE_URL` 和 `CSGPT_CS2_DESIGN_API_KEY` 是 CS2 统一设计接口配置。未填写时分别复用 `CSGPT_CS2_BASE_URL` 和 `CSGPT_CS2_API_KEY`；浏览器只访问 CSGPT 服务端代理，不接收上游密钥。
 
