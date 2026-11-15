@@ -47,6 +47,7 @@ import {
   detectFEMReadyDesignIntent,
   renderDeterministicDesignAppendix,
   requestDeterministicDesign,
+  type DesignIntent,
   type DesignServiceResponse,
 } from "@/app/utils/server-deterministic-design";
 import {
@@ -59,6 +60,8 @@ import {
   appendDesignToOpenAICompletion,
   appendDesignToOpenAIStream,
   prepareDesignNarrativeRest,
+  validateTextCompletion,
+  validateTextStream,
 } from "@/app/utils/server-design-completion";
 import {
   applyCSGPTContextBudget,
@@ -747,11 +750,22 @@ async function handleDedicatedCSGPTChatCompletions(
     );
   }
   const upstreamModel = resolveUpstreamCSGPTModel(model, config);
-  const designIntent =
-    model === CSGPT_MODEL_2
-      ? detectFEMReadyDesignIntent(messages) ||
-        detectDeterministicDesignIntent(messages)
-      : null;
+  let designIntent: DesignIntent | null = null;
+  try {
+    if (model === CSGPT_MODEL_2) {
+      designIntent =
+        detectFEMReadyDesignIntent(messages) ||
+        detectDeterministicDesignIntent(messages);
+    }
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: true,
+        message: error instanceof Error ? error.message : "候选输入无效。",
+      },
+      { status: 422 },
+    );
+  }
   let laminateContext: string | null = null;
   if (model === CSGPT_MODEL_2 && !designIntent) {
     try {
@@ -978,6 +992,8 @@ async function handleDedicatedCSGPTChatCompletions(
             model,
             designArtifact,
           )
+        : laminateContext
+        ? validateTextStream(response.body, model)
         : response.body;
     if (designArtifact) {
       responseHeaders.set(
@@ -991,20 +1007,23 @@ async function handleDedicatedCSGPTChatCompletions(
     });
   }
 
-  let data = await response.json();
-  if (designAppendix && designResponse && designArtifact) {
-    try {
+  let data;
+  try {
+    data = await response.json();
+    if (designAppendix && designResponse && designArtifact) {
       data = appendDesignToOpenAICompletion(
         data,
         designAppendix,
         designArtifact,
       );
-    } catch (error: any) {
-      return NextResponse.json(
-        { error: true, message: error?.message || "CS2 上游响应结构无效" },
-        { status: 502 },
-      );
+    } else if (laminateContext) {
+      validateTextCompletion(data);
     }
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: true, message: error?.message || "CS2 上游响应结构无效" },
+      { status: 502 },
+    );
   }
   const nextResponse = NextResponse.json(data);
   if (designArtifact) {

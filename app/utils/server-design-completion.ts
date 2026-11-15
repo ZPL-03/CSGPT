@@ -33,11 +33,24 @@ export function prepareDesignNarrativeRest(rest: Record<string, any>) {
 
 function requireFinishReason(reason: unknown): string {
   if (typeof reason !== "string" || !reason.trim()) {
-    throw new Error(
-      "设计说明上游缺少有效的 finish_reason，无法确认回答是否完整。",
-    );
+    throw new Error("上游缺少有效的 finish_reason，无法确认回答是否完整。");
   }
   return reason;
+}
+
+/** 工具解释的正文与完成原因均需保留，不能用计算成功代替回答完成。 */
+export function validateTextCompletion(data: any) {
+  const choice = data?.choices?.[0];
+  if (
+    data?.error ||
+    data?.choices?.length !== 1 ||
+    typeof choice?.message?.content !== "string" ||
+    !choice.message.content.trim()
+  ) {
+    throw new Error("上游返回的非流式消息结构无效。");
+  }
+  requireFinishReason(choice.finish_reason);
+  return data;
 }
 
 export function appendDesignToOpenAICompletion(
@@ -45,15 +58,8 @@ export function appendDesignToOpenAICompletion(
   appendix: string,
   designArtifact: CSGPTDesignArtifact,
 ) {
-  const choice = data?.choices?.[0];
-  if (
-    data?.error ||
-    data?.choices?.length !== 1 ||
-    typeof choice?.message?.content !== "string"
-  ) {
-    throw new Error("设计说明上游返回的非流式消息结构无效。");
-  }
-  const finishReason = requireFinishReason(choice.finish_reason);
+  validateTextCompletion(data);
+  const choice = data.choices[0];
   return {
     ...data,
     [CSGPT_DESIGN_ARTIFACT_FIELD]: designArtifact,
@@ -64,7 +70,7 @@ export function appendDesignToOpenAICompletion(
           ...choice.message,
           content: choice.message.content + appendix,
         },
-        finish_reason: finishReason,
+        finish_reason: choice.finish_reason,
       },
     ],
   };
@@ -75,6 +81,22 @@ export function appendDesignToOpenAIStream(
   appendix: string,
   model: string,
   designArtifact: CSGPTDesignArtifact,
+) {
+  return completeTextStream(upstreamBody, model, { appendix, designArtifact });
+}
+
+/** 层合板解释使用同一完成协议，但不追加候选或伪造设计工件。 */
+export function validateTextStream(
+  upstreamBody: ReadableStream<Uint8Array>,
+  model: string,
+) {
+  return completeTextStream(upstreamBody, model);
+}
+
+function completeTextStream(
+  upstreamBody: ReadableStream<Uint8Array>,
+  model: string,
+  extension?: { appendix: string; designArtifact: CSGPTDesignArtifact },
 ) {
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
@@ -88,6 +110,7 @@ export function appendDesignToOpenAIStream(
       let buffer = "";
       let upstreamFinishReason: string | null = null;
       let receivedDone = false;
+      let receivedContent = false;
       const send = (payload: unknown) => {
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify(payload)}\n\n`),
@@ -124,6 +147,11 @@ export function appendDesignToOpenAIStream(
           if (upstreamFinishReason && Object.keys(choice.delta || {}).length) {
             throw new Error("设计说明上游在完成结果后仍返回消息内容。");
           }
+          const content = choice.delta?.content;
+          if (content != null && typeof content !== "string") {
+            throw new Error("上游 SSE 正文必须是文本。");
+          }
+          if (content?.trim()) receivedContent = true;
           if (choice.finish_reason != null) {
             if (upstreamFinishReason) {
               throw new Error("设计说明上游重复返回完成结果。");
@@ -152,7 +180,9 @@ export function appendDesignToOpenAIStream(
         if (buffer.trim()) forwardEvent(buffer);
         const finishReason = requireFinishReason(upstreamFinishReason);
         if (!receivedDone) throw new Error("设计说明上游缺少 SSE 结束标记。");
+        if (!receivedContent) throw new Error("上游未返回回答正文。");
 
+        const appendix = extension?.appendix || "";
         for (
           let offset = 0;
           offset < appendix.length;
@@ -164,21 +194,23 @@ export function appendDesignToOpenAIStream(
             }),
           );
         }
-        const serialized = JSON.stringify(designArtifact);
-        const total = Math.ceil(serialized.length / ARTIFACT_CHUNK_CHARS);
-        for (let index = 0; index < total; index += 1) {
-          send({
-            ...chunk({}),
-            [CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD]: {
-              id: completionId,
-              index,
-              total,
-              data: serialized.slice(
-                index * ARTIFACT_CHUNK_CHARS,
-                (index + 1) * ARTIFACT_CHUNK_CHARS,
-              ),
-            },
-          });
+        if (extension) {
+          const serialized = JSON.stringify(extension.designArtifact);
+          const total = Math.ceil(serialized.length / ARTIFACT_CHUNK_CHARS);
+          for (let index = 0; index < total; index += 1) {
+            send({
+              ...chunk({}),
+              [CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD]: {
+                id: completionId,
+                index,
+                total,
+                data: serialized.slice(
+                  index * ARTIFACT_CHUNK_CHARS,
+                  (index + 1) * ARTIFACT_CHUNK_CHARS,
+                ),
+              },
+            });
+          }
         }
         send(chunk({}, finishReason));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));

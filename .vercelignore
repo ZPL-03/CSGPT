@@ -3,6 +3,8 @@
 .next/
 .logs/
 coverage/
+output/
+.playwright-cli/
 node_modules/
 
 .env

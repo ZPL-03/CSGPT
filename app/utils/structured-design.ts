@@ -1,3 +1,5 @@
+import { validateDesignContract } from "./design-contract";
+
 export const CSGPT_DESIGN_ARTIFACT_FIELD = "csgpt_design_artifact";
 export const CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD = "csgpt_design_artifact_chunk";
 export const CSGPT_DESIGN_ARTIFACT_HEADER = "x-csgpt-design-artifact";
@@ -54,9 +56,20 @@ export function parseCSGPTDesignArtifactHeader(response?: Response) {
   const value = response?.headers?.get(CSGPT_DESIGN_ARTIFACT_HEADER);
   if (!value) return null;
   try {
-    return JSON.parse(decodeURIComponent(value)) as CSGPTDesignArtifactSummary;
+    const summary = JSON.parse(decodeURIComponent(value));
+    if (
+      !["concept_layup_enumeration", "fem_ready_cylindrical_shell"].includes(
+        summary?.generation_mode,
+      ) ||
+      !Number.isInteger(summary.candidate_count) ||
+      summary.candidate_count < 1 ||
+      typeof summary.design_fingerprint !== "string" ||
+      !/^[a-f0-9]{64}$/.test(summary.design_fingerprint)
+    )
+      throw new Error("invalid_header");
+    return summary as CSGPTDesignArtifactSummary;
   } catch {
-    return null;
+    throw new Error("结构化设计响应头无效。");
   }
 }
 
@@ -64,31 +77,32 @@ export function validateCSGPTDesignArtifact(
   value: unknown,
   expected?: CSGPTDesignArtifactSummary | null,
 ): CSGPTDesignArtifact {
-  const artifact = value as CSGPTDesignArtifact | undefined;
-  if (
-    artifact?.status !== "passed" ||
-    typeof artifact.generation_mode !== "string" ||
-    !artifact.result ||
-    typeof artifact.result !== "object"
-  ) {
-    throw new Error("结构化设计合同缺失或结构无效。");
-  }
+  const artifact = validateDesignContract(value);
   const summary = summarizeCSGPTDesignArtifact(artifact);
-  const candidates = artifact.result.candidates;
   if (
-    !Number.isInteger(summary.candidate_count) ||
-    summary.candidate_count < 1 ||
-    !Array.isArray(candidates) ||
-    candidates.length !== summary.candidate_count ||
-    !summary.design_fingerprint ||
-    (expected &&
-      (summary.generation_mode !== expected.generation_mode ||
-        summary.candidate_count !== expected.candidate_count ||
-        summary.design_fingerprint !== expected.design_fingerprint))
+    expected &&
+    (summary.generation_mode !== expected.generation_mode ||
+      summary.candidate_count !== expected.candidate_count ||
+      summary.design_fingerprint !== expected.design_fingerprint)
   ) {
     throw new Error("结构化设计合同的候选数量、指纹或生成模式不一致。");
   }
   return artifact;
+}
+
+export function validateCompletedDesignArtifact(options: {
+  response?: Response;
+  artifact?: unknown;
+  chunksStarted: boolean;
+  finishReason: unknown;
+}) {
+  const expected = parseCSGPTDesignArtifactHeader(options.response);
+  if (expected || options.chunksStarted || options.artifact !== undefined) {
+    if (typeof options.finishReason !== "string" || !options.finishReason) {
+      throw new Error("设计回答缺少完成状态。");
+    }
+    validateCSGPTDesignArtifact(options.artifact, expected);
+  }
 }
 
 export class CSGPTDesignArtifactAssembler {

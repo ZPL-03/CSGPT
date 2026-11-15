@@ -540,7 +540,10 @@ function renderNumericResult(response: LaminateServiceResponse) {
     response.engine_version
   }；计算指纹 ${
     response.calculation_fingerprint
-  }。参考面为几何中面，层序从负 z 到正 z；A、B、D 分别使用 1、z、z² 权重积分。计算范围为六个耦合项，不含完整刚度矩阵或壳体承载结果。\n\n${lines.join(
+  }。参考面为几何中面，层序从负 z 到正 z；A、B、D 分别使用 1、z、z² 权重积分。
+层内 Qbar 为常量时，各项为：Aij = Σ Qbar_ij,k (z_k-z_(k-1))；Bij = (1/2) Σ Qbar_ij,k (z_k²-z_(k-1)²)；Dij = (1/3) Σ Qbar_ij,k (z_k³-z_(k-1)³)。Qbar 使用 MPa，z 使用 mm。
+单一均匀层以自身中面为参考时，Aij=Qbar_ij h，Bij=0，Dij=Qbar_ij h³/12；多层截面使用各层上下表面的坐标求和。
+计算范围为六个耦合项，不含完整刚度矩阵或壳体承载结果。对称性由材料、角度和厚度的中面镜像关系判定；浮点残差应按单位、刚度量级和计算精度评价，不能仅因小量非零断言层序不对称。\n\n${lines.join(
     "\n\n",
   )}`;
 }

@@ -22,7 +22,6 @@ import {
 import { getHeaders } from "../client/api";
 import { getClientConfig } from "../config/client";
 import { createPersistStore } from "../utils/store";
-import { ensure } from "../utils/clone";
 import { useAppConfig } from "./config";
 import { getModelProvider } from "../utils/model";
 
@@ -176,97 +175,6 @@ export const useAccessStore = createPersistStore(
       this.fetch();
 
       return get().needCode;
-    },
-    isValidOpenAI() {
-      return ensure(get(), ["openaiApiKey"]);
-    },
-
-    isValidAzure() {
-      return ensure(get(), ["azureUrl", "azureApiKey", "azureApiVersion"]);
-    },
-
-    isValidGoogle() {
-      return ensure(get(), ["googleApiKey"]);
-    },
-
-    isValidAnthropic() {
-      return ensure(get(), ["anthropicApiKey"]);
-    },
-
-    isValidBaidu() {
-      return ensure(get(), ["baiduApiKey", "baiduSecretKey"]);
-    },
-
-    isValidByteDance() {
-      return ensure(get(), ["bytedanceApiKey"]);
-    },
-
-    isValidAlibaba() {
-      return ensure(get(), ["alibabaApiKey"]);
-    },
-
-    isValidTencent() {
-      return ensure(get(), ["tencentSecretKey", "tencentSecretId"]);
-    },
-
-    isValidMoonshot() {
-      return ensure(get(), ["moonshotApiKey"]);
-    },
-    isValidIflytek() {
-      return ensure(get(), ["iflytekApiKey"]);
-    },
-    isValidDeepSeek() {
-      return ensure(get(), ["deepseekApiKey"]);
-    },
-
-    isValidXAI() {
-      return ensure(get(), ["xaiApiKey"]);
-    },
-
-    isValidChatGLM() {
-      return ensure(get(), ["chatglmApiKey"]);
-    },
-
-    isValidSiliconFlow() {
-      return ensure(get(), ["siliconflowApiKey"]);
-    },
-
-    isValidCSGPT() {
-      return ensure(get(), ["csgptApiKey"]);
-    },
-
-    isValidStability() {
-      return ensure(get(), ["stabilityApiKey"]);
-    },
-
-    isValid302AI() {
-      return ensure(get(), ["ai302ApiKey"]);
-    },
-
-    isAuthorized() {
-      this.fetch();
-
-      return (
-        this.isValidCSGPT() ||
-        this.isValidOpenAI() ||
-        this.isValidAzure() ||
-        this.isValidGoogle() ||
-        this.isValidAnthropic() ||
-        this.isValidBaidu() ||
-        this.isValidByteDance() ||
-        this.isValidAlibaba() ||
-        this.isValidTencent() ||
-        this.isValidStability() ||
-        this.isValidMoonshot() ||
-        this.isValidIflytek() ||
-        this.isValidDeepSeek() ||
-        this.isValidXAI() ||
-        this.isValidChatGLM() ||
-        this.isValidSiliconFlow() ||
-        this.isValid302AI() ||
-        !this.enabledAccessControl() ||
-        (this.enabledAccessControl() && ensure(get(), ["accessCode"]))
-      );
     },
     fetch() {
       if (fetchState > 0 || getClientConfig()?.buildMode === "export") return;

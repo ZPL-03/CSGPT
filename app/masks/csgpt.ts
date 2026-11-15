@@ -7,7 +7,11 @@ import {
   CSGPT_DEFAULT_MODEL,
   ServiceProvider,
 } from "../constant";
-import { CSGPT_LAMINATE_RULES } from "../prompts/csgpt";
+import {
+  CSGPT_LAMINATE_RULES,
+  CSGPT_LAYUP_RULES,
+  CSGPT_NUMERICAL_EVIDENCE_RULE,
+} from "../prompts/csgpt";
 
 export const CSGPT_MASKS: BuiltinMask[] = [
   {
@@ -36,7 +40,7 @@ ${CSGPT_LAMINATE_RULES}
 2. 涉及公式时给出推导过程或引用来源
 3. 涉及设计参数时说明适用条件和安全系数
 4. 证据不足时明确说明"需要补充数据"或"当前信息不足"
-5. 普通对话不生成真实图像、三维模型、有限元网格或仿真云图；没有外部求解器结果时不输出位移、应力、屈曲载荷或收敛结论
+5. ${CSGPT_NUMERICAL_EVIDENCE_RULE}
 6. 回答使用结构化格式：问题分析 → 证据依据 → 设计建议 → 风险提示`,
         date: "",
       },
@@ -87,14 +91,7 @@ ${CSGPT_LAMINATE_RULES}
 
 ${CSGPT_LAMINATE_RULES}
 
-铺层表示规范：
-- ±15° 仅表示 +15° 和 -15° 角度对；正负角层数相等表示均衡，但该符号本身不证明关于中面对称
-- [±15/90]s 中末尾 s 表示将括号内序列关于中面镜像，是紧凑的对称铺层记号
-- 角度从轴向（0°）测量，环向为 90°
-- 均衡表示非 0°/90° 角度的正负层数相等，主要约束经典层合理论中的面内拉伸-剪切耦合项 A16/A26；均衡不等于关于中面对称，且需满足材料与厚度配对条件
-- 只有逐层关于中面的镜像对称才支持 B 矩阵为零的对称结论；非对称但均衡的铺层仍可能有非零 B 分量，不得把均衡解释为 B=0
-- 精确数量的批量候选必须逐个物理层完整展开，不使用 ±、末尾 s、下标或重复次数压缩
-- 输入未给定单层厚度时，不编造单层厚度和数值总厚度
+${CSGPT_LAYUP_RULES}
 
 请提供专业的铺层设计建议，包括设计依据和注意事项。`,
         date: "",
@@ -192,7 +189,7 @@ ${CSGPT_LAMINATE_RULES}
 - 各向异性弹性、层合板、胶层/界面、损伤、渐进失效等材料与失效模型
 - Abaqus、ANSYS、Nastran、CalculiX、COMSOL 等求解器的建模流程和后处理指标整理
 
-请提供专业的有限元建模指导。没有外部求解器结果时，只整理模型输入、求解步骤、缺失参数和后处理指标，不输出虚构的仿真云图、应力、位移、屈曲载荷或收敛结论。`,
+请按分析目标说明模型输入、求解步骤和后处理指标。${CSGPT_NUMERICAL_EVIDENCE_RULE}`,
         date: "",
       },
       {

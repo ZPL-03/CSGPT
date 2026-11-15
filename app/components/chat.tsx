@@ -1900,19 +1900,18 @@ function _Chat() {
   const accessStore = useAccessStore();
 
   const context: ChatMessage[] = useMemo(() => {
-    return session.mask.hideContext ? [] : session.mask.context.slice();
-  }, [session.mask.context, session.mask.hideContext]);
-
-  if (
-    context.length === 0 &&
-    session.messages.at(0)?.content !== BOT_HELLO.content
-  ) {
-    const copiedHello = Object.assign({}, BOT_HELLO);
-    if (!accessStore.isAuthorized()) {
-      copiedHello.content = Locale.Error.Unauthorized;
+    const messages = session.mask.hideContext
+      ? []
+      : session.mask.context.slice();
+    // 欢迎语只属于展示上下文，身份验证由登录入口和服务端请求处理。
+    if (
+      messages.length === 0 &&
+      session.messages.at(0)?.content !== BOT_HELLO.content
+    ) {
+      messages.push({ ...BOT_HELLO });
     }
-    context.push(copiedHello);
-  }
+    return messages;
+  }, [session.mask.context, session.mask.hideContext, session.messages]);
 
   const renderMessages = useMemo(() => {
     return context.concat(session.messages);

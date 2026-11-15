@@ -1,3 +1,18 @@
+import {
+  renderDesignTable,
+  stableJson,
+  validateDesignContract,
+  validateDesignInterpretationContext,
+  type DesignServiceResponse,
+  type DeterministicDesignServiceResponse,
+  type FEMReadyDesignServiceResponse,
+} from "./design-contract";
+export type {
+  DesignServiceResponse,
+  DeterministicDesignServiceResponse,
+  FEMReadyDesignServiceResponse,
+} from "./design-contract";
+
 type JsonScalar = string | number | boolean | null;
 
 export type DeterministicDesignPayload = {
@@ -30,6 +45,7 @@ export type FEMReadyDesignPayload = {
     length_mm: number;
     radius_mm: number;
     thickness_mm?: number;
+    imperfection_ratio?: number;
   };
   load_conditions: {
     service_depth_m?: number;
@@ -59,128 +75,6 @@ export type FEMReadyDesignIntent = {
 };
 
 export type DesignIntent = DeterministicDesignIntent | FEMReadyDesignIntent;
-
-type DesignCandidate = {
-  candidate_id: number;
-  material: string;
-  parameters: Record<string, JsonScalar>;
-  layup_deg: number[];
-  layer_count: number;
-  ply_thickness_mm: number | null;
-  total_thickness_mm: number | null;
-  symmetric: boolean;
-  balanced: boolean;
-};
-
-export type DeterministicDesignServiceResponse = {
-  status: "passed";
-  generation_mode: "concept_layup_enumeration";
-  engine_version: number;
-  engine_fingerprint: string;
-  result: {
-    schema_version: "1";
-    engine_version: number;
-    engine_fingerprint: string;
-    request: DeterministicDesignPayload & {
-      non_neutral_angle_family_count?: number | null;
-    };
-    candidate_count: number;
-    candidates: DesignCandidate[];
-    design_fingerprint: string;
-    evidence_boundary: string;
-  };
-  markdown: string;
-};
-
-type FEMReadyCandidate = {
-  candidate_id: string;
-  design_revision_id: string;
-  hull_type: "CYLINDRICAL";
-  geometry: {
-    length_mm: number;
-    radius_mm: number;
-    thickness_mm: number;
-    alpha_deg: number;
-    beta_deg: number;
-    imperfection_ratio: number;
-  };
-  layup: {
-    ply_count: number;
-    angles_deg: number[];
-    ply_thickness_mm: number;
-    balanced: boolean;
-    symmetric: boolean;
-  };
-  material_system: Record<string, unknown>;
-  load_conditions: { external_pressure_MPa: number };
-  boundary_conditions: { type: string };
-  design_targets: { ultimate_pressure_min_MPa: number };
-  provenance: {
-    source_sha256: string;
-    source_row_number: number;
-    geometry_match: string;
-    historical_fem_reference: { status: string };
-    source_laminate_stiffness_validation: {
-      status: string;
-      max_abs_error: number;
-      absolute_tolerance: number;
-    };
-  };
-  screening: {
-    candidate_role:
-      | "historically_screened_baseline"
-      | "exact_geometry_exploration"
-      | "nearest_neighbor_transfer_exploration";
-  };
-  fem_readiness: {
-    current_fem_run_required: boolean;
-    status: string;
-  };
-};
-
-export type FEMReadyDesignServiceResponse = {
-  status: "passed";
-  contract_version: "1";
-  generation_mode: "fem_ready_cylindrical_shell";
-  result: {
-    schema_version: "2";
-    contract_version: "1";
-    generation_mode: "fem_ready_cylindrical_shell";
-    request: FEMReadyDesignPayload & {
-      geometry: FEMReadyDesignPayload["geometry"] & {
-        thickness_mm: number[] | null;
-      };
-      load_conditions: FEMReadyDesignPayload["load_conditions"] & {
-        external_pressure_MPa: number;
-      };
-      materials: string[];
-      design_targets: {
-        ultimate_pressure_min_MPa: number;
-        service_pressure_MPa: number;
-        safety_factor: number | null;
-        primary_objective: string;
-      };
-    };
-    source_table: {
-      sha256: string;
-      row_count: number;
-    };
-    coverage: {
-      exact_geometry_row_count: number;
-      exact_geometry_reference_at_or_above_target_count: number;
-      reference_result_status: string;
-    };
-    candidate_count: number;
-    candidates: FEMReadyCandidate[];
-    design_fingerprint: string;
-    evidence_boundary: string;
-  };
-  markdown: string;
-};
-
-export type DesignServiceResponse =
-  | DeterministicDesignServiceResponse
-  | FEMReadyDesignServiceResponse;
 
 const DEFAULT_LAYER_COUNT = 60;
 const DEFAULT_ANGLES = [30, 45, 60, 90];
@@ -273,72 +167,187 @@ function extractCandidateCount(text: string) {
   return null;
 }
 
+function hasCandidateGenerationRequest(text: string) {
+  // 两种工具入口共用动作判断，设计名词和已有结果不构成生成请求。
+  if (
+    /(?:不要|无需|不必|禁止|停止|不需要|不再)\s*(?:再|重新)?\s*(?:生成|枚举|给出|列出|提供|输出|设计|提出|构造)/.test(
+      text,
+    ) ||
+    /(?:do\s+not|don't|no\s+need\s+to)\s+(?:generate|enumerate|create|provide|list|design)\b/i.test(
+      text,
+    ) ||
+    /(?:已有|已生成|已经生成|已枚举)\s*(?:的)?\s*(?:\d+|[零〇一二两三四五六七八九十百千]+)\s*(?:组|个|套)/.test(
+      text,
+    )
+  ) {
+    return false;
+  }
+  return (
+    /(?:生成|枚举|给出|列出|提供|输出|提出|构造|generate|enumerate|create|provide|list).{0,40}(?:\d+\s*(?:组|个|套)|候选|方案|designs?|candidates?)/i.test(
+      text,
+    ) ||
+    /设计\s*(?:\d+|[零〇一二两三四五六七八九十百千]+)\s*(?:组|个|套)|\bdesign\s+\d+\s+(?:candidate\s+)?designs?\b/i.test(
+      text,
+    )
+  );
+}
+
+const NUMERIC_VALUE = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)?`;
+
+function parseNumber(value: string, field = "数值约束") {
+  const parts = value.split("/").map(Number);
+  const result = parts.length === 2 ? parts[0] / parts[1] : parts[0];
+  if (!Number.isFinite(result) || result <= 0)
+    throw new Error(`${field}必须为有限正数。`);
+  return result;
+}
+
+function singleValue(values: number[], field: string) {
+  if (!values.length) return null;
+  if (values.some((value) => Math.abs(value - values[0]) > 1e-9)) {
+    throw new Error(`${field}指定了不同取值，请明确采用值。`);
+  }
+  return values[0];
+}
+
 function extractLabeledNumber(text: string, labels: string, units: string) {
-  const number = "(\\d+(?:\\.\\d+)?)";
-  const before = text.match(
-    new RegExp(
-      `(?:${labels})\\s*(?:为|是|达到|约|=|:|：)?\\s*${number}\\s*(?:${units})`,
-      "i",
-    ),
+  const number = `(${NUMERIC_VALUE})`;
+  const unit = units
+    ? `\\s*(?:${units})(?![A-Za-z0-9/])`
+    : String.raw`(?=$|[^A-Za-z0-9./+%‰-])`;
+  const before = new RegExp(
+    `(?:${labels})\\s*(?:为|是|达到|约|取|=|:|：)?\\s*${number}${unit}`,
+    "gi",
   );
-  if (before) return Number(before[1]);
-  const after = text.match(
-    new RegExp(`${number}\\s*(?:${units})\\s*(?:的)?\\s*(?:${labels})`, "i"),
+  const values = [...text.matchAll(before)].map((match) =>
+    parseNumber(match[1]),
   );
-  return after ? Number(after[1]) : null;
+  if (units) {
+    const after = new RegExp(
+      `${number}\\s*(?:${units})\\s*(?:的)?\\s*(?:${labels})`,
+      "gi",
+    );
+    values.push(
+      ...[...text.matchAll(after)].map((match) => parseNumber(match[1])),
+    );
+  }
+  return singleValue(values, "同一数值约束");
 }
 
 function extractLengthMillimeters(text: string, labels: string) {
   const millimeters = extractLabeledNumber(text, labels, "mm|毫米");
-  if (millimeters !== null) return millimeters;
   const meters = extractLabeledNumber(text, labels, "m(?!m)|米");
-  return meters === null ? null : meters * 1000;
+  return singleValue(
+    [
+      ...(millimeters === null ? [] : [millimeters]),
+      ...(meters === null ? [] : [meters * 1000]),
+    ],
+    "长度",
+  );
+}
+
+// 否定作用于后续并列项，直到同一句中的肯定选择词改变作用范围。
+function excludedAt(text: string, index: number) {
+  const segments = (
+    text
+      .slice(0, index)
+      .split(/[。；;\n]/)
+      .at(-1) || ""
+  ).split(/[，,]/);
+  let clause = segments.pop() || "";
+  while (segments.length && /^(?:\s|和|与|及|、|或|and|or)*$/i.test(clause)) {
+    clause = segments.pop() + "," + clause;
+  }
+  const markers = [
+    ...clause.matchAll(
+      /((?:不(?:要|必|需|得)?|禁止|严禁|排除|不是|非)\s*(?:再)?\s*(?:采用|使用|选用|选择|选|要求|允许)?|\b(?:not|without|exclude)\b\s*(?:use|using|select|allow)?\s*)|(采用|使用|选用|选择|只允许|仅允许|允许|设为|而取|\buse\b|\binstead\b)/gi,
+    ),
+  ];
+  return Boolean(markers.at(-1)?.[1]);
 }
 
 function uniqueNumbers(values: number[]) {
   return [...new Set(values)].sort((left, right) => left - right);
 }
 
-function extractAngles(text: string) {
-  const values = [...text.matchAll(/([+-]?\d+(?:\.\d+)?)\s*°/g)]
-    .map((match) => Math.abs(Number(match[1])))
-    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 90);
-  return uniqueNumbers(values);
-}
-
-function extractExcludedAngles(text: string) {
-  const values: number[] = [];
-  for (const clause of text.split(/[。；;，,\n]/)) {
-    if (!/(?:不采用|不使用|排除|禁止|不得使用|exclude)/i.test(clause)) {
-      continue;
-    }
-    values.push(...extractAngles(clause));
+function extractAngleConstraints(text: string) {
+  const selected: number[] = [];
+  const excluded: number[] = [];
+  for (const match of text.matchAll(
+    /([±+-]?\d+(?:\.\d+)?)\s*(?:°|度|\bdeg(?:rees?)?\b)/gi,
+  )) {
+    const value = Math.abs(Number(match[1].replace("±", "")));
+    if (!Number.isFinite(value) || value > 90)
+      throw new Error("候选角度族必须位于 0° 到 90°。");
+    (excludedAt(text, match.index!) ? excluded : selected).push(value);
   }
-  return uniqueNumbers(values);
+  if (selected.some((value) => excluded.includes(value)))
+    throw new Error("角度允许项与排除项冲突。");
+  return {
+    selected: uniqueNumbers(selected),
+    excluded: uniqueNumbers(excluded),
+  };
 }
 
-function extractMaterials(text: string) {
-  const values = [
+function extractMaterials(text: string, fem: boolean) {
+  const aliases = new Map([
+    ["T700/EPOXY", "T700/Epoxy"],
+    ["T700/EP", "T700/Epoxy"],
+    ["T700/环氧", "T700/Epoxy"],
+    ["T800G/5228", "T800G/5228"],
+    ["M40J/TDE85", "M40J/TDE-85"],
+    ["IM7/8552", "IM7-8552"],
+  ]);
+  const tokens = [
     ...text.matchAll(
-      /\b(?:T\d+[A-Z0-9-]*|M\d+[A-Z0-9-]*|IM\d+[A-Z0-9-]*)\s*[\/／]\s*[A-Z0-9-]+\b/gi,
+      /\b(?:T\d+[A-Z0-9]*|M\d+[A-Z0-9]*|IM\d+[A-Z0-9]*)(?:\s*[/／-]\s*(?:[A-Z0-9-]+|环氧|乙烯基酯|聚酰亚胺))?/gi,
     ),
     ...text.matchAll(
-      /(碳纤维|玻璃纤维|芳纶纤维|玄武岩纤维)\s*[\/／]\s*(环氧|乙烯基酯|聚酰亚胺)/g,
+      /(?:高强|高模量)?(?:碳纤维|玻璃纤维|芳纶纤维|玄武岩纤维)\s*[/／]\s*(?:环氧|乙烯基酯|聚酰亚胺)/g,
     ),
-  ].map((match) => match[0].replace(/\s+/g, ""));
-  return [...new Set(values)];
-}
-
-function extractFEMMaterials(text: string) {
-  const aliases: Array<[RegExp, string]> = [
-    [/T700\s*[\/／-]\s*(?:Epoxy|EP)\b/i, "T700/Epoxy"],
-    [/T800G\s*[\/／-]\s*5228\b/i, "T800G/5228"],
-    [/M40J\s*[\/／-]\s*TDE-?85\b/i, "M40J/TDE-85"],
-    [/IM7\s*[\/／-]\s*8552\b/i, "IM7-8552"],
   ];
-  return aliases
-    .filter(([pattern]) => pattern.test(text))
-    .map(([, material]) => material);
+  const selected = new Set<string>();
+  const excluded = new Set<string>();
+  for (const token of tokens) {
+    const normalized = token[0]
+      .replace(/\s+/g, "")
+      .replace("／", "/")
+      .toUpperCase()
+      .replace(/^(IM\d+|T\d+[A-Z]*|M\d+[A-Z]*)-/, "$1/")
+      .replace("TDE-85", "TDE85");
+    const negative = excludedAt(text, token.index!);
+    const material =
+      aliases.get(normalized) ??
+      token[0].replace(/\s+/g, "").replace("／", "/");
+    if (fem && !negative && !aliases.has(normalized))
+      throw new Error(`FEM-ready 源表不包含指定材料 ${token[0]}。`);
+    (negative ? excluded : selected).add(material);
+  }
+  if ([...selected].some((name) => excluded.has(name)))
+    throw new Error("材料允许项与排除项冲突。");
+  // 材料声明必须落到已解析的牌号，不能把未识别的声明当作未指定。
+  for (const mention of text.matchAll(
+    /(?:只允许|仅允许|指定|限定)\s*材料|材料\s*(?:[:：=]|为|是|[A-Za-z0-9])|\bmaterials?\s*[:=]/gi,
+  )) {
+    const end = text.slice(mention.index!).search(/[，,。；;\n]/);
+    const limit = end < 0 ? text.length : mention.index! + end;
+    if (
+      !tokens.some(
+        (token) => token.index! >= mention.index! && token.index! < limit,
+      )
+    )
+      throw new Error("无法识别指定材料，请提供材料牌号与基体名称。");
+  }
+  if (!tokens.length) return [];
+  const materials = (
+    selected.size
+      ? [...selected]
+      : fem
+      ? [...new Set(aliases.values())]
+      : DEFAULT_MATERIALS
+  ).filter((name) => !excluded.has(name));
+  if (!materials.length) throw new Error("材料约束没有可用候选。");
+  return materials;
 }
 
 function extractExternalPressureMPa(text: string) {
@@ -350,30 +359,79 @@ function extractExternalPressureMPa(text: string) {
 }
 
 function extractSafetyFactor(text: string) {
-  const match = text.match(
-    /(?:安全系数|设计系数|safety\s*factor)\s*(?:为|是|=|:|：|取)?\s*(\d+(?:\.\d+)?)/i,
+  return extractLabeledNumber(text, "安全系数|设计系数|safety\\s*factor", "");
+}
+
+function extractImperfectionRatio(text: string) {
+  const label = "(?:初始)?缺陷(?:比|幅值)|imperfection(?:_ratio|\\s+ratio)";
+  const expression = new RegExp(
+    `(?:${label})\\s*(?:为|是|=|:|：|取)?\\s*(千分之|百分之)?\\s*(${NUMERIC_VALUE}|[零〇一二两三四五六七八九十百千]+)\\s*(‰|%|％)?(?=\\s*(?:$|[，,。;；、\\n!！?？]|且|并|和|and\\b))`,
+    "gi",
   );
-  return match ? Number(match[1]) : null;
+  const matches = [...text.matchAll(expression)];
+  const mentions = [...text.matchAll(new RegExp(label, "gi"))];
+  if (matches.length !== mentions.length)
+    throw new Error(
+      "请用完整无量纲数值表示缺陷比，例如 0.008、2e-3、1/500 或 8‰；绝对缺陷幅值需要另给定义。",
+    );
+  if (!matches.length) return null;
+  const values = matches.map((match) => {
+    const raw = /^[+-]?[\d.]/.test(match[2])
+      ? parseNumber(match[2], "分析缺陷比")
+      : parseChineseInteger(match[2]);
+    if (match[1] && match[3])
+      throw new Error("缺陷比的百分比与千分比单位重复，请使用一种表示方式。");
+    const divisor =
+      match[1] === "千分之" || match[3] === "‰"
+        ? 1000
+        : match[1] === "百分之" || match[3] === "%" || match[3] === "％"
+        ? 100
+        : 1;
+    const value = raw / divisor;
+    if (!Number.isFinite(value) || value <= 0)
+      throw new Error("分析缺陷比必须为正数。");
+    return value;
+  });
+  if (values.some((value) => Math.abs(value - values[0]) > 1e-12))
+    throw new Error("指定了多个不同的缺陷比，请明确采用值。");
+  return values[0];
 }
 
 function extractBoundaryType(
   text: string,
 ): NonNullable<FEMReadyDesignPayload["boundary_conditions"]>["type"] | null {
-  if (/(?:简支|simply\s*supported|SSSS)/i.test(text)) {
-    return "END_SIMPLY_SUPPORTED";
+  const definitions = [
+    [/(?:简支|simply\s*supported|SSSS)/gi, "END_SIMPLY_SUPPORTED"],
+    [/(?:固支|固定端|clamped|CCCC)/gi, "END_CLAMPED"],
+    [
+      /(?:法兰(?:等效)?约束|flange\s*(?:constrained|constraint))/gi,
+      "FLANGE_CONSTRAINED",
+    ],
+  ] as const;
+  const selected = new Set<
+    NonNullable<FEMReadyDesignPayload["boundary_conditions"]>["type"]
+  >();
+  const excluded = new Set<string>();
+  for (const [pattern, type] of definitions) {
+    for (const match of text.matchAll(pattern)) {
+      const negative = excludedAt(text, match.index!);
+      if (negative) excluded.add(type);
+      else selected.add(type);
+    }
   }
-  if (/(?:固支|固定端|clamped|CCCC)/i.test(text)) {
-    return "END_CLAMPED";
+  if (selected.size > 1 || [...selected].some((type) => excluded.has(type))) {
+    throw new Error("端部边界条件存在冲突，请明确一种边界。");
   }
-  if (/(?:法兰|flange)/i.test(text)) return "FLANGE_CONSTRAINED";
-  return null;
+  if (!selected.size && excluded.size)
+    throw new Error("请求只排除了边界类型，请明确采用的端部边界。");
+  return [...selected][0] ?? null;
 }
 
 export function detectFEMReadyDesignIntent(
   messages: unknown[],
 ): FEMReadyDesignIntent | null {
   const text = latestUserText(messages);
-  if (!text) return null;
+  if (!text || !hasCandidateGenerationRequest(text)) return null;
   if (
     !/(?:FEM[-_ ]?ready|可直接进入有限元校核|(?:有限元|Abaqus).{0,8}(?:输入包|输入文件|候选包)|CSDM_cph)/i.test(
       text,
@@ -387,9 +445,6 @@ export function detectFEMReadyDesignIntent(
       text,
     ) ||
     !/(?:耐压壳|压力壳|圆柱壳|壳体|pressure\s+hull|cylindrical\s+shell)/i.test(
-      text,
-    ) ||
-    !/(?:生成|枚举|给出|列出|提供|输出|设计|提出|构造|generate|enumerat|create|provide|list)/i.test(
       text,
     )
   ) {
@@ -412,7 +467,9 @@ export function detectFEMReadyDesignIntent(
     radius === null ||
     (depth === null && externalPressure === null)
   ) {
-    return null;
+    throw new Error(
+      "FEM-ready 候选需要明确的圆柱段长度、内半径以及水深或外压。",
+    );
   }
 
   const explicitLayerCount = extractLabeledNumber(
@@ -421,16 +478,39 @@ export function detectFEMReadyDesignIntent(
     "层|plies?",
   );
   if (explicitLayerCount !== null && explicitLayerCount !== 40) {
-    return null;
+    throw new Error(
+      "FEM-ready 源表候选采用 40 层铺层，指定层数与源表合同不一致。",
+    );
   }
 
-  const totalThickness = extractLabeledNumber(
+  let totalThickness = extractLabeledNumber(
     text,
     "总厚度|壁厚|壳体厚度|total thickness",
     "mm|毫米",
   );
+  const plyThickness = extractLabeledNumber(
+    text,
+    "单层厚度|单层名义厚度|ply thickness",
+    "mm|毫米",
+  );
+  if (plyThickness !== null) {
+    const calculatedTotal = Number((plyThickness * 40).toFixed(6));
+    if (
+      totalThickness !== null &&
+      Math.abs(totalThickness - calculatedTotal) > 1e-6
+    ) {
+      throw new Error("指定总厚度与 40 层单层厚度之和不一致。");
+    }
+    totalThickness = calculatedTotal;
+  }
+  const imperfection = extractImperfectionRatio(text);
   const safetyFactor = extractSafetyFactor(text);
-  const materials = extractFEMMaterials(text);
+  const materials = extractMaterials(text, true);
+  const angleConstraints = extractAngleConstraints(text);
+  if (angleConstraints.selected.length || angleConstraints.excluded.length)
+    throw new Error(
+      "FEM-ready 源表接口不支持角度筛选；限定角度的候选请使用概念铺层枚举。",
+    );
   const boundaryType = extractBoundaryType(text);
   const facts = [
     `圆柱段长度 ${length} mm`,
@@ -440,6 +520,10 @@ export function detectFEMReadyDesignIntent(
       : `外部静水压力 ${externalPressure} MPa`,
   ];
   if (totalThickness !== null) facts.push(`总厚度 ${totalThickness} mm`);
+  if (plyThickness !== null) facts.push(`单层厚度 ${plyThickness} mm`);
+  if (imperfection !== null) facts.push(`分析缺陷比 ${imperfection}`);
+  if (depth !== null && externalPressure !== null)
+    facts.push(`外部静水压力 ${externalPressure} MPa`);
   if (materials.length) facts.push(`材料限定 ${materials.join("、")}`);
   if (safetyFactor !== null) facts.push(`安全系数 ${safetyFactor}`);
   if (boundaryType !== null) facts.push(`端部边界 ${boundaryType}`);
@@ -452,7 +536,7 @@ export function detectFEMReadyDesignIntent(
   const assumptions = [
     "候选来自正式有限元表格参数域，表中历史结果只用于筛选参考，所有候选必须由当前 Abaqus 模型重新求解。",
     "当前计算合同只覆盖复合材料圆柱壳子模型；金属封头、法兰和连接细节未显式建模。",
-    "40 层顺序来自源表铺层模板，单层厚度由源行总厚度除以 40 得到，不是用户给定层厚。",
+    "40 层顺序来自源表铺层模板，候选按等厚层输入。",
   ];
   if (boundaryType === null) {
     assumptions.push(
@@ -476,6 +560,7 @@ export function detectFEMReadyDesignIntent(
       length_mm: length,
       radius_mm: radius,
       ...(totalThickness !== null ? { thickness_mm: totalThickness } : {}),
+      ...(imperfection !== null ? { imperfection_ratio: imperfection } : {}),
     },
     load_conditions: {
       ...(depth !== null ? { service_depth_m: depth } : {}),
@@ -520,13 +605,7 @@ export function detectDeterministicDesignIntent(
   messages: unknown[],
 ): DeterministicDesignIntent | null {
   const text = latestUserText(messages);
-  if (!text) return null;
-  const explicitEnumeration = /(?:枚举|按规则|确定性生成|enumerat)/i.test(text);
-  const hasLayupSpecification =
-    /(?:完整物理层数|总层数|铺层层数|层数)\s*(?:为|是|=|:|：)?\s*\d+\s*层/.test(
-      text,
-    ) && extractAngles(text).length > 0;
-  if (!explicitEnumeration && !hasLayupSpecification) return null;
+  if (!text || !hasCandidateGenerationRequest(text)) return null;
   const count = extractCandidateCount(text);
   if (!count || count < 2) return null;
   if (
@@ -534,9 +613,6 @@ export function detectDeterministicDesignIntent(
       text,
     ) ||
     !/(?:耐压壳|压力壳|压力容器|圆柱壳|壳体|储氢瓶|COPV|pressure\s+(?:hull|vessel)|cylinder)/i.test(
-      text,
-    ) ||
-    !/(?:生成|枚举|给出|列出|提供|输出|设计|提出|构造|generate|enumerat|create|provide|list)/i.test(
       text,
     )
   ) {
@@ -546,6 +622,21 @@ export function detectDeterministicDesignIntent(
   const facts: string[] = [];
   const assumptions: string[] = [];
   const parameterValues: Record<string, JsonScalar[]> = {};
+  const pressure = extractExternalPressureMPa(text);
+  const safetyFactor = extractSafetyFactor(text);
+  const imperfection = extractImperfectionRatio(text);
+  if (pressure !== null) {
+    parameterValues.design_pressure_mpa = [pressure];
+    facts.push(`外压 ${pressure} MPa`);
+  }
+  if (safetyFactor !== null) {
+    parameterValues.safety_factor = [safetyFactor];
+    facts.push(`安全系数 ${safetyFactor}`);
+  }
+  if (imperfection !== null) {
+    parameterValues.imperfection_ratio = [imperfection];
+    facts.push(`分析缺陷比 ${imperfection}`);
+  }
   const depth = extractLabeledNumber(
     text,
     "水深|深度|下潜深度|工作深度",
@@ -598,10 +689,6 @@ export function detectDeterministicDesignIntent(
   );
   if (plyThickness !== null) {
     facts.push(`单层厚度 ${plyThickness} mm`);
-  } else {
-    assumptions.push(
-      "单层厚度未给定，候选表保持“未给定/待确定”，不编造单层厚度和数值总厚度。",
-    );
   }
   const totalThickness = extractLabeledNumber(
     text,
@@ -609,18 +696,33 @@ export function detectDeterministicDesignIntent(
     "mm|毫米",
   );
   if (totalThickness !== null) {
+    if (
+      plyThickness !== null &&
+      Math.abs(totalThickness - layerCount * plyThickness) > 1e-6
+    ) {
+      throw new Error("指定总厚度与物理层数、单层厚度不一致。");
+    }
     parameterValues.total_thickness_mm = [totalThickness];
     facts.push(`总厚度 ${totalThickness} mm`);
   }
+  if (plyThickness === null) {
+    assumptions.push(
+      totalThickness === null
+        ? "单层厚度和总厚度未给定，厚度字段保留为空。"
+        : "总厚度按输入保存；总厚度除以层数给出平均层厚，实际各层厚度待材料与工艺确定。",
+    );
+  }
 
-  const excludedAngles = extractExcludedAngles(text);
-  const statedAngles = extractAngles(text).filter(
-    (value) => !excludedAngles.includes(value),
-  );
-  const allowedAngles = statedAngles.length ? statedAngles : DEFAULT_ANGLES;
+  const { selected: statedAngles, excluded: excludedAngles } =
+    extractAngleConstraints(text);
+  const allowedAngles = (
+    statedAngles.length ? statedAngles : DEFAULT_ANGLES
+  ).filter((value) => !excludedAngles.includes(value));
+  if (!allowedAngles.length)
+    throw new Error("角度约束没有可用候选，请明确允许的角度族。");
   if (!statedAngles.length) {
     assumptions.push(
-      "允许角度未给定，初始筛选空间采用 30°、45°、60° 和 90°，并排除 0°。",
+      `允许角度未给定，筛选空间采用 ${allowedAngles.join("°、")}°。`,
     );
   } else {
     facts.push(`允许角度族 ${allowedAngles.join("°、")}°`);
@@ -631,7 +733,7 @@ export function detectDeterministicDesignIntent(
     ? []
     : [0];
 
-  const materials = extractMaterials(text);
+  const materials = extractMaterials(text, false);
   const selectedMaterials = materials.length ? materials : DEFAULT_MATERIALS;
   if (materials.length) {
     facts.push(`材料候选 ${materials.join("、")}`);
@@ -656,10 +758,14 @@ export function detectDeterministicDesignIntent(
   const symmetric = symmetricSetting ?? true;
   const balanced = balancedSetting ?? true;
   if (symmetricSetting === null) {
-    assumptions.push("为抑制拉伸-弯曲耦合，初始候选要求关于中面对称。");
+    assumptions.push(
+      "候选角度序列采用中面镜像对称；层间材料与厚度对称时 B 矩阵为零。",
+    );
   }
   if (balancedSetting === null) {
-    assumptions.push("为控制面内剪切耦合，初始候选要求正负角层数均衡。");
+    assumptions.push(
+      "候选正负角层数相同；正负角层材料与厚度匹配时 A16、A26 相消。",
+    );
   }
 
   return {
@@ -683,155 +789,21 @@ export function detectDeterministicDesignIntent(
   };
 }
 
-function sequenceIsSymmetric(sequence: number[]) {
-  return sequence.every(
-    (value, index) =>
-      Math.abs(value - sequence[sequence.length - index - 1]) <= 1e-9,
-  );
-}
-
-function sequenceIsBalanced(sequence: number[]) {
-  const counts = new Map<number, number>();
-  for (const value of sequence) {
-    if (Math.abs(value) === 0 || Math.abs(value) === 90) continue;
-    counts.set(value, (counts.get(value) || 0) + 1);
+function requireSameRequest(actual: unknown, expected: unknown, field: string) {
+  if (stableJson(actual) !== stableJson(expected)) {
+    throw new Error(`设计服务返回的 ${field} 与请求不一致。`);
   }
-  return [...new Set([...counts.keys()].map(Math.abs))].every(
-    (magnitude) =>
-      (counts.get(magnitude) || 0) === (counts.get(-magnitude) || 0),
-  );
 }
 
 export function validateDeterministicDesignResponse(
   response: unknown,
   intent: DeterministicDesignIntent,
 ): asserts response is DeterministicDesignServiceResponse {
-  const value = response as Partial<DeterministicDesignServiceResponse>;
-  const candidates = value?.result?.candidates;
-  const request = value?.result?.request;
-  if (
-    value?.status !== "passed" ||
-    value.generation_mode !== "concept_layup_enumeration" ||
-    !Number.isInteger(value.engine_version) ||
-    !value.engine_fingerprint ||
-    value.result?.engine_version !== value.engine_version ||
-    value.result?.engine_fingerprint !== value.engine_fingerprint ||
-    !value.result?.design_fingerprint ||
-    value.result?.schema_version !== "1" ||
-    !request ||
-    request.schema_version !== intent.payload.schema_version ||
-    request.candidate_count !== intent.payload.candidate_count ||
-    request.layer_count !== intent.payload.layer_count ||
-    JSON.stringify(request.allowed_angles_deg) !==
-      JSON.stringify(intent.payload.allowed_angles_deg) ||
-    JSON.stringify(request.excluded_angles_deg) !==
-      JSON.stringify(intent.payload.excluded_angles_deg) ||
-    request.symmetric !== intent.payload.symmetric ||
-    request.balanced !== intent.payload.balanced ||
-    JSON.stringify(request.materials) !==
-      JSON.stringify(intent.payload.materials) ||
-    request.ply_thickness_mm !== intent.payload.ply_thickness_mm ||
-    JSON.stringify(request.parameter_values) !==
-      JSON.stringify(intent.payload.parameter_values) ||
-    value.result.candidate_count !== intent.candidateCount ||
-    !Array.isArray(candidates) ||
-    candidates.length !== intent.candidateCount ||
-    typeof value.markdown !== "string"
-  ) {
-    throw new Error("确定性设计服务返回的数量、版本或结果结构无效。");
-  }
-
-  const uniqueSequences = new Set<string>();
-  const allowedAngles = new Set(intent.payload.allowed_angles_deg);
-  const excludedAngles = new Set(intent.payload.excluded_angles_deg);
-  const parameterNames = Object.keys(intent.payload.parameter_values).sort();
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index];
-    if (
-      candidate.candidate_id !== index + 1 ||
-      !Array.isArray(candidate.layup_deg) ||
-      candidate.layup_deg.some(
-        (angle) => typeof angle !== "number" || !Number.isFinite(angle),
-      ) ||
-      candidate.layup_deg.length !== intent.payload.layer_count ||
-      candidate.layer_count !== intent.payload.layer_count ||
-      candidate.material !==
-        intent.payload.materials[index % intent.payload.materials.length]
-    ) {
-      throw new Error("确定性设计服务返回的编号、材料或物理层数无效。");
-    }
-    if (
-      candidate.layup_deg.some(
-        (angle) =>
-          !allowedAngles.has(Math.abs(angle)) ||
-          excludedAngles.has(Math.abs(angle)),
-      )
-    ) {
-      throw new Error("确定性设计服务返回了允许集合外或已排除的角度。");
-    }
-    const candidateParameterNames = Object.keys(
-      candidate.parameters || {},
-    ).sort();
-    if (
-      JSON.stringify(candidateParameterNames) !==
-        JSON.stringify(parameterNames) ||
-      parameterNames.some(
-        (name) =>
-          !intent.payload.parameter_values[name].some(
-            (value) => value === candidate.parameters[name],
-          ),
-      )
-    ) {
-      throw new Error("确定性设计服务返回的参数不在任务规格中。");
-    }
-    const sequenceKey = JSON.stringify(candidate.layup_deg);
-    if (uniqueSequences.has(sequenceKey)) {
-      throw new Error("确定性设计服务返回了重复铺层序列。");
-    }
-    uniqueSequences.add(sequenceKey);
-    if (
-      intent.payload.symmetric &&
-      (!candidate.symmetric || !sequenceIsSymmetric(candidate.layup_deg))
-    ) {
-      throw new Error("确定性设计服务返回了不满足对称约束的铺层。");
-    }
-    if (
-      intent.payload.balanced &&
-      (!candidate.balanced || !sequenceIsBalanced(candidate.layup_deg))
-    ) {
-      throw new Error("确定性设计服务返回了不满足均衡约束的铺层。");
-    }
-    const explicitTotal = candidate.parameters.total_thickness_mm;
-    const expectedTotal =
-      typeof explicitTotal === "number"
-        ? explicitTotal
-        : intent.payload.ply_thickness_mm === null
-        ? null
-        : intent.payload.layer_count * intent.payload.ply_thickness_mm;
-    if (
-      candidate.ply_thickness_mm !== intent.payload.ply_thickness_mm ||
-      (expectedTotal === null
-        ? candidate.total_thickness_mm !== null
-        : typeof candidate.total_thickness_mm !== "number" ||
-          Math.abs(candidate.total_thickness_mm - expectedTotal) > 1e-9)
-    ) {
-      throw new Error("确定性设计服务返回的厚度边界或厚度算术无效。");
-    }
-  }
-  const markdownRows = value.markdown
-    .split(/\r?\n/)
-    .filter((line) => /^\|\s*\d+\s*\|/.test(line));
-  const markdownIds = markdownRows.map((line) =>
-    Number(line.match(/^\|\s*(\d+)\s*\|/)?.[1]),
-  );
-  if (
-    markdownRows.length !== intent.candidateCount ||
-    markdownIds.some((candidateId, index) => candidateId !== index + 1)
-  ) {
-    throw new Error("确定性设计表的候选行数或编号不完整。");
-  }
-  if (/±|[₀-₉]|\]\s*[sS]\b/.test(markdownRows.join("\n"))) {
-    throw new Error("确定性设计表包含压缩铺层记号。");
+  const value = validateDesignContract(response);
+  if (value.generation_mode !== intent.mode)
+    throw new Error("设计响应模式与请求不一致。");
+  for (const [key, expected] of Object.entries(intent.payload)) {
+    requireSameRequest(value.result.request[key], expected, key);
   }
 }
 
@@ -839,156 +811,81 @@ export function validateFEMReadyDesignResponse(
   response: unknown,
   intent: FEMReadyDesignIntent,
 ): asserts response is FEMReadyDesignServiceResponse {
-  const value = response as Partial<FEMReadyDesignServiceResponse>;
-  const result = value.result;
-  const candidates = result?.candidates;
-  const request = result?.request;
+  const value = validateDesignContract(response);
+  if (value.generation_mode !== intent.mode)
+    throw new Error("设计响应模式与请求不一致。");
+  const { request, source_table } = value.result;
   if (
-    value.status !== "passed" ||
-    value.contract_version !== "1" ||
-    value.generation_mode !== "fem_ready_cylindrical_shell" ||
-    result?.schema_version !== "2" ||
-    result.contract_version !== "1" ||
-    result.generation_mode !== intent.payload.generation_mode ||
-    !request ||
-    request.schema_version !== "2" ||
-    request.generation_mode !== intent.payload.generation_mode ||
-    request.candidate_count !== intent.candidateCount ||
-    request.geometry.length_mm !== intent.payload.geometry.length_mm ||
-    request.geometry.radius_mm !== intent.payload.geometry.radius_mm ||
-    result.source_table?.sha256 !== FEM_TABLE_SHA256 ||
-    result.source_table?.row_count !== 5857 ||
-    result.candidate_count !== intent.candidateCount ||
-    !Array.isArray(candidates) ||
-    candidates.length !== intent.candidateCount ||
-    !result.design_fingerprint ||
-    typeof value.markdown !== "string"
+    source_table.sha256 !== FEM_TABLE_SHA256 ||
+    source_table.row_count !== 5857
   ) {
-    throw new Error("FEM-ready 设计服务返回的版本、数据源或结果结构无效。");
+    throw new Error("FEM-ready 设计服务的数据源不一致。");
   }
-  if (
-    intent.payload.load_conditions.service_depth_m !== undefined &&
-    request.load_conditions.service_depth_m !==
-      intent.payload.load_conditions.service_depth_m
-  ) {
-    throw new Error("FEM-ready 设计服务返回的工作水深与请求不一致。");
+  requireSameRequest(
+    request.candidate_count,
+    intent.candidateCount,
+    "候选数量",
+  );
+  requireSameRequest(
+    request.geometry,
+    {
+      length_mm: intent.payload.geometry.length_mm,
+      radius_mm: intent.payload.geometry.radius_mm,
+      thickness_mm:
+        intent.payload.geometry.thickness_mm === undefined
+          ? null
+          : [intent.payload.geometry.thickness_mm],
+      ...(intent.payload.geometry.imperfection_ratio === undefined
+        ? {}
+        : { imperfection_ratio: intent.payload.geometry.imperfection_ratio }),
+    },
+    "几何与缺陷",
+  );
+  for (const key of Object.keys(intent.payload.load_conditions) as Array<
+    keyof FEMReadyDesignPayload["load_conditions"]
+  >) {
+    requireSameRequest(
+      request.load_conditions[key],
+      intent.payload.load_conditions[key],
+      key,
+    );
   }
-  if (
-    intent.payload.load_conditions.external_pressure_MPa !== undefined &&
-    request.load_conditions.external_pressure_MPa !==
-      intent.payload.load_conditions.external_pressure_MPa
-  ) {
-    throw new Error("FEM-ready 设计服务返回的外压与请求不一致。");
-  }
-  if (
-    typeof request.load_conditions.external_pressure_MPa !== "number" ||
-    request.load_conditions.external_pressure_MPa <= 0
-  ) {
-    throw new Error("FEM-ready 设计服务未返回有效外部静水压力。");
-  }
-
-  const revisions = new Set<string>();
-  const requiredMaterialFields = [
-    "name",
-    "material_key",
-    "density_kg_per_m3",
-    "E1_GPa",
-    "E2_GPa",
-    "G12_GPa",
-    "nu12",
-    "Xt_MPa",
-    "Xc_MPa",
-    "Yt_MPa",
-    "Yc_MPa",
-    "S_MPa",
-  ];
-  for (let index = 0; index < candidates.length; index += 1) {
-    const candidate = candidates[index];
-    if (
-      candidate.candidate_id !== `TMP_${index + 1}` ||
-      candidate.hull_type !== "CYLINDRICAL" ||
-      candidate.geometry.length_mm !== intent.payload.geometry.length_mm ||
-      candidate.geometry.radius_mm !== intent.payload.geometry.radius_mm ||
-      !Number.isFinite(candidate.geometry.thickness_mm) ||
-      candidate.geometry.thickness_mm <= 0 ||
-      !Number.isFinite(candidate.geometry.imperfection_ratio) ||
-      candidate.geometry.imperfection_ratio <= 0 ||
-      candidate.layup.ply_count !== 40 ||
-      !Array.isArray(candidate.layup.angles_deg) ||
-      candidate.layup.angles_deg.length !== 40 ||
-      candidate.layup.angles_deg.some(
-        (angle) => !Number.isFinite(angle) || Math.abs(angle) > 90,
-      ) ||
-      candidate.layup.balanced !== true ||
-      !sequenceIsBalanced(candidate.layup.angles_deg) ||
-      candidate.layup.symmetric !==
-        sequenceIsSymmetric(candidate.layup.angles_deg) ||
-      !Number.isFinite(candidate.layup.ply_thickness_mm) ||
-      candidate.layup.ply_thickness_mm <= 0 ||
-      Math.abs(
-        candidate.layup.ply_thickness_mm * candidate.layup.ply_count -
-          candidate.geometry.thickness_mm,
-      ) > 1e-5 ||
-      candidate.load_conditions.external_pressure_MPa !==
-        request.load_conditions.external_pressure_MPa ||
-      !candidate.boundary_conditions.type ||
-      !Number.isFinite(candidate.design_targets.ultimate_pressure_min_MPa) ||
-      candidate.design_targets.ultimate_pressure_min_MPa <= 0 ||
-      candidate.provenance.source_sha256 !== FEM_TABLE_SHA256 ||
-      ![
-        "historically_screened_baseline",
-        "exact_geometry_exploration",
-        "nearest_neighbor_transfer_exploration",
-      ].includes(candidate.screening?.candidate_role) ||
-      candidate.provenance.historical_fem_reference.status !==
-        "screening_reference_only_not_current_run" ||
-      candidate.provenance.source_laminate_stiffness_validation.status !==
-        "recomputed_from_explicit_sequence" ||
-      !Number.isFinite(
-        candidate.provenance.source_laminate_stiffness_validation.max_abs_error,
-      ) ||
-      candidate.provenance.source_laminate_stiffness_validation.max_abs_error >
-        candidate.provenance.source_laminate_stiffness_validation
-          .absolute_tolerance ||
-      candidate.fem_readiness.current_fem_run_required !== true ||
-      !/^DR_[a-f0-9]{64}$/.test(candidate.design_revision_id) ||
-      requiredMaterialFields.some((field) => {
-        const materialValue = candidate.material_system[field];
-        if (field === "name" || field === "material_key") {
-          return typeof materialValue !== "string" || !materialValue.trim();
-        }
-        return (
-          typeof materialValue !== "number" ||
-          !Number.isFinite(materialValue) ||
-          materialValue <= 0
-        );
-      })
-    ) {
-      throw new Error(
-        `FEM-ready 候选 ${index + 1} 缺少当前圆柱壳校核所需输入。`,
-      );
-    }
-    if (revisions.has(candidate.design_revision_id)) {
-      throw new Error("FEM-ready 设计服务返回了重复设计修订。");
-    }
-    revisions.add(candidate.design_revision_id);
-  }
-
-  const markdownRows = value.markdown
-    .split(/\r?\n/)
-    .filter((line) => /^\|\s*TMP_\d+\s*\|/.test(line));
-  if (
-    markdownRows.length !== intent.candidateCount ||
-    markdownRows.some(
-      (line, index) =>
-        line.match(/^\|\s*(TMP_\d+)\s*\|/)?.[1] !== `TMP_${index + 1}`,
-    )
-  ) {
-    throw new Error("FEM-ready 候选表的行数或编号不完整。");
-  }
-  if (/±|[₀-₉]|\]\s*[sS]\b/.test(markdownRows.join("\n"))) {
-    throw new Error("FEM-ready 候选表包含压缩铺层记号。");
-  }
+  requireSameRequest(
+    request.boundary_conditions.type,
+    intent.payload.boundary_conditions?.type ?? "FLANGE_CONSTRAINED",
+    "端部边界",
+  );
+  requireSameRequest(
+    request.boundary_conditions.basis,
+    intent.payload.boundary_conditions ? "user_input" : "modeling_assumption",
+    "边界依据",
+  );
+  requireSameRequest(
+    request.design_targets.safety_factor,
+    intent.payload.design_targets?.safety_factor ?? null,
+    "安全系数",
+  );
+  requireSameRequest(
+    request.design_targets.primary_objective,
+    intent.payload.design_targets?.primary_objective ?? "有限元校核后筛选",
+    "设计目标",
+  );
+  if (intent.payload.materials)
+    requireSameRequest(
+      [...request.materials].sort(),
+      [...intent.payload.materials].sort(),
+      "材料",
+    );
+  requireSameRequest(
+    request.structure_form,
+    intent.payload.structure_form,
+    "结构形式",
+  );
+  requireSameRequest(
+    request.manufacturing_process,
+    intent.payload.manufacturing_process,
+    "制造工艺",
+  );
 }
 
 export async function requestDeterministicDesign(
@@ -1070,106 +967,22 @@ export function buildDesignNarrativeInstruction(
   intent: DesignIntent,
   response: DesignServiceResponse,
 ) {
-  if (
-    intent.mode === "fem_ready_cylindrical_shell" &&
-    response.generation_mode === "fem_ready_cylindrical_shell"
-  ) {
-    const request = response.result.request;
-    const coverage = response.result.coverage;
-    const roleCounts = response.result.candidates.reduce(
-      (counts, candidate) => {
-        counts[candidate.screening.candidate_role] += 1;
-        return counts;
-      },
-      {
-        historically_screened_baseline: 0,
-        exact_geometry_exploration: 0,
-        nearest_neighbor_transfer_exploration: 0,
-      },
-    );
-    return `当前请求由 CSGPT 工程设计路径处理。结构化引擎已从指纹固定的真实有限元表格中生成并校验 ${
-      intent.candidateCount
-    } 组可进入 CSDM_cph 圆柱壳子模型的候选。你只负责工程解释，不得重新枚举、删改或补写候选。
-
-请用简体中文写四个简洁但完整的小节：
-1. “任务与 FEM 输入”：说明圆柱段几何、服务外压 ${
-      request.load_conditions.external_pressure_MPa
-    } MPa、边界条件、材料范围、40 层显式铺层、总厚度和初始缺陷均已进入结构化候选。材料范围严格为 ${request.materials.join(
-      "、",
-    )}，不得补入其他材料体系；材料名称不证明材料常数的试验来源。40 层来自源表模板，不得把模型或源表默认值说成用户输入；形成输入包不表示已导入 CSDM_cph 或运行有限元。
-2. “候选来源与筛选”：说明正式表格共 ${
-      response.result.source_table.row_count
-    } 行；目标几何有 ${coverage.exact_geometry_row_count} 行，其中 ${
-      coverage.exact_geometry_reference_at_or_above_target_count
-    } 行历史参考极限压力不低于当前目标。实际选中的候选角色为：同几何历史基线 ${
-      roleCounts.historically_screened_baseline
-    } 组，同几何探索 ${
-      roleCounts.exact_geometry_exploration
-    } 组，最近邻迁移探索 ${
-      roleCounts.nearest_neighbor_transfer_exploration
-    } 组。三者分别说明，不得把同几何探索写成几何迁移。历史值只用于筛选，不是当前 Abaqus 结果；只有最近邻迁移探索固定为用户几何后需要重新评估来源几何差异。
-3. “数据流”：说明每个候选包含稳定 design_revision_id、几何、40 个逐层角度、材料属性、缺陷、载荷、边界和目标，可作为 CSDM_cph 当前圆柱壳校核的输入；有限元结果必须按 design_revision_id 回写。
-4. “适用边界”：明确当前只建模复合材料圆柱壳，未显式建模金属封头、法兰和连接；未完成当前 Abaqus 求解、网格收敛、缺陷敏感性、渐进损伤、制造偏差和试验验证前，不得宣称整机在目标水深安全。
-
-层合板术语边界：均衡表示非 0°/90° 角度的正负层数相等，主要约束经典层合理论中的面内拉伸-剪切耦合项 A16/A26；均衡不等于关于中面对称。只有逐层关于中面的镜像对称才支持 B 矩阵为零的对称结论。对非对称但均衡的候选，不得声称 B=0 或没有拉伸-弯曲耦合；应引用候选实际的 symmetric 和 balanced 字段，并说明仍需当前 Abaqus 校核。
-
-对于“非对称但均衡”的候选，解释必须按以下三个可核验事实组织，不能改写成相反关系：
-- 均衡：正负角层数相等，主要说明 A16/A26 等面内拉伸-剪切耦合项的消除趋势；均衡本身不决定 B 矩阵。
-- 对称：物理层序列关于中面对称时，才可在相同材料和厚度假设下说明 B=0；对称性与均衡性是两个独立字段。
-- 当前候选若为 symmetric=false 且 balanced=true：只能说明“非对称但均衡，不能由该字段推出 B=0，仍需按 design_revision_id 运行当前 Abaqus 校核”，不得同时出现“该候选 B_ij=0”“均衡导致 B=0”或“无拉伸-弯曲耦合”。
-
-禁止重新输出候选表，禁止把历史参考值写成当前计算值，禁止编造安全系数、整机承载能力或 Abaqus 结果。说明控制在 1400 个汉字以内，最后一句写“完整 FEM 输入候选表如下”。
-
-用户明确输入：
-${intent.facts.map((item) => `- ${item}`).join("\n")}
-
-建模与证据边界：
-${intent.assumptions.map((item) => `- ${item.trim()}`).join("\n")}`;
-  }
-
-  if (
-    intent.mode !== "concept_layup_enumeration" ||
-    response.generation_mode === "fem_ready_cylindrical_shell"
-  ) {
+  if (intent.mode !== response.generation_mode) {
     throw new Error("设计意图与设计服务响应模式不一致。");
   }
-  return `当前请求由 CSGPT 组合生产路径处理。确定性设计引擎已经生成并校验 ${
-    intent.candidateCount
-  } 组候选，设计引擎版本为 ${
-    response.engine_version
-  }。你只负责工程解释，不负责重新枚举候选。
-
-请用简体中文写四个简洁但完整的小节：
-1. “需求与已知输入”：只复述用户明确给定的事实。
-2. “候选空间假设”：逐项说明下面的初始筛选假设，并明确它们不是安全结论。
-3. “生成与独立复核方法”：解释精确数量、编号、逐个物理层展开、唯一性、角度集合、层数、厚度边界、对称和均衡是如何由确定性引擎生成并复核的。
-4. “安全性边界与后续校核”：说明这些是待校核候选，不能据此宣称可在目标工况安全使用；列出静水外压换算、材料许用值、金属封头与复合材料连接、初始缺陷、几何非线性、屈曲/塌陷、渐进损伤、网格收敛、制造与试验验证等必要工作。
-
-禁止重新输出候选表、禁止使用 ±、尾部 s、下标或重复次数压缩铺层、禁止编造单层厚度、总厚度、承载值、安全系数或有限元结果。说明控制在 1200 个汉字以内，最后一句写“完整候选表如下”。
-
-用户明确输入：
-${
-  intent.facts.length
-    ? intent.facts.map((item) => `- ${item}`).join("\n")
-    : "- 未提取到可直接采用的数值事实"
-}
-
-初始筛选假设：
-${intent.assumptions.map((item) => `- ${item}`).join("\n")}`;
-}
-
-function localizeParameterHeaders(markdown: string) {
-  const replacements: Record<string, string> = {
-    inner_radius_mm: "内半径/mm",
-    length_mm: "圆柱段长度/mm",
-    manufacturing_process: "制造工艺",
-    service_depth_m: "工作水深/m",
-    structure_form: "结构形式",
-    total_thickness_mm: "输入总厚度/mm",
-  };
-  return Object.entries(replacements).reduce(
-    (text, [source, target]) => text.replaceAll(source, target),
-    markdown,
+  validateDesignInterpretationContext(response);
+  const context = response.interpretation_context;
+  // 统计事实由设计服务按实际候选汇总，界面直接展示完整候选表。
+  return (
+    "请说明以下候选数据的工程含义，按任务输入与候选分组、层数厚度与铺层、制造与有限元校核三部分回答。" +
+    "说明对称与均衡各自需要的层间关系及其对 ABD 分量的约束。" +
+    "候选表由应用程序直接展示，回答只写工程说明。" +
+    "已知数值、未知输入、历史结果和当前校核状态分别按给定数据说明。\n" +
+    JSON.stringify(context.facts) +
+    "\n用户明确输入：\n" +
+    JSON.stringify(intent.facts) +
+    "\n建模假设：\n" +
+    JSON.stringify(intent.assumptions)
   );
 }
 
@@ -1177,27 +990,14 @@ export function renderDeterministicDesignAppendix(
   intent: DesignIntent,
   response: DesignServiceResponse,
 ) {
-  if (
-    intent.mode === "fem_ready_cylindrical_shell" &&
-    response.generation_mode === "fem_ready_cylindrical_shell"
-  ) {
-    return `\n\n## FEM-ready 圆柱壳候选
-
-以下 ${intent.candidateCount} 组候选来自指纹固定的真实有限元表格参数域，包含 CSDM_cph 当前圆柱壳子模型所需的几何、材料、40 层显式铺层、初始缺陷、载荷、边界和目标字段。历史有限元值只用于来源筛选，所有候选仍需按 design_revision_id 重新运行当前 Abaqus 模型；本表不代表金属封头与连接结构已经校核。
-
-${response.markdown}`;
-  }
-  if (
-    intent.mode !== "concept_layup_enumeration" ||
-    response.generation_mode === "fem_ready_cylindrical_shell"
-  ) {
-    throw new Error("设计意图与设计服务响应模式不一致。");
-  }
-  return `\n\n## 确定性候选表\n\n以下 ${
-    intent.candidateCount
-  } 组方案由确定性设计引擎逐项生成并通过硬约束复核。表中的铺层均按从外表面到内表面的物理层逐层展开；“未给定”和“待确定”表示输入缺失，不代表零值。\n\n${localizeParameterHeaders(
-    response.markdown,
-  )}\n\n设计结果指纹：\`${
-    response.result.design_fingerprint
-  }\`；设计引擎版本：\`${response.engine_version}\`。`;
+  if (intent.mode !== response.generation_mode)
+    throw new Error("设计意图与设计响应模式不一致。");
+  const fem = response.generation_mode === "fem_ready_cylindrical_shell";
+  const title = fem ? "FEM-ready 圆柱壳候选" : "概念候选";
+  const scope = fem
+    ? "候选按源行保留材料、铺层、厚度和分析缺陷。历史压力用于初筛，当前圆柱段尚未求解；金属封头和连接不在该子模型内。"
+    : "铺层按外表面到内表面逐层展开。未给定的厚度保留为空，候选承载能力需结合材料与工况校核。";
+  return `\n\n## ${title}\n\n${scope}\n\n${renderDesignTable(
+    response,
+  )}\n\n设计结果指纹：\`${response.result.design_fingerprint}\`。`;
 }

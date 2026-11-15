@@ -1,20 +1,10 @@
-import { getClientConfig } from "../config/client";
 import { SubmitKey } from "../store/config";
-
-const isApp = !!getClientConfig()?.isApp;
 
 const cn = {
   WIP: "该功能仍在开发中……",
   Error: {
-    Unauthorized: isApp
-      ? `😆 对话遇到了一些问题，不用慌:
-       \\ 1️⃣ 检查 API 配置是否正确，点击[这里](/#/settings)修改设置 ⚙️
-       \\ 2️⃣ 确认模型服务是否可用`
-      : `😆 对话遇到了一些问题，不用慌:
-       \ 1️⃣ 如果你正在使用私有部署版本，点击[这里](/#/auth)输入访问秘钥 🔑
-       \ 2️⃣ 检查 API 配置是否正确，点击[这里](/#/settings)修改设置 ⚙️
-       \ 3️⃣ 确认模型服务是否可用
-       `,
+    Unauthorized:
+      "身份验证失败。请重新登录；使用自定义模型接口时，请检查 API 凭据。",
   },
   Auth: {
     Return: "返回",

@@ -54,7 +54,21 @@
     {
       "name": "深海耐压壳普通批量设计问答",
       "prompt": "我现在想要设计一款能够在5000米水深下安全使用的复合材料耐压壳，其结构形式两端为金属封头，中间是采用缠绕工艺制备的复合材料圆柱壳。圆柱壳长度为600mm，内半径为150mm，你来直接生成满足这种设计要求的50组方案，并详细解释方案生成的过程。",
-      "expectedDetected": false
+      "expectedDetected": true,
+      "expectedMode": "concept_layup_enumeration",
+      "expectedCandidateCount": 50,
+      "expectedLayerCount": 60,
+      "expectedAllowedAngles": [30, 45, 60, 90],
+      "expectedPlyThickness": null,
+      "expectedParameters": {
+        "service_depth_m": [5000],
+        "inner_radius_mm": [150],
+        "length_mm": [600],
+        "structure_form": ["两端金属封头+复合材料圆柱壳"],
+        "manufacturing_process": ["纤维缠绕"]
+      },
+      "expectedSymmetric": true,
+      "expectedBalanced": true
     },
     {
       "name": "自然限定语中的 FEM-ready 50 组候选",

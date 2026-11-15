@@ -11,8 +11,7 @@ import { prettyObject } from "./format";
 import { fetch as tauriFetch } from "./stream";
 import {
   CSGPTDesignArtifactAssembler,
-  parseCSGPTDesignArtifactHeader,
-  validateCSGPTDesignArtifact,
+  validateCompletedDesignArtifact,
   type CSGPTDesignArtifact,
   type CSGPTDesignArtifactChunk,
 } from "./structured-design";
@@ -473,14 +472,14 @@ export function streamWithThink(
 
   const finish = () => {
     if (!finished) {
-      const expected = parseCSGPTDesignArtifactHeader(responseRes);
-      if (
-        !controller.signal.aborted &&
-        (expected || designArtifactChunks.started)
-      ) {
+      if (!controller.signal.aborted) {
         try {
-          if (!finishReason) throw new Error("设计回答缺少完成状态。");
-          validateCSGPTDesignArtifact(designArtifact, expected);
+          validateCompletedDesignArtifact({
+            response: responseRes,
+            artifact: designArtifact,
+            chunksStarted: designArtifactChunks.started,
+            finishReason,
+          });
         } catch (error) {
           fail(error);
           return;

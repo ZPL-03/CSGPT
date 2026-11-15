@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { designFixture } from "./helpers/design-fixtures";
+import { toCSGPTDesignArtifact } from "../app/utils/structured-design";
 import {
   buildLaminateCalculationContext,
   detectLaminateAnalysisIntent,
@@ -72,6 +74,8 @@ import {
   appendDesignToOpenAICompletion,
   appendDesignToOpenAIStream,
   prepareDesignNarrativeRest,
+  validateTextCompletion,
+  validateTextStream,
 } from "../app/utils/server-design-completion";
 import {
   CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD,
@@ -82,32 +86,69 @@ import {
   type CSGPTDesignArtifact,
 } from "../app/utils/structured-design";
 
-const candidates = Array.from({ length: 50 }, (_, index) => ({
-  candidate_id: `TMP_${index + 1}`,
-  layup: {
-    angles_deg: Array.from({ length: 40 }, () => [30, -30, 80, -80]).flat(),
-  },
-  note: "待有限元校核的候选，不构成安全结论。",
-}));
-const artifact: CSGPTDesignArtifact = {
-  status: "passed",
-  generation_mode: "fem_ready_cylindrical_shell",
-  result: {
-    candidate_count: 50,
-    candidates,
-    design_fingerprint: "test-design-fingerprint",
-  },
-};
+const femFixture = designFixture("fem") as FEMReadyDesignServiceResponse;
+const candidates = femFixture.result.candidates;
+const artifact: CSGPTDesignArtifact = toCSGPTDesignArtifact(femFixture);
 const narrative = "需求与边界\n圆柱段长度 600 mm。";
 
 const designRequest =
   "生成50组 FEM-ready 复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm，两端金属封头。";
-test("普通批量设计问答不强制进入源表或固定层数的工具路径", () => {
+test("普通批量设计请求调用概念工具，FEM-ready 使用独立合同", () => {
   const messages = [
     { role: "user", content: designRequest.replace("FEM-ready ", "") },
   ];
   assert.equal(detectFEMReadyDesignIntent(messages), null);
-  assert.equal(detectDeterministicDesignIntent(messages), null);
+  const intent = detectDeterministicDesignIntent(messages);
+  assert.equal(intent?.mode, "concept_layup_enumeration");
+  assert.equal(intent?.candidateCount, 50);
+  assert.ok(intent?.assumptions.some((item) => item.includes("层数未给定")));
+  assert.ok(!intent?.facts.some((item) => item.includes("层")));
+});
+
+test("结果讨论和禁止生成的请求不会重新生成候选", () => {
+  for (const content of [
+    "不要生成50组复合材料耐压壳候选，请解释筛选依据。",
+    "请比较已有50组复合材料耐压壳设计方案。",
+    "请解释50组复合材料耐压壳方案的屈曲结果。",
+    "请解释已生成50组复合材料耐压壳方案的屈曲结果。",
+    "不要设计50组复合材料耐压壳方案，只需讨论材料。",
+    "无需重新生成50组复合材料耐压壳方案。",
+    "生成50组旅游方案。",
+  ]) {
+    assert.equal(
+      detectDeterministicDesignIntent([{ role: "user", content }]),
+      null,
+    );
+  }
+});
+
+test("设计动词接受中文和阿拉伯数字，FEM-ready 仍需明确合同", () => {
+  for (const count of ["50", "五十"]) {
+    const content = `请设计${count}组复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm。`;
+    assert.equal(
+      detectDeterministicDesignIntent([{ role: "user", content }])
+        ?.candidateCount,
+      50,
+    );
+    assert.equal(detectFEMReadyDesignIntent([{ role: "user", content }]), null);
+    assert.equal(
+      detectFEMReadyDesignIntent([
+        { role: "user", content: content + "需要FEM-ready输入包。" },
+      ])?.candidateCount,
+      50,
+    );
+  }
+});
+
+test("FEM-ready 的结果讨论和否定生成请求不调用生成工具", () => {
+  for (const content of [
+    designRequest.replace("生成50组", "不要生成50组"),
+    designRequest.replace("生成50组", "请比较已有50组"),
+    designRequest.replace("生成50组", "请解释50组"),
+    designRequest.replace("生成50组", "无需重新设计50组"),
+  ]) {
+    assert.equal(detectFEMReadyDesignIntent([{ role: "user", content }]), null);
+  }
 });
 test("摘要与历史消息不会触发候选生成", () => {
   for (const role of ["system", "assistant", "tool"]) {
@@ -211,6 +252,9 @@ test("层合板数值请求使用统一服务并保留带符号 ABD 结果", asy
     assert.ok(content);
     assert.match(content, /D16=1328\.4/);
     assert.match(content, /D26=820\.8/);
+    assert.match(content, /Dij = \(1\/3\)/);
+    assert.match(content, /h³\/12/);
+    assert.match(content, /浮点残差/);
     assert.equal(requestPayload.calculation_mode, "laminate_abd_coupling");
     assert.equal(requestPayload.cases[0].layers.length, 4);
   } finally {
@@ -238,49 +282,55 @@ test("未指定的边界和层数不会归为用户输入", () => {
   assert.ok(explicit?.facts.some((item) => item.includes("40")));
 });
 
-test("设计说明按实际选中角色区分同几何探索和迁移探索", () => {
+test("设计说明读取与候选指纹绑定的服务统计", () => {
   const intent = detectFEMReadyDesignIntent([
     { role: "user", content: designRequest },
   ]);
   assert.ok(intent);
-  const response = {
-    generation_mode: "fem_ready_cylindrical_shell",
-    result: {
-      request: {
-        load_conditions: { external_pressure_MPa: 50.259081 },
-        materials: ["T700/Epoxy", "M40J/TDE-85"],
-      },
-      source_table: { row_count: 5857 },
-      coverage: {
-        exact_geometry_row_count: 48,
-        exact_geometry_reference_at_or_above_target_count: 8,
-      },
-      candidates: [
-        ...Array.from({ length: 8 }, () => ({
-          screening: { candidate_role: "historically_screened_baseline" },
-        })),
-        ...Array.from({ length: 40 }, () => ({
-          screening: { candidate_role: "exact_geometry_exploration" },
-        })),
-        ...Array.from({ length: 2 }, () => ({
-          screening: {
-            candidate_role: "nearest_neighbor_transfer_exploration",
-          },
-        })),
-      ],
-    },
-  } as unknown as FEMReadyDesignServiceResponse;
+  const response = designFixture("fem") as FEMReadyDesignServiceResponse;
   const instruction = buildDesignNarrativeInstruction(intent, response);
-  assert.match(
-    instruction,
-    /同几何历史基线 8 组，同几何探索 40 组，最近邻迁移探索 2 组/,
+  assert.deepEqual(response.interpretation_context.facts["候选来源分组"], {
+    同几何历史基线: 8,
+    同几何探索: 40,
+    最近邻几何迁移: 2,
+  });
+  assert.match(instruction, /"当前有限元结果":null/);
+  assert.match(instruction, /"角度序列镜像对称的候选数量":0/);
+  assert.match(instruction, /"正负角层数均衡的候选数量":50/);
+  assert.match(instruction, /回答只写工程说明/);
+  response.interpretation_context.design_fingerprint = "b".repeat(64);
+  assert.throws(
+    () => buildDesignNarrativeInstruction(intent, response),
+    /解释输入/,
   );
-  assert.match(instruction, /不表示已导入 CSDM_cph 或运行有限元/);
-  assert.match(instruction, /材料范围严格为 T700\/Epoxy、M40J\/TDE-85/);
 });
 const appendix =
   "\n" +
   candidates.map((item) => `| ${item.candidate_id} | 待校核 |`).join("\n");
+
+test("层合板非流式解释校验完成原因且不附加设计工件", () => {
+  const data = {
+    choices: [{ message: { content: "计算结果" }, finish_reason: "stop" }],
+  };
+  assert.equal(validateTextCompletion(data), data);
+  assert.throws(
+    () =>
+      validateTextCompletion({
+        choices: [{ message: { content: "计算结果" }, finish_reason: null }],
+      }),
+    /finish_reason/,
+  );
+  assert.equal(CSGPT_DESIGN_ARTIFACT_FIELD in data, false);
+  for (const content of ["", " \n "]) {
+    assert.throws(
+      () =>
+        validateTextCompletion({
+          choices: [{ message: { content }, finish_reason: "stop" }],
+        }),
+      /消息结构无效/,
+    );
+  }
+});
 const event = (payload: unknown, newline = "\n") =>
   `data: ${JSON.stringify(payload)}${newline}${newline}`;
 const delta = (content: string, reason: unknown = null) => ({
@@ -297,6 +347,27 @@ function inputStream(text: string, fragmentSize = 19) {
     },
   });
 }
+
+test("层合板流式解释保留正文和真实完成原因，缺少完成事件时失败", async () => {
+  const complete =
+    event(delta("计算结果")) + event(delta("", "length")) + "data: [DONE]\n\n";
+  const output = await new Response(
+    validateTextStream(inputStream(complete, 1), "csllm"),
+  ).text();
+  assert.match(output, /计算结果/);
+  assert.match(output, /"finish_reason":"length"/);
+  assert.doesNotMatch(output, new RegExp(CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD));
+  assert.equal(output.endsWith("data: [DONE]\n\n"), true);
+  await assert.rejects(
+    new Response(
+      validateTextStream(
+        inputStream(event(delta("片段")) + "data: [DONE]\n\n"),
+        "csllm",
+      ),
+    ).text(),
+    /finish_reason/,
+  );
+});
 async function outputEvents(text: string, fragmentSize?: number) {
   const body = appendDesignToOpenAIStream(
     inputStream(text, fragmentSize),
@@ -395,6 +466,13 @@ for (const reason of [null, undefined, "", 0]) {
   });
 }
 for (const [name, text] of [
+  ["空正文", event(delta(" ", "stop")) + "data: [DONE]\n\n"],
+  [
+    "非文本正文",
+    event({
+      choices: [{ index: 0, delta: { content: 123 }, finish_reason: "stop" }],
+    }) + "data: [DONE]\n\n",
+  ],
   ["缺失完成状态", event(delta(narrative)) + "data: [DONE]\n\n"],
   ["缺失结束标记", event(delta(narrative, "stop"))],
   [
