@@ -244,7 +244,7 @@ function requestedCandidateIds(text: string) {
 }
 
 function formatAngle(value: number) {
-  return `${Number.isInteger(value) ? value : value.toFixed(6)}°`;
+  return `${value}°`;
 }
 
 function candidateResult(

@@ -716,6 +716,21 @@ function table(headers: string[], rows: unknown[][]) {
     .join("\n");
 }
 
+function summaryNumber(value: number) {
+  // 非零小量使用科学计数法，避免显示舍入把它写成精确零。
+  const rounded = value.toFixed(1);
+  return value !== 0 && Number(rounded) === 0
+    ? value.toExponential(1)
+    : String(Number(rounded));
+}
+
+function displayParameter(key: string, value: unknown) {
+  if (typeof value !== "number") return value;
+  const pressure = /pressure.*_(?:m|k|g)?pa$/i.test(key);
+  const geometry = key.endsWith("_mm") && !key.includes("thickness");
+  return pressure || geometry ? summaryNumber(value) : value;
+}
+
 // 表格仅使用合同字段，远端 Markdown 不参与界面展示。
 export function renderDesignTable(response: DesignServiceResponse) {
   if (response.generation_mode === "concept_layup_enumeration") {
@@ -735,7 +750,7 @@ export function renderDesignTable(response: DesignServiceResponse) {
       response.result.candidates.map((item) => [
         item.candidate_id,
         item.material,
-        ...keys.map((key) => item.parameters[key]),
+        ...keys.map((key) => displayParameter(key, item.parameters[key])),
         item.layer_count,
         item.ply_thickness_mm,
         item.total_thickness_mm,
@@ -750,8 +765,8 @@ export function renderDesignTable(response: DesignServiceResponse) {
     item.candidate_id,
     roleLabels[item.screening.candidate_role],
     item.material_system.name,
-    item.geometry.length_mm,
-    item.geometry.radius_mm,
+    summaryNumber(item.geometry.length_mm),
+    summaryNumber(item.geometry.radius_mm),
     item.geometry.thickness_mm,
     item.geometry.imperfection_ratio,
     item.layup.ply_thickness_mm,
@@ -759,7 +774,9 @@ export function renderDesignTable(response: DesignServiceResponse) {
     item.layup.balanced,
     `[${item.layup.angles_deg.join("/")}]`,
     comparisonLabels[item.screening.historical_reference_comparison],
-    item.provenance.historical_fem_reference.ultimate_pressure_MPa,
+    summaryNumber(
+      item.provenance.historical_fem_reference.ultimate_pressure_MPa,
+    ),
     item.provenance.source_row_number,
   ]);
   const materials = [
@@ -784,11 +801,11 @@ export function renderDesignTable(response: DesignServiceResponse) {
     "S_MPa",
   ];
   return (
-    `服务外压 ${
-      request.load_conditions.external_pressure_MPa
-    } MPa，极限压力目标 ${
-      request.design_targets.ultimate_pressure_min_MPa
-    } MPa。端部边界：${
+    `服务外压 ${summaryNumber(
+      request.load_conditions.external_pressure_MPa,
+    )} MPa，极限压力目标 ${summaryNumber(
+      request.design_targets.ultimate_pressure_min_MPa,
+    )} MPa。端部边界：${
       boundaryLabels[request.boundary_conditions.type]
     }。\n\n` +
     table(

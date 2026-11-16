@@ -564,6 +564,27 @@ test("表格从结构化字段渲染，不使用远端 Markdown", async (t) => {
   assert.ok(!text.includes("已通过FEM"));
 });
 
+test("工程表格简化压力显示，保留层厚、缺陷、角度与工件原值", () => {
+  const response = designFixture("fem_custom");
+  assert.equal(response.generation_mode, "fem_ready_cylindrical_shell");
+  if (response.generation_mode !== "fem_ready_cylindrical_shell") return;
+  const candidate = response.result.candidates[0];
+  response.result.request.load_conditions.external_pressure_MPa = 50.259081;
+  candidate.provenance.historical_fem_reference.ultimate_pressure_MPa = 9.593256116;
+  candidate.geometry.imperfection_ratio = 0.005123456;
+  candidate.layup.ply_thickness_mm = 0.125;
+  candidate.layup.angles_deg = [45, -45, 22.5, -22.5];
+  const snapshot = structuredClone(response);
+  const rendered = renderDesignTable(response);
+  assert.match(rendered, /服务外压 50\.3 MPa/);
+  assert.match(rendered, /\| 9\.6 \|/);
+  assert.match(rendered, /0\.005123456/);
+  assert.match(rendered, /0\.125/);
+  assert.match(rendered, /45\/-45\/22\.5\/-22\.5/);
+  assert.ok(!rendered.includes("9.593256116"));
+  assert.deepEqual(response, snapshot);
+});
+
 test("概念响应逐项绑定请求，不接受另一个任务的参数", () => {
   const intent = detectDeterministicDesignIntent(
     message(

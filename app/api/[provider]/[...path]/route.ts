@@ -7,7 +7,10 @@ import {
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
 } from "@/app/constant";
-import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
+import {
+  CSGPT_NUMBER_DISPLAY_RULE,
+  CSGPT_SYSTEM_PROMPT,
+} from "@/app/prompts/csgpt";
 import { buildInternalKnowledgeContext } from "@/app/utils/server-rag-kg";
 import {
   encodeRagKgSourcesHeader,
@@ -623,6 +626,14 @@ async function prepareProxyMessages(
     processedMessages.unshift({
       role: "system",
       content: CSGPT_SYSTEM_PROMPT,
+      _csgptContextPriority: 100,
+    });
+  }
+
+  if (options.injectCSGPTPrompt) {
+    processedMessages.unshift({
+      role: "system",
+      content: CSGPT_NUMBER_DISPLAY_RULE,
       _csgptContextPriority: 100,
     });
   }

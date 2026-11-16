@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NextRequest } from "next/server";
 import { CSGPT_MODEL_2 } from "../app/constant";
+import { CSGPT_NUMBER_DISPLAY_RULE } from "../app/prompts/csgpt";
 import { POST } from "../app/api/[provider]/[...path]/route";
 import { CSGPT_DESIGN_ARTIFACT_FIELD } from "../app/utils/structured-design";
 import { designFixture } from "./helpers/design-fixtures";
@@ -74,6 +75,14 @@ for (const mode of [
         assert.ok(
           body.messages.some((message: any) => message.content === question),
         );
+        assert.equal(
+          body.messages.filter(
+            (message: any) =>
+              message.role === "system" &&
+              message.content === CSGPT_NUMBER_DISPLAY_RULE,
+          ).length,
+          1,
+        );
         assert.ok(
           body.messages.some(
             (message: any) =>
@@ -121,7 +130,12 @@ for (const mode of [
         body: JSON.stringify({
           model: CSGPT_MODEL_2,
           stream: mode === "stream",
-          messages: [{ role: "user", content: question }],
+          messages: [
+            ...(mode === "stream"
+              ? [{ role: "system", content: "按用户指定工况解释设计。" }]
+              : []),
+            { role: "user", content: question },
+          ],
         }),
       }),
       { params: { provider: "csgpt", path: ["chat", "completions"] } },
