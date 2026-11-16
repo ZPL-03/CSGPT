@@ -1,6 +1,6 @@
 {
   "package": "csllm",
-  "generated_at": "2026-11-12T23:31:01.068087+00:00",
+  "generated_at": "2026-11-16T19:32:12.188939+00:00",
   "source_files": {
     "rag_chunks": "dataset/processed/rag/rag_chunks.jsonl",
     "relations": "dataset/processed/kg/relations.jsonl",
@@ -78,13 +78,13 @@
     {
       "path": "runtime/rag_chunks.compact.jsonl.gz",
       "bytes": 98616296,
-      "sha256": "c848691e5836bba3d31c58e46cc3cbf7fcdd8fc2268852360367aff1a6fb5307",
+      "sha256": "a04f6139218947e7fb86a74f1476cc8fdf70c75d28cc6b53d15a624bd72a3469",
       "records": 173228
     },
     {
       "path": "runtime/relations.compact.jsonl.gz",
       "bytes": 7101644,
-      "sha256": "51b269414b3f3584611c2eeae90263e16ca98c1e19ac0fdf1e9fe213c8b908ac",
+      "sha256": "c5ea0ae10ed2257fb9fc2056c52280bf810b14bcf59fd5a3568a9d00da2de3bc",
       "records": 250606
     },
     {
@@ -108,7 +108,7 @@
     {
       "path": "provenance/file_manifest.jsonl",
       "bytes": 716,
-      "sha256": "6f643ffea071e5e8bf44133bc45b95a43a05812a7fc253ae24db099f29bc3f62",
+      "sha256": "06eafb409d3b6401b1fc493c2825325bb4cd04070b5c8e6cdfa1b17f33b95e7e",
       "records": 5
     }
   ]
