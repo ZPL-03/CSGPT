@@ -678,7 +678,7 @@ export function detectDeterministicDesignIntent(
     facts.push(`完整物理层数 ${explicitLayerCount} 层`);
   } else {
     assumptions.push(
-      `完整物理层数未给定，初始筛选候选统一采用 ${DEFAULT_LAYER_COUNT} 层；该值不是安全性结论。`,
+      `完整物理层数未给定，初始筛选候选采用 ${DEFAULT_LAYER_COUNT} 层。`,
     );
   }
 
@@ -955,7 +955,7 @@ export async function requestDeterministicDesign(
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("确定性设计服务请求超时，未返回不完整候选。");
+      throw new Error("确定性设计服务请求超时。");
     }
     throw error;
   } finally {

@@ -609,7 +609,7 @@ const cn = {
     DefaultTopic: "新的聊天",
     BotHello: "有什么可以帮你的吗",
     Error: "出错了，稍后重试吧",
-    ResponseLimit: "本次回复已达到输出长度上限，请发送“继续”以延续回答。",
+    ResponseLimit: "回复已达到输出长度上限，请发送“继续”以延续回答。",
     Prompt: {
       History: (content: string) => "这是历史聊天总结作为前情提要：" + content,
       Topic:
@@ -629,7 +629,7 @@ const cn = {
   Context: {
     Toast: (x: any) => `包含 ${x} 条预设提示词`,
     Edit: "当前对话设置",
-    Add: "新增一条对话",
+    Add: "添加对话",
     Clear: "上下文已清除",
     Revert: "恢复上下文",
   },
