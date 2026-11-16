@@ -21,21 +21,19 @@ export type RagKgSource = RagKgDocumentSource | RagKgGraphSource;
 
 const MAX_HEADER_VALUE_LENGTH = 7600;
 
+export function ragKgSourcesFitHeader(sources: RagKgSource[]) {
+  return (
+    encodeURIComponent(JSON.stringify(sources)).length <=
+    MAX_HEADER_VALUE_LENGTH
+  );
+}
+
 export function encodeRagKgSourcesHeader(sources: RagKgSource[]) {
   if (!sources.length) return "";
-  const encode = (items: RagKgSource[]) =>
-    encodeURIComponent(JSON.stringify(items));
-
-  const encoded = encode(sources);
-  if (encoded.length <= MAX_HEADER_VALUE_LENGTH) return encoded;
-
-  for (let count = sources.length; count > 0; count -= 1) {
-    const compactEncoded = encode(sources.slice(0, count));
-    if (compactEncoded.length <= MAX_HEADER_VALUE_LENGTH) {
-      return compactEncoded;
-    }
+  if (!ragKgSourcesFitHeader(sources)) {
+    throw new Error("知识库来源超出响应头容量。");
   }
-  return "";
+  return encodeURIComponent(JSON.stringify(sources));
 }
 
 export function parseRagKgSourcesHeader(response?: Response) {

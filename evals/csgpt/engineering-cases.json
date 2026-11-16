@@ -10,6 +10,20 @@
         "record_id",
         "内部路径"
       ]
+    },
+    {
+      "name": "层合板耦合分量检索",
+      "query": "请解释对称均衡层合板中 A16、B16、D16 和 D26 的物理意义与取值条件",
+      "minDocumentSources": 1,
+      "forbiddenPatterns": [],
+      "requiredEvidencePattern": "[ABD]\\s*_?\\s*\\{?\\s*[12]\\s*6"
+    },
+    {
+      "name": "数值和单位不作为知识检索词",
+      "query": "18.6 MPa、15.0 MPa、0.008、600 mm",
+      "minDocumentSources": 0,
+      "forbiddenPatterns": [],
+      "expectEmpty": true
     }
   ],
   "knowledgeGraph": [

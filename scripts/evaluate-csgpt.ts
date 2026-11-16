@@ -31,7 +31,12 @@ import {
   detectLaminateAnalysisIntent,
 } from "../app/utils/server-laminate-analysis";
 import { estimateTokenLength } from "../app/utils/token";
-import type { RagKgDocumentSource } from "../app/utils/rag-kg-sources";
+import {
+  encodeRagKgSourcesHeader,
+  parseRagKgSourcesHeader,
+  RAG_KG_SOURCES_HEADER,
+  type RagKgDocumentSource,
+} from "../app/utils/rag-kg-sources";
 
 type EvalFailure = {
   suite: string;
@@ -52,6 +57,8 @@ type CasesFile = {
     query: string;
     minDocumentSources: number;
     forbiddenPatterns: string[];
+    expectEmpty?: boolean;
+    requiredEvidencePattern?: string;
   }>;
   knowledgeGraph: Array<{
     name: string;
@@ -208,6 +215,10 @@ async function evaluateRagKg(cases: CasesFile["ragKg"]) {
       const context = await buildInternalKnowledgeContext([
         { role: "user", content: item.query },
       ]);
+      if (item.expectEmpty) {
+        assertCondition(context === null, "无检索词的问题返回了无关资料");
+        return "no-evidence";
+      }
       assertCondition(context, "内部知识库未返回上下文");
       const documentSources = context.sources.filter(isDocumentSource);
       assertCondition(
@@ -222,6 +233,39 @@ async function evaluateRagKg(cases: CasesFile["ragKg"]) {
           `来源 ${source.id}`,
         );
       }
+      if (item.requiredEvidencePattern) {
+        // 逐段检查实际传给模型的正文，题名和用户问题不作为命中证据。
+        const excerpts = context.message
+          .split("内容：")
+          .slice(1)
+          .map((text) => text.split(/\n\n/)[0]);
+        const pattern = new RegExp(item.requiredEvidencePattern, "i");
+        for (const excerpt of excerpts) {
+          assertCondition(pattern.test(excerpt), "检索段落缺少所问技术分量");
+        }
+      }
+      const encoded = encodeRagKgSourcesHeader(context.sources);
+      const decoded = parseRagKgSourcesHeader(
+        new Response(null, {
+          headers: { [RAG_KG_SOURCES_HEADER]: encoded },
+        }),
+      );
+      assertCondition(
+        JSON.stringify(decoded) === JSON.stringify(context.sources),
+        "来源在响应头传输中丢失",
+      );
+      const referencedIds = new Set(
+        Array.from(
+          context.message.matchAll(/(?:来源 |知识关系 |依据 )([SK]\d+)\b/g),
+          (match) => match[1],
+        ),
+      );
+      const sourceIds = new Set(decoded.map((source) => source.id));
+      assertCondition(
+        sourceIds.size === referencedIds.size &&
+          Array.from(sourceIds).every((id) => referencedIds.has(id)),
+        "上下文与界面的来源编号不一致",
+      );
       return `sources=${context.sources.length}`;
     });
   }
@@ -809,7 +853,11 @@ async function main() {
       );
     });
   } else {
-    skip("laminate-analysis", "显式铺层序列事实复核", "设置 CSGPT_EVAL_DESIGN_ONLINE=1 后执行");
+    skip(
+      "laminate-analysis",
+      "显式铺层序列事实复核",
+      "设置 CSGPT_EVAL_DESIGN_ONLINE=1 后执行",
+    );
   }
   await evaluateDeterministicDesign(cases.deterministicDesign);
   await evaluateResearchModes(cases.researchModes);
