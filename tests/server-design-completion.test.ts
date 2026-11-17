@@ -202,6 +202,48 @@ test("层合板数值请求使用统一服务并保留带符号 ABD 结果", asy
               D16: 1328.4,
               D26: 820.8,
             },
+            contributions: [
+              {
+                z_lower_mm: -0.6,
+                z_upper_mm: -0.3,
+                A16: 3690,
+                A26: 2280,
+                B16: -1660.5,
+                B26: -1026,
+                D16: 774.9,
+                D26: 478.8,
+              },
+              {
+                z_lower_mm: -0.3,
+                z_upper_mm: 0,
+                A16: -3690,
+                A26: -2280,
+                B16: 553.5,
+                B26: 342,
+                D16: -110.7,
+                D26: -68.4,
+              },
+              {
+                z_lower_mm: 0,
+                z_upper_mm: 0.3,
+                A16: -3690,
+                A26: -2280,
+                B16: -553.5,
+                B26: -342,
+                D16: -110.7,
+                D26: -68.4,
+              },
+              {
+                z_lower_mm: 0.3,
+                z_upper_mm: 0.6,
+                A16: 3690,
+                A26: 2280,
+                B16: 1660.5,
+                B26: 1026,
+                D16: 774.9,
+                D26: 478.8,
+              },
+            ],
           },
         ],
       },
@@ -250,11 +292,11 @@ test("层合板数值请求使用统一服务并保留带符号 ABD 结果", asy
       },
     ]);
     assert.ok(content);
-    assert.match(content, /D16=1328\.4/);
-    assert.match(content, /D26=820\.8/);
-    assert.match(content, /Dij = \(1\/3\)/);
-    assert.match(content, /h³\/12/);
-    assert.match(content, /浮点残差/);
+    const context = JSON.parse(content.slice(content.indexOf("{")));
+    assert.deepEqual(context.request, requestPayload);
+    assert.equal(context.result.cases[0].calculated_coupling.D16, 1328.4);
+    assert.equal(context.result.cases[0].calculated_coupling.D26, 820.8);
+    assert.equal(context.result.cases[0].contributions.length, 4);
     assert.equal(requestPayload.calculation_mode, "laminate_abd_coupling");
     assert.equal(requestPayload.cases[0].layers.length, 4);
   } finally {

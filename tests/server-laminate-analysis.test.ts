@@ -43,6 +43,18 @@ function response() {
             D16: 0.225,
             D26: 0.045,
           },
+          contributions: [
+            {
+              z_lower_mm: -0.15,
+              z_upper_mm: 0.15,
+              A16: 30,
+              A26: 6,
+              B16: 0,
+              B26: 0,
+              D16: 0.225,
+              D26: 0.045,
+            },
+          ],
         },
       ],
     },
@@ -139,6 +151,15 @@ test("响应必须保留全部截面、层序、单位、有限数值和计算�
       (r: any) => {
         delete r.result.cases[0].symmetry_mismatch;
       },
+      (r: any) => {
+        delete r.result.cases[0].contributions;
+      },
+      (r: any) => {
+        r.result.cases[0].contributions[0].z_upper_mm = 10;
+      },
+      (r: any) => {
+        r.result.cases[0].contributions[0].D16 = 0;
+      },
     ]) {
       const data = response();
       mutate(data);
@@ -150,7 +171,9 @@ test("响应必须保留全部截面、层序、单位、有限数值和计算�
     }
     globalThis.fetch = async () => Response.json(response());
     const content = await buildLaminateCalculationContext(messages([section]));
-    assert.ok(content?.includes("D16=0.225"));
+    const context = JSON.parse(content!.slice(content!.indexOf("{")));
+    assert.deepEqual(context.request.cases, [section]);
+    assert.deepEqual(context.result, response().result);
     assert.ok(content?.includes("b".repeat(64)));
   } finally {
     globalThis.fetch = fetch;
@@ -201,6 +224,7 @@ test("候选核对采用最近的候选内容，不按表格或 JSON 格式排�
           "laminate_layup_semantics";
         data.result.cases[0].case_id = "TMP_1";
         data.result.cases[0].calculated_coupling = null;
+        data.result.cases[0].contributions = [];
         return Response.json(data);
       };
       const text = await buildLaminateCalculationContext([
@@ -236,6 +260,7 @@ test("非对称结果必须携带与请求层序一致的镜像证据", async ()
       angle_sequence_symmetric: false,
       angle_count_balanced: true,
       calculated_coupling: null,
+      contributions: [],
     });
     for (const mismatch of [
       undefined,

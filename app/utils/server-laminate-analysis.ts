@@ -20,7 +20,10 @@ type LaminateServiceCase = {
   angle_count_balanced: boolean;
   calculated_coupling: Record<string, number> | null;
   symmetry_mismatch: SymmetryMismatch | null;
+  contributions: Record<string, number>[];
 };
+
+const COUPLING_COMPONENTS = ["A16", "A26", "B16", "B26", "D16", "D26"];
 
 type LaminateServiceResponse = {
   status: string;
@@ -340,7 +343,7 @@ async function requestLaminateService(
       typeof item.angle_count_balanced !== "boolean" ||
       (numeric
         ? !item.calculated_coupling ||
-          ["A16", "A26", "B16", "B26", "D16", "D26"].some(
+          COUPLING_COMPONENTS.some(
             (key) =>
               typeof item.calculated_coupling?.[key] !== "number" ||
               !Number.isFinite(item.calculated_coupling[key]),
@@ -348,6 +351,57 @@ async function requestLaminateService(
         : item.calculated_coupling !== null)
     )
       throw new Error("层合板计算结果与请求的截面、层序或数值字段不一致。");
+    // 逐层坐标对应请求厚度，各层贡献之和对应截面合计，二者共同构成解释依据。
+    if (
+      !Array.isArray(item.contributions) ||
+      item.contributions.length !== (numeric ? item.layer_count : 0)
+    ) {
+      throw new Error("层合板逐层贡献与请求的层数不一致。");
+    }
+    if (numeric) {
+      const close = (actual: number, expected: number, scale = 0) =>
+        Number.isFinite(actual) &&
+        Math.abs(actual - expected) <=
+          1e-10 * Math.max(1, Math.abs(expected), scale);
+      let lower =
+        -input.layers.reduce((sum, layer) => sum + layer.thickness_mm!, 0) / 2;
+      const sums = Object.fromEntries(
+        COUPLING_COMPONENTS.map((key) => [key, 0]),
+      );
+      for (const [layerIndex, contribution] of item.contributions.entries()) {
+        const upper = lower + input.layers[layerIndex].thickness_mm!;
+        if (
+          !contribution ||
+          typeof contribution !== "object" ||
+          !close(contribution.z_lower_mm, lower) ||
+          !close(contribution.z_upper_mm, upper) ||
+          COUPLING_COMPONENTS.some(
+            (key) =>
+              typeof contribution[key] !== "number" ||
+              !Number.isFinite(contribution[key]),
+          )
+        ) {
+          throw new Error("层合板逐层坐标或贡献数值与请求不一致。");
+        }
+        for (const key of COUPLING_COMPONENTS) sums[key] += contribution[key];
+        lower = upper;
+      }
+      if (
+        COUPLING_COMPONENTS.some(
+          (key) =>
+            !close(
+              sums[key],
+              item.calculated_coupling![key],
+              item.contributions.reduce(
+                (sum, row) => sum + Math.abs(row[key]),
+                0,
+              ),
+            ),
+        )
+      ) {
+        throw new Error("层合板逐层贡献与截面合计不一致。");
+      }
+    }
     const mismatch = item.symmetry_mismatch;
     if (item.angle_sequence_symmetric) {
       if (mismatch !== null) throw new Error("对称层序的镜像校核证据不一致。");
@@ -524,27 +578,18 @@ function numericPayload(text: string): LaminatePayload | null {
   };
 }
 
-function renderNumericResult(response: LaminateServiceResponse) {
-  const cases = response.result.cases;
-  const lines = cases.map((item) => {
-    const values = item.calculated_coupling!;
-    return `#### ${item.case_id}\n- 物理层数：${
-      item.layer_count
-    }；逐层序列：${item.sequence_deg.map(formatAngle).join("、")}\n- A16=${
-      values.A16
-    } N/mm，A26=${values.A26} N/mm；B16=${values.B16} N，B26=${
-      values.B26
-    } N；D16=${values.D16} N·mm，D26=${values.D26} N·mm。`;
-  });
+function renderNumericResult(
+  response: LaminateServiceResponse,
+  request: LaminatePayload,
+) {
   return `### 层合板耦合项计算结果\n\n计算引擎 v${
     response.engine_version
   }；计算指纹 ${
     response.calculation_fingerprint
   }。参考面为几何中面，层序从负 z 到正 z；A、B、D 分别使用 1、z、z² 权重积分。
 层内 Qbar 为常量时，各项为：Aij = Σ Qbar_ij,k (z_k-z_(k-1))；Bij = (1/2) Σ Qbar_ij,k (z_k²-z_(k-1)²)；Dij = (1/3) Σ Qbar_ij,k (z_k³-z_(k-1)³)。Qbar 使用 MPa，z 使用 mm。
-单一均匀层以自身中面为参考时，Aij=Qbar_ij h，Bij=0，Dij=Qbar_ij h³/12；多层截面使用各层上下表面的坐标求和。
-计算范围为六个耦合项，不含完整刚度矩阵或壳体承载结果。对称性由材料、角度和厚度的中面镜像关系判定；浮点残差应按单位、刚度量级和计算精度评价，不能仅因小量非零断言层序不对称。\n\n${lines.join(
-    "\n\n",
+计算范围为六个耦合项，不含完整刚度矩阵或壳体承载结果。对称性由材料、角度和厚度的中面镜像关系判定。\n\n${JSON.stringify(
+    { request, result: response.result },
   )}`;
 }
 
@@ -555,7 +600,7 @@ export async function buildLaminateCalculationContext(
   const userText = latestUserText(messages);
   const numeric = numericPayload(userText);
   if (numeric) {
-    return renderNumericResult(await requestLaminateService(numeric));
+    return renderNumericResult(await requestLaminateService(numeric), numeric);
   }
   const candidates = parseCandidates(latestCandidateContext(messages));
   const requestedIds = requestedCandidateIds(userText);
