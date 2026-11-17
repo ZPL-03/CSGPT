@@ -27,6 +27,31 @@ function response() {
       reference_plane: "geometric_midplane",
       layer_order: "negative_z_to_positive_z",
       coupling_units: { A: "N/mm", B: "N", D: "N*mm" },
+      abd_contract: {
+        integral_weights: { A: "1", B: "z", D: "z^2" },
+        discrete_formulas: {
+          A: "Aij = sum(Qbarij,k * (z_upper - z_lower))",
+          B: "Bij = sum(Qbarij,k * (z_upper^2 - z_lower^2) / 2)",
+          D: "Dij = sum(Qbarij,k * (z_upper^3 - z_lower^3) / 3)",
+        },
+        coupling_definitions: {
+          A16_A26: "面内拉伸-剪切耦合",
+          B16_B26: "膜力-曲率与弯矩-中面应变的交叉耦合",
+          D16_D26: "弯曲-扭转耦合",
+        },
+        stiffness_scope: {
+          model: "平面应力经典层合板线弹性截面刚度",
+          does_not_prove: ["壳体承载", "屈曲压力", "材料失效", "整机安全"],
+          structural_check_requires: [
+            "几何",
+            "载荷",
+            "边界条件",
+            "初始缺陷",
+            "材料失效模型",
+            "有限元或试验结果",
+          ],
+        },
+      },
       cases: [
         {
           case_id: "A",
@@ -143,6 +168,12 @@ test("响应必须保留全部截面、层序、单位、有限数值和计算�
         r.result.coupling_units.B = "N/mm";
       },
       (r: any) => {
+        r.result.abd_contract.integral_weights.B = "z^2";
+      },
+      (r: any) => {
+        delete r.result.abd_contract;
+      },
+      (r: any) => {
         delete r.calculation_fingerprint;
       },
       (r: any) => {
@@ -175,6 +206,13 @@ test("响应必须保留全部截面、层序、单位、有限数值和计算�
     assert.deepEqual(context.request.cases, [section]);
     assert.deepEqual(context.result, response().result);
     assert.ok(content?.includes("b".repeat(64)));
+    const reordered = response();
+    reordered.result.abd_contract = Object.fromEntries(
+      Object.entries(reordered.result.abd_contract).reverse(),
+    ) as typeof reordered.result.abd_contract;
+    reordered.result.abd_contract.integral_weights = { D: "z^2", B: "z", A: "1" };
+    globalThis.fetch = async () => Response.json(reordered);
+    assert.ok(await buildLaminateCalculationContext(messages([section])));
   } finally {
     globalThis.fetch = fetch;
     if (base === undefined) delete process.env.CSGPT_CS2_DESIGN_BASE_URL;

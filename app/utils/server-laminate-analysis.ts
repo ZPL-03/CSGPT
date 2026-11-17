@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 type LaminateCandidate = {
   candidateId: string;
   sequence: number[];
@@ -25,6 +27,32 @@ type LaminateServiceCase = {
 
 const COUPLING_COMPONENTS = ["A16", "A26", "B16", "B26", "D16", "D26"];
 
+const EXPECTED_ABD_CONTRACT = {
+  integral_weights: { A: "1", B: "z", D: "z^2" },
+  discrete_formulas: {
+    A: "Aij = sum(Qbarij,k * (z_upper - z_lower))",
+    B: "Bij = sum(Qbarij,k * (z_upper^2 - z_lower^2) / 2)",
+    D: "Dij = sum(Qbarij,k * (z_upper^3 - z_lower^3) / 3)",
+  },
+  coupling_definitions: {
+    A16_A26: "面内拉伸-剪切耦合",
+    B16_B26: "膜力-曲率与弯矩-中面应变的交叉耦合",
+    D16_D26: "弯曲-扭转耦合",
+  },
+  stiffness_scope: {
+    model: "平面应力经典层合板线弹性截面刚度",
+    does_not_prove: ["壳体承载", "屈曲压力", "材料失效", "整机安全"],
+    structural_check_requires: [
+      "几何",
+      "载荷",
+      "边界条件",
+      "初始缺陷",
+      "材料失效模型",
+      "有限元或试验结果",
+    ],
+  },
+} as const;
+
 type LaminateServiceResponse = {
   status: string;
   contract_version: string;
@@ -38,6 +66,7 @@ type LaminateServiceResponse = {
     reference_plane: string;
     layer_order: string;
     coupling_units: { A: string; B: string; D: string };
+    abd_contract: typeof EXPECTED_ABD_CONTRACT;
     cases: LaminateServiceCase[];
   };
 };
@@ -321,6 +350,7 @@ async function requestLaminateService(
     data.result.coupling_units?.A !== "N/mm" ||
     data.result.coupling_units?.B !== "N" ||
     data.result.coupling_units?.D !== "N*mm" ||
+    !isDeepStrictEqual(data.result.abd_contract, EXPECTED_ABD_CONTRACT) ||
     !Array.isArray(data.result.cases) ||
     data.result.cases.length !== payload.cases.length
   ) {
@@ -582,15 +612,27 @@ function renderNumericResult(
   response: LaminateServiceResponse,
   request: LaminatePayload,
 ) {
+  const contract = response.result.abd_contract;
   return `### 层合板耦合项计算结果\n\n计算引擎 v${
     response.engine_version
   }；计算指纹 ${
     response.calculation_fingerprint
-  }。参考面为几何中面，层序从负 z 到正 z；A、B、D 分别使用 1、z、z² 权重积分。
-层内 Qbar 为常量时，各项为：Aij = Σ Qbar_ij,k (z_k-z_(k-1))；Bij = (1/2) Σ Qbar_ij,k (z_k²-z_(k-1)²)；Dij = (1/3) Σ Qbar_ij,k (z_k³-z_(k-1)³)。Qbar 使用 MPa，z 使用 mm。
-计算范围为六个耦合项，不含完整刚度矩阵或壳体承载结果。对称性由材料、角度和厚度的中面镜像关系判定。\n\n${JSON.stringify(
-    { request, result: response.result },
-  )}`;
+  }。参考面为几何中面，层序从负 z 到正 z；A、B、D 分别使用 ${
+    contract.integral_weights.A
+  }、${contract.integral_weights.B}、${contract.integral_weights.D} 权重积分。
+  层内 Qbar 为常量时，各项为：${contract.discrete_formulas.A}；${
+    contract.discrete_formulas.B
+  }；${contract.discrete_formulas.D}。Qbar 使用 MPa，z 使用 mm。
+  计算范围为六个耦合项，不含完整刚度矩阵或壳体承载结果。${
+    contract.stiffness_scope.model
+  }不能单独证明${contract.stiffness_scope.does_not_prove.join(
+    "、",
+  )}；结构校核还需要${contract.stiffness_scope.structural_check_requires.join(
+    "、",
+  )}。对称性由材料、角度和厚度的中面镜像关系判定。\n\n${JSON.stringify({
+    request,
+    result: response.result,
+  })}`;
 }
 
 export async function buildLaminateCalculationContext(

@@ -186,6 +186,31 @@ test("层合板数值请求使用统一服务并保留带符号 ABD 结果", asy
         reference_plane: "geometric_midplane",
         layer_order: "negative_z_to_positive_z",
         coupling_units: { A: "N/mm", B: "N", D: "N*mm" },
+        abd_contract: {
+          integral_weights: { A: "1", B: "z", D: "z^2" },
+          discrete_formulas: {
+            A: "Aij = sum(Qbarij,k * (z_upper - z_lower))",
+            B: "Bij = sum(Qbarij,k * (z_upper^2 - z_lower^2) / 2)",
+            D: "Dij = sum(Qbarij,k * (z_upper^3 - z_lower^3) / 3)",
+          },
+          coupling_definitions: {
+            A16_A26: "面内拉伸-剪切耦合",
+            B16_B26: "膜力-曲率与弯矩-中面应变的交叉耦合",
+            D16_D26: "弯曲-扭转耦合",
+          },
+          stiffness_scope: {
+            model: "平面应力经典层合板线弹性截面刚度",
+            does_not_prove: ["壳体承载", "屈曲压力", "材料失效", "整机安全"],
+            structural_check_requires: [
+              "几何",
+              "载荷",
+              "边界条件",
+              "初始缺陷",
+              "材料失效模型",
+              "有限元或试验结果",
+            ],
+          },
+        },
         cases: [
           {
             case_id: "A",
