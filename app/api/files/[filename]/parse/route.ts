@@ -34,9 +34,9 @@ function isValidFileId(fileId: string) {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { filename: string } },
+  { params }: { params: Promise<{ filename: string }> },
 ) {
-  const fileId = params.filename;
+  const { filename: fileId } = await params;
   let userId: string | null = null;
 
   try {

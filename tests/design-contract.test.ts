@@ -239,7 +239,7 @@ test("没有响应头或分片的整包工件也须通过完成校验", () => {
         chunksStarted: false,
         finishReason: undefined,
       }),
-    /完成状态/,
+    /finish_reason/,
   );
   validateCompletedDesignArtifact({
     artifact: fixtures.fem_custom,

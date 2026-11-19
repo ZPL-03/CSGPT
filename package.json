@@ -2,14 +2,22 @@
   "name": "csgpt",
   "private": true,
   "license": "mit",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
     "build": "prisma generate && cross-env BUILD_MODE=standalone next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
     "eval:csgpt": "tsx scripts/evaluate-csgpt.ts",
-    "test:design-completion": "tsx --test tests/server-design-completion.test.ts tests/server-laminate-analysis.test.ts tests/csgpt-chat-route.test.ts tests/design-contract.test.ts",
+    "test:design-completion": "tsx --test tests/server-design-completion.test.ts tests/server-laminate-analysis.test.ts tests/csgpt-chat-route.test.ts tests/design-contract.test.ts tests/design-context.test.ts tests/rag-quality.test.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:csllm": "tsx --test tests/runtime/csllm-runtime.test.ts",
+    "test:e2e": "playwright test",
+    "test:parsers": "playwright test -c playwright.parsers.config.ts",
+    "test:ui:compat": "playwright test -c playwright.ui.config.ts",
     "verify:csllm": "tsx scripts/sync-csllm-runtime.ts --verify",
     "sync:csllm": "tsx scripts/sync-csllm-runtime.ts",
     "db:migrate": "prisma migrate deploy",
@@ -20,8 +28,8 @@
   "dependencies": {
     "@fortaine/fetch-event-source": "^3.0.6",
     "@hello-pangea/dnd": "^16.5.0",
-    "@modelcontextprotocol/sdk": "^1.0.4",
-    "@next/third-parties": "^14.1.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@next/third-parties": "15.5.28",
     "@prisma/client": "^5.22.0",
     "@svgr/webpack": "^6.5.1",
     "@vercel/analytics": "^0.1.11",
@@ -36,31 +44,33 @@
     "idb-keyval": "^6.2.1",
     "jsonwebtoken": "^9.0.3",
     "jszip": "^3.10.1",
-    "katex": "^0.16.45",
-    "lodash-es": "^4.17.21",
+    "katex": "0.18.10",
+    "lodash-es": "^4.18.0",
     "mammoth": "^1.12.0",
-    "mermaid": "^10.6.1",
-    "nanoid": "^5.0.3",
-    "next": "^14.1.1",
-    "pdfjs-dist": "^4.0.379",
+    "mermaid": "12.3.0",
+    "nanoid": "^5.1.16",
+    "next": "15.5.28",
+    "pdfjs-dist": "6.5.438",
     "prisma": "^5.22.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-markdown": "^8.0.7",
-    "react-router-dom": "^6.15.0",
-    "rehype-highlight": "^6.0.0",
-    "rehype-katex": "^6.0.3",
-    "remark-breaks": "^3.0.2",
-    "remark-gfm": "^3.0.1",
-    "remark-math": "^5.1.1",
-    "sass": "^1.59.2",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "7.18.5",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "7.0.1",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "6.0.0",
+    "sass": "1.79.0",
     "tesseract.js": "^7.0.0",
     "use-debounce": "^9.0.4",
-    "xlsx": "^0.18.5",
-    "zod": "^3.24.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.6.6",
     "zustand": "^4.3.8"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@playwright/test": "^1.65.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/cytoscape": "^3.21.9",
     "@types/jsonwebtoken": "^9.0.10",
@@ -68,22 +78,26 @@
     "@types/node": "^20.11.30",
     "@types/react": "^18.2.70",
     "@types/react-dom": "^18.2.7",
-    "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "eslint": "^8.49.0",
-    "eslint-config-next": "13.4.19",
-    "eslint-config-prettier": "^8.8.0",
-    "eslint-plugin-prettier": "^5.1.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.5.28",
     "husky": "^8.0.0",
-    "lint-staged": "^13.2.2",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.0.2",
-    "tsx": "^4.16.0",
+    "tsx": "^4.23.15",
     "typescript": "5.2.2",
-    "watch": "^1.0.2",
-    "webpack": "^5.88.1"
+    "webpack": "^5.112.2"
   },
-  "resolutions": {
-    "lint-staged/yaml": "^2.2.2"
+  "overrides": {
+    "next": {
+      "postcss": "8.5.23"
+    },
+    "rehype-katex": {
+      "katex": "$katex"
+    },
+    "micromark-extension-math": {
+      "katex": "$katex"
+    }
   },
-  "packageManager": "yarn@1.22.19"
+  "packageManager": "npm@11.12.1"
 }

@@ -1,11 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { parseArgs } from "node:util";
+import { loadEnvConfig } from "@next/env";
+import {
+  createResearchRecorder,
+  readResearchCapture,
+  readReusableReport,
+  selectResearchMode,
+} from "./evaluation-research";
 
 import { extractTextFromFile } from "../app/utils/file-text-extractor";
 import {
   executeResearchSearch,
   getConfiguredResearchSearchProviders,
   getResearchSearchToolCatalog,
+  isCompositeMaterialsResult,
+  isPatentDocumentUrl,
   type ResearchSearchResult,
 } from "../app/utils/research-search-registry";
 import {
@@ -31,6 +42,10 @@ import {
   detectLaminateAnalysisIntent,
 } from "../app/utils/server-laminate-analysis";
 import { estimateTokenLength } from "../app/utils/token";
+import {
+  evidenceReference,
+  formatRagEvidence,
+} from "../app/utils/rag-evidence";
 import {
   encodeRagKgSourcesHeader,
   parseRagKgSourcesHeader,
@@ -59,6 +74,7 @@ type CasesFile = {
     forbiddenPatterns: string[];
     expectEmpty?: boolean;
     requiredEvidencePattern?: string;
+    requiredTableProjection?: boolean;
   }>;
   knowledgeGraph: Array<{
     name: string;
@@ -126,6 +142,110 @@ type CasesFile = {
 
 const results: EvalResult[] = [];
 const failures: EvalFailure[] = [];
+const caseMetrics: Array<{
+  suite: string;
+  name: string;
+  duration_ms: number;
+  rss_start_bytes: number;
+  rss_end_bytes: number;
+  sampled_peak_rss_bytes: number;
+  process_peak_rss_bytes: number;
+}> = [];
+const RSS_SAMPLE_INTERVAL_MS = 50;
+const ragEvidence: Array<{
+  name: string;
+  query: string;
+  context: Awaited<ReturnType<typeof buildInternalKnowledgeContext>>;
+}> = [];
+const graphEvidence: Array<{
+  name: string;
+  query: string;
+  graph: Awaited<ReturnType<typeof queryKnowledgeGraph>>;
+}> = [];
+let researchRecorder = createResearchRecorder();
+
+const evidenceFiles = [
+  "data/csllm/provenance/manifest.json",
+  "data/csllm/provenance/file_manifest.jsonl",
+  "data/csllm/runtime/rag_chunks.compact.jsonl.gz",
+  "data/csllm/runtime/relations.compact.jsonl.gz",
+  "data/csllm/kg/entities.jsonl",
+  "data/csllm/kg/kg_stats.json",
+  "data/csllm/provenance/README.md",
+  "package-lock.json",
+  "scripts/evaluate-csgpt.ts",
+  "scripts/evaluation-research.ts",
+  "evals/csgpt/engineering-cases.json",
+  "app/utils/server-rag-kg.ts",
+  "app/utils/rag-evidence.ts",
+  "app/utils/rag-quality.ts",
+  "app/utils/rag-kg-sources.ts",
+  "app/utils/knowledge-graph.ts",
+  "app/utils/research-search-registry.ts",
+  "app/utils/research-sources.ts",
+];
+
+// 报告绑定实际读取的数据与检索实现，不包含环境凭据。
+async function fingerprintEvidenceFiles() {
+  const files = [];
+  for (const file of evidenceFiles) {
+    const hash = createHash("sha256");
+    let bytes = 0;
+    for await (const chunk of fs.createReadStream(file)) {
+      hash.update(chunk);
+      bytes += chunk.length;
+    }
+    files.push({ path: file, bytes, sha256: hash.digest("hex") });
+  }
+  return files;
+}
+
+function evaluationOptions() {
+  const { values } = parseArgs({
+    options: {
+      report: { type: "string" },
+      "online-research-only": { type: "boolean", default: false },
+      "reuse-report": { type: "string" },
+      "replay-research": { type: "string" },
+      "research-mode": { type: "string" },
+    },
+  });
+  if (
+    values["reuse-report"] &&
+    (!values["online-research-only"] || !values.report)
+  ) {
+    throw new Error("复用报告要求 --online-research-only 和 --report");
+  }
+  if (values["replay-research"] && !values["online-research-only"]) {
+    throw new Error("响应回放要求 --online-research-only");
+  }
+  const options = {
+    reportPath: null as string | null,
+    onlineResearchOnly: values["online-research-only"],
+    reuseReport: values["reuse-report"],
+    replayResearch: values["replay-research"],
+    researchMode: selectResearchMode(
+      values["research-mode"],
+      values["online-research-only"] === true,
+    ),
+  };
+  if (!values.report) return options;
+  const root = path.resolve("evals/csgpt/results");
+  const reportPath = path.resolve(values.report);
+  const relative = path.relative(root, reportPath);
+  if (
+    !relative ||
+    relative.startsWith("..") ||
+    path.isAbsolute(relative) ||
+    !reportPath.endsWith(".json")
+  ) {
+    throw new Error("报告路径须位于 evals/csgpt/results 下，扩展名为 .json");
+  }
+  if (fs.existsSync(reportPath)) {
+    throw new Error("报告文件已存在，请使用不同文件名保留各次运行证据");
+  }
+  return { ...options, reportPath };
+}
 
 function loadCases() {
   const filePath = path.join(
@@ -135,26 +255,6 @@ function loadCases() {
     "engineering-cases.json",
   );
   return JSON.parse(fs.readFileSync(filePath, "utf-8")) as CasesFile;
-}
-
-function loadDotEnv(filePath: string) {
-  if (!fs.existsSync(filePath)) return;
-  const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
-  for (const line of lines) {
-    if (!line || /^\s*#/.test(line) || !line.includes("=")) continue;
-    const index = line.indexOf("=");
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (key && process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
 }
 
 function pass(suite: string, name: string, detail?: string) {
@@ -201,11 +301,31 @@ async function runCase(
   name: string,
   fn: () => Promise<string | void> | string | void,
 ) {
+  const started = performance.now();
+  const rssStart = process.memoryUsage.rss();
+  let sampledPeakRss = rssStart;
+  // 在现有用例执行期间采样，不为资源统计重复检索；OS 峰值是进程累计高水位。
+  const sampleRss = () => {
+    sampledPeakRss = Math.max(sampledPeakRss, process.memoryUsage.rss());
+  };
+  const sampler = setInterval(sampleRss, RSS_SAMPLE_INTERVAL_MS);
   try {
     const detail = await fn();
     pass(suite, name, detail || undefined);
   } catch (error) {
     fail(suite, name, error instanceof Error ? error.message : String(error));
+  } finally {
+    clearInterval(sampler);
+    sampleRss();
+    caseMetrics.push({
+      suite,
+      name,
+      duration_ms: Math.round((performance.now() - started) * 100) / 100,
+      rss_start_bytes: rssStart,
+      rss_end_bytes: process.memoryUsage.rss(),
+      sampled_peak_rss_bytes: sampledPeakRss,
+      process_peak_rss_bytes: process.resourceUsage().maxRSS * 1024,
+    });
   }
 }
 
@@ -215,11 +335,65 @@ async function evaluateRagKg(cases: CasesFile["ragKg"]) {
       const context = await buildInternalKnowledgeContext([
         { role: "user", content: item.query },
       ]);
+      ragEvidence.push({ name: item.name, query: item.query, context });
       if (item.expectEmpty) {
         assertCondition(context === null, "无检索词的问题返回了无关资料");
         return "no-evidence";
       }
       assertCondition(context, "内部知识库未返回上下文");
+      assertCondition(
+        context.message.length <= 12000,
+        "上下文超过整包字符预算",
+      );
+      for (const excerpt of context.excerpts) {
+        assertCondition(
+          excerpt.evidence.retrieval_eligible === true,
+          "返回了不可检索证据",
+        );
+        assertCondition(
+          context.message.includes(formatRagEvidence(excerpt.evidence)),
+          "证据正文、条件或列投影被截断",
+        );
+        for (const condition of [
+          ...excerpt.evidence.applicability_context,
+          ...excerpt.evidence.table_evidence.flatMap(
+            (table) => table.condition_context,
+          ),
+        ]) {
+          assertCondition(
+            context.message.includes(condition),
+            "条件原文未完整传入上下文",
+          );
+        }
+        const source = context.sources.find(
+          (source) => source.id === excerpt.sourceId,
+        );
+        assertCondition(
+          JSON.stringify(source?.evidence) ===
+            JSON.stringify(evidenceReference(excerpt.evidence)),
+          "引用身份与上下文分块不一致",
+        );
+      }
+      for (const source of context.sources) {
+        assertCondition(
+          context.excerpts.some(
+            (excerpt) =>
+              JSON.stringify(source.evidence) ===
+              JSON.stringify(evidenceReference(excerpt.evidence)),
+          ),
+          "来源没有对应的当前完整分块",
+        );
+      }
+      if (item.requiredTableProjection) {
+        assertCondition(
+          context.excerpts.some((excerpt) =>
+            excerpt.evidence.table_evidence.some(
+              (table) => table.column_projection,
+            ),
+          ),
+          "检索结果缺少表格列投影",
+        );
+      }
       const documentSources = context.sources.filter(isDocumentSource);
       assertCondition(
         documentSources.length >= item.minDocumentSources,
@@ -235,10 +409,8 @@ async function evaluateRagKg(cases: CasesFile["ragKg"]) {
       }
       if (item.requiredEvidencePattern) {
         // 逐段检查实际传给模型的正文，题名和用户问题不作为命中证据。
-        const excerpts = context.message
-          .split("内容：")
-          .slice(1)
-          .map((text) => text.split(/\n\n/)[0]);
+        const excerpts = context.excerpts.map((item) => item.text);
+        assertCondition(excerpts.length > 0, "检索结果缺少正文证据");
         const pattern = new RegExp(item.requiredEvidencePattern, "i");
         for (const excerpt of excerpts) {
           assertCondition(pattern.test(excerpt), "检索段落缺少所问技术分量");
@@ -275,7 +447,16 @@ async function evaluateKnowledgeGraph(cases: CasesFile["knowledgeGraph"]) {
   for (const item of cases) {
     await runCase("knowledge-graph", item.name, async () => {
       const graph = await queryKnowledgeGraph(item.query, 40);
+      graphEvidence.push({ name: item.name, query: item.query, graph });
       assertCondition(graph.mode === "query", "图谱模式不是 query");
+      for (const edge of graph.edges) {
+        assertCondition(
+          edge.evidence.retrieval_eligible &&
+            edge.evidence.record_id === edge.recordId &&
+            !!edge.evidence.chunk_fingerprint,
+          "图谱关系没有当前分块证据",
+        );
+      }
       assertCondition(
         graph.nodes.length >= item.minNodes,
         `节点数量 ${graph.nodes.length} 小于 ${item.minNodes}`,
@@ -741,7 +922,7 @@ async function evaluateOnlineResearch(cases: CasesFile["onlineResearch"]) {
 
   for (const item of cases) {
     await runCase("online-research", item.name, async () => {
-      const result = await executeResearchSearch({
+      const result = await researchRecorder.search({
         query: item.query,
         mode: item.mode,
         provider: item.provider,
@@ -753,15 +934,15 @@ async function evaluateOnlineResearch(cases: CasesFile["onlineResearch"]) {
       );
       const source = createResearchSource(result.results[0], 0);
       assertCondition(source.title && source.url, "来源缺少标题或链接");
+      if (item.mode === "patent") {
+        assertCondition(
+          result.results.every((entry) => isPatentDocumentUrl(entry.url)),
+          "专利检索包含未定位到专利文献的来源",
+        );
+      }
       return `provider=${result.provider}, results=${result.results.length}`;
     });
   }
-}
-
-function isCompositeResearchResult(result: ResearchSearchResult) {
-  return /composite|composites|fiber|fibre|polymer|laminate|cfrp|gfrp|carbon|epoxy/i.test(
-    [result.title, result.venue, result.source].filter(Boolean).join(" "),
-  );
 }
 
 async function evaluateOnlineAcademicRelevance() {
@@ -781,21 +962,25 @@ async function evaluateOnlineAcademicRelevance() {
 
     for (const provider of providers) {
       try {
-        const search = await executeResearchSearch({
+        const search = await researchRecorder.search({
           query,
           mode: "academic",
           provider,
           maxResults: 3,
         });
         results.push(...search.results);
-      } catch {
-        continue;
+      } catch (error) {
+        fail(
+          "online-research-provider",
+          provider,
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
 
     assertCondition(results.length >= 3, `结果数量 ${results.length} 小于 3`);
     const unrelated = results.filter(
-      (result) => !isCompositeResearchResult(result),
+      (result) => !isCompositeMaterialsResult(result),
     );
     assertCondition(
       unrelated.length === 0,
@@ -825,8 +1010,32 @@ async function evaluateDatabaseMigrations(
 }
 
 async function main() {
-  loadDotEnv(path.join(process.cwd(), ".env"));
-  loadDotEnv(path.join(process.cwd(), ".env.local"));
+  const options = evaluationOptions();
+  const { reportPath } = options;
+  const startedAt = new Date().toISOString();
+  const reusedReport = options.reuseReport
+    ? await readReusableReport(options.reuseReport)
+    : undefined;
+  const filesBefore = reportPath ? await fingerprintEvidenceFiles() : null;
+  // 与 Next.js 服务使用同一环境文件优先级，不输出配置值。
+  loadEnvConfig(process.cwd());
+  if (options.onlineResearchOnly && process.env.CSGPT_EVAL_ONLINE !== "1") {
+    throw new Error("定向在线检索要求 CSGPT_EVAL_ONLINE=1");
+  }
+  if (
+    options.onlineResearchOnly &&
+    process.env.CSGPT_EVAL_DESIGN_ONLINE === "1"
+  ) {
+    throw new Error(
+      "定向在线检索不执行设计服务，请设置 CSGPT_EVAL_DESIGN_ONLINE=0",
+    );
+  }
+  const researchCapture = options.replayResearch
+    ? readResearchCapture(options.replayResearch)
+    : undefined;
+  researchRecorder = createResearchRecorder(
+    researchCapture ? { capture: researchCapture } : undefined,
+  );
 
   if (typeof globalThis.atob !== "function") {
     globalThis.atob = (value: string) =>
@@ -838,32 +1047,105 @@ async function main() {
   }
 
   const cases = loadCases();
-  await evaluateRagKg(cases.ragKg);
-  await evaluateKnowledgeGraph(cases.knowledgeGraph);
-  await evaluateFileExtraction(cases.fileExtraction);
-  await evaluateFileContextIds(cases.fileContextIds);
-  await runCase("context-budget", "历史轮次裁剪与共享窗口预算", () => {
-    evaluateContextBudgetRegression();
-    return "system/current preserved; orphan history removed";
-  });
-  if (process.env.CSGPT_EVAL_DESIGN_ONLINE === "1") {
-    await runCase("laminate-analysis", "显式铺层序列事实复核", () => {
-      return evaluateLaminateDeterministicFacts().then(
-        () => "sequence symmetry/balance and ABD evidence boundary preserved",
-      );
+  if (!options.onlineResearchOnly) {
+    await evaluateRagKg(cases.ragKg);
+    await evaluateKnowledgeGraph(cases.knowledgeGraph);
+    await evaluateFileExtraction(cases.fileExtraction);
+    await evaluateFileContextIds(cases.fileContextIds);
+    await runCase("context-budget", "历史轮次裁剪与共享窗口预算", () => {
+      evaluateContextBudgetRegression();
+      return "system/current preserved; orphan history removed";
     });
-  } else {
-    skip(
-      "laminate-analysis",
-      "显式铺层序列事实复核",
-      "设置 CSGPT_EVAL_DESIGN_ONLINE=1 后执行",
+    if (process.env.CSGPT_EVAL_DESIGN_ONLINE === "1") {
+      await runCase("laminate-analysis", "显式铺层序列事实复核", () => {
+        return evaluateLaminateDeterministicFacts().then(
+          () => "sequence symmetry/balance and ABD evidence boundary preserved",
+        );
+      });
+    } else {
+      skip(
+        "laminate-analysis",
+        "显式铺层序列事实复核",
+        "设置 CSGPT_EVAL_DESIGN_ONLINE=1 后执行",
+      );
+    }
+    await evaluateDeterministicDesign(cases.deterministicDesign);
+    await evaluateResearchModes(cases.researchModes);
+    await evaluateDatabaseMigrations(cases.databaseMigrations);
+  } else if (reusedReport) {
+    results.push(
+      ...reusedReport.report.results.filter(
+        (entry) => entry.suite !== "online-research",
+      ),
     );
   }
-  await evaluateDeterministicDesign(cases.deterministicDesign);
-  await evaluateResearchModes(cases.researchModes);
-  await evaluateOnlineResearch(cases.onlineResearch);
-  await evaluateOnlineAcademicRelevance();
-  await evaluateDatabaseMigrations(cases.databaseMigrations);
+  await evaluateOnlineResearch(
+    cases.onlineResearch.filter(
+      (item) => !options.researchMode || item.mode === options.researchMode,
+    ),
+  );
+  if (!options.researchMode || options.researchMode === "academic") {
+    await evaluateOnlineAcademicRelevance();
+  }
+
+  if (reportPath) {
+    const filesAfter = await fingerprintEvidenceFiles();
+    const filesUnchanged =
+      JSON.stringify(filesBefore) === JSON.stringify(filesAfter);
+    if (!filesUnchanged) {
+      fail("evidence", "输入与实现文件一致性", "评测期间文件内容发生变化");
+    }
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.writeFileSync(
+      reportPath,
+      JSON.stringify(
+        {
+          schema_version: reusedReport ? 2 : 1,
+          execution: {
+            command: `npm run eval:csgpt -- ${process.argv.slice(2).join(" ")}`,
+            scope: options.onlineResearchOnly ? "online-research" : "all",
+            research_mode: options.researchMode,
+            configuration: "Next.js 环境配置优先级，凭据不进入报告",
+          },
+          reused_report: reusedReport,
+          response_capture: researchCapture
+            ? {
+                path: researchCapture.path,
+                sha256: researchCapture.sha256,
+                result_review: researchCapture.result_review,
+              }
+            : undefined,
+          started_at: startedAt,
+          finished_at: new Date().toISOString(),
+          environment: {
+            node: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            online_research: process.env.CSGPT_EVAL_ONLINE === "1",
+            research_transport: researchCapture ? "recorded-response" : "live",
+            online_design: process.env.CSGPT_EVAL_DESIGN_ONLINE === "1",
+          },
+          files_before: filesBefore,
+          files_after: filesAfter,
+          files_unchanged: filesUnchanged,
+          results,
+          failures,
+          performance: {
+            rss_sample_interval_ms: RSS_SAMPLE_INTERVAL_MS,
+            process_peak_rss_bytes: process.resourceUsage().maxRSS * 1024,
+            cases: caseMetrics,
+          },
+          rag: ragEvidence,
+          knowledge_graph: graphEvidence,
+          online_research: researchRecorder.attempts,
+        },
+        null,
+        2,
+      ) + "\n",
+      { flag: "wx" },
+    );
+    console.log(`报告：${path.relative(process.cwd(), reportPath)}`);
+  }
 
   for (const result of results) {
     const detail = result.detail ? ` ${result.detail}` : "";

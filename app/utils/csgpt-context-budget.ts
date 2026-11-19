@@ -154,7 +154,7 @@ function retainMessagesWithinBudget(
 
   for (const { message, index } of systemIndexes) {
     const remainingTokens = tokenBudget - tokenCount;
-    if (remainingTokens <= 0) break;
+    if (remainingTokens <= 0 && !message._csgptContextAtomic) continue;
     const targetRemainingTokens =
       contextPriority(message, index) <= 20
         ? Math.max(8, remainingTokens - CSGPT_HISTORY_COMPACTION_RESERVE)
@@ -165,6 +165,12 @@ function retainMessagesWithinBudget(
       selectedMessages.set(index, message);
       tokenCount += fullTokens;
       continue;
+    }
+    // 工程事实与检索单元不可从中间切开，避免丢失数值对应关系和适用条件。
+    if (message._csgptContextAtomic) {
+      throw new Error(
+        "完整工程工件或检索上下文超出窗口，请减少候选数量或关闭部分检索选项。",
+      );
     }
 
     const minimumTokens = Math.min(96, targetRemainingTokens);
@@ -238,6 +244,19 @@ export function applyCSGPTContextBudget(
   rest: Record<string, any>,
   contextLength: number,
 ) {
+  const template = rest.chat_template_kwargs;
+  if (
+    template !== undefined &&
+    (!template || typeof template !== "object" || Array.isArray(template))
+  ) {
+    throw new Error("chat_template_kwargs 必须是对象。");
+  }
+  if (
+    template?.enable_thinking !== undefined &&
+    typeof template.enable_thinking !== "boolean"
+  ) {
+    throw new Error("enable_thinking 必须是布尔值。");
+  }
   const requestedOutput =
     typeof rest.max_completion_tokens === "number"
       ? rest.max_completion_tokens
@@ -263,7 +282,14 @@ export function applyCSGPTContextBudget(
     1,
     Math.floor(Math.min(normalizedOutput, availableOutput)),
   );
-  const boundedRest = { ...rest };
+  // CSGPT 默认直接作答；显式启用的 thinking 与正文共用输出预算。
+  const boundedRest: Record<string, any> = {
+    ...rest,
+    chat_template_kwargs: {
+      ...template,
+      enable_thinking: template?.enable_thinking ?? false,
+    },
+  };
 
   if (Object.prototype.hasOwnProperty.call(boundedRest, "max_tokens")) {
     boundedRest.max_tokens = outputTokens;

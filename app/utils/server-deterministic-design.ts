@@ -7,6 +7,7 @@ import {
   type DeterministicDesignServiceResponse,
   type FEMReadyDesignServiceResponse,
 } from "./design-contract";
+import { DESIGN_FACT_RULES } from "./design-context";
 export type {
   DesignServiceResponse,
   DeterministicDesignServiceResponse,
@@ -678,7 +679,7 @@ export function detectDeterministicDesignIntent(
     facts.push(`完整物理层数 ${explicitLayerCount} 层`);
   } else {
     assumptions.push(
-      `完整物理层数未给定，初始筛选候选采用 ${DEFAULT_LAYER_COUNT} 层。`,
+      `用户未指定物理层数；工具选择 ${DEFAULT_LAYER_COUNT} 层并生成每个候选的完整层序。`,
     );
   }
 
@@ -977,11 +978,12 @@ export function buildDesignNarrativeInstruction(
     "请说明以下候选数据的工程含义，按任务输入与候选分组、层数厚度与铺层、制造与有限元校核三部分回答。" +
     "说明对称与均衡各自需要的层间关系及其对 ABD 分量的约束。" +
     "候选表由应用程序直接展示，回答只写工程说明。" +
-    "已知数值、未知输入、历史结果和当前校核状态分别按给定数据说明。\n" +
+    DESIGN_FACT_RULES +
+    "\n" +
     JSON.stringify(context.facts) +
     "\n用户明确输入：\n" +
     JSON.stringify(intent.facts) +
-    "\n建模假设：\n" +
+    "\n工具选择与建模依据（不是用户缺失字段列表）：\n" +
     JSON.stringify(intent.assumptions)
   );
 }

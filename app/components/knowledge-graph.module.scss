@@ -280,12 +280,14 @@
 @media screen and (max-width: 900px) {
   .graph-body {
     padding: 12px;
+    overflow-y: auto;
   }
 
   .graph-toolbar,
   .graph-summary {
     align-items: stretch;
     flex-direction: column;
+    flex-shrink: 0;
   }
 
   .graph-stats {
@@ -293,6 +295,7 @@
   }
 
   .graph-content {
+    flex: none;
     grid-template-columns: 1fr;
   }
 
@@ -301,6 +304,7 @@
   }
 
   .graph-panel {
-    max-height: 320px;
+    max-height: none;
+    overflow: visible;
   }
 }

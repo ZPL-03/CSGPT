@@ -17,17 +17,48 @@ import {
 import fs from "fs/promises";
 import path from "path";
 import { getServerSideConfig } from "../config/server";
+import { headers } from "next/headers";
+import { getUserFromRequest } from "../lib/auth";
+import { prisma } from "../lib/prisma";
 
 const logger = new MCPClientLogger("MCP Actions");
 const CONFIG_PATH = path.join(process.cwd(), "app/mcp/mcp_config.json");
 
 const clientsMap = new Map<string, McpClientData>();
 
+// MCP 配置与子进程属于服务端全局资源，仅管理员可以读取或操作。
+async function hasMcpAdminAccess(): Promise<boolean> {
+  const config = getServerSideConfig();
+  if (!config.enableMcp) return false;
+  const adminNames = config.adminUsernames
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (adminNames.length === 0) return false;
+  const request = new Request("http://mcp.internal", {
+    headers: await headers(),
+  });
+  const userId = await getUserFromRequest(request);
+  if (!userId) return false;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { username: true },
+  });
+  return !!user && adminNames.includes(user.username);
+}
+
+async function requireMcpAdmin(): Promise<void> {
+  if (!(await hasMcpAdminAccess())) {
+    throw new Error("MCP 未启用或当前用户无管理员权限。");
+  }
+}
+
 // 获取客户端状态
 export async function getClientsStatus(): Promise<
   Record<string, ServerStatusResponse>
 > {
-  const config = await getMcpConfigFromFile();
+  await requireMcpAdmin();
+  const config = await readMcpConfig();
   const result: Record<string, ServerStatusResponse> = {};
 
   for (const clientId of Object.keys(config.mcpServers)) {
@@ -76,11 +107,13 @@ export async function getClientsStatus(): Promise<
 
 // 获取客户端工具
 export async function getClientTools(clientId: string) {
+  await requireMcpAdmin();
   return clientsMap.get(clientId)?.tools ?? null;
 }
 
 // 获取可用客户端数量
 export async function getAvailableClientsCount() {
+  await requireMcpAdmin();
   let count = 0;
   clientsMap.forEach((map) => !map.errorMsg && count++);
   return count;
@@ -88,6 +121,7 @@ export async function getAvailableClientsCount() {
 
 // 获取所有客户端工具
 export async function getAllTools() {
+  await requireMcpAdmin();
   const result = [];
   for (const [clientId, status] of clientsMap.entries()) {
     result.push({
@@ -140,6 +174,7 @@ async function initializeSingleClient(
 
 // 初始化系统
 export async function initializeMcpSystem() {
+  await requireMcpAdmin();
   logger.info("MCP Actions starting...");
   try {
     // 活跃客户端状态
@@ -148,7 +183,7 @@ export async function initializeMcpSystem() {
       return;
     }
 
-    const config = await getMcpConfigFromFile();
+    const config = await readMcpConfig();
     // 初始化所有客户端
     for (const [clientId, serverConfig] of Object.entries(config.mcpServers)) {
       await initializeSingleClient(clientId, serverConfig);
@@ -162,8 +197,9 @@ export async function initializeMcpSystem() {
 
 // 添加服务器
 export async function addMcpServer(clientId: string, config: ServerConfig) {
+  await requireMcpAdmin();
   try {
-    const currentConfig = await getMcpConfigFromFile();
+    const currentConfig = await readMcpConfig();
     const isNewServer = !(clientId in currentConfig.mcpServers);
 
     // 如果是新服务器，设置默认状态为 active
@@ -194,8 +230,9 @@ export async function addMcpServer(clientId: string, config: ServerConfig) {
 
 // 暂停服务器
 export async function pauseMcpServer(clientId: string) {
+  await requireMcpAdmin();
   try {
-    const currentConfig = await getMcpConfigFromFile();
+    const currentConfig = await readMcpConfig();
     const serverConfig = currentConfig.mcpServers[clientId];
     if (!serverConfig) {
       throw new Error(`Server ${clientId} not found`);
@@ -230,8 +267,9 @@ export async function pauseMcpServer(clientId: string) {
 
 // 服务器启用
 export async function resumeMcpServer(clientId: string): Promise<void> {
+  await requireMcpAdmin();
   try {
-    const currentConfig = await getMcpConfigFromFile();
+    const currentConfig = await readMcpConfig();
     const serverConfig = currentConfig.mcpServers[clientId];
     if (!serverConfig) {
       throw new Error(`Server ${clientId} not found`);
@@ -258,7 +296,7 @@ export async function resumeMcpServer(clientId: string): Promise<void> {
       };
       await updateMcpConfig(newConfig);
     } catch (error) {
-      const currentConfig = await getMcpConfigFromFile();
+      const currentConfig = await readMcpConfig();
       const serverConfig = currentConfig.mcpServers[clientId];
 
       // 配置中的服务器状态标记为 error
@@ -284,8 +322,9 @@ export async function resumeMcpServer(clientId: string): Promise<void> {
 
 // 服务器删除
 export async function removeMcpServer(clientId: string) {
+  await requireMcpAdmin();
   try {
-    const currentConfig = await getMcpConfigFromFile();
+    const currentConfig = await readMcpConfig();
     const { [clientId]: _, ...rest } = currentConfig.mcpServers;
     const newConfig = {
       ...currentConfig,
@@ -309,6 +348,7 @@ export async function removeMcpServer(clientId: string) {
 
 // 重启所有客户端
 export async function restartAllClients() {
+  await requireMcpAdmin();
   logger.info("Restarting all clients...");
   try {
     // 关闭所有客户端
@@ -322,7 +362,7 @@ export async function restartAllClients() {
     clientsMap.clear();
 
     // 重新初始化
-    const config = await getMcpConfigFromFile();
+    const config = await readMcpConfig();
     for (const [clientId, serverConfig] of Object.entries(config.mcpServers)) {
       await initializeSingleClient(clientId, serverConfig);
     }
@@ -338,6 +378,7 @@ export async function executeMcpAction(
   clientId: string,
   request: McpRequestMessage,
 ) {
+  await requireMcpAdmin();
   try {
     const client = clientsMap.get(clientId);
     if (!client?.client) {
@@ -353,12 +394,19 @@ export async function executeMcpAction(
 
 // 获取 MCP 配置文件
 export async function getMcpConfigFromFile(): Promise<McpConfigData> {
+  await requireMcpAdmin();
+  return readMcpConfig();
+}
+
+async function readMcpConfig(): Promise<McpConfigData> {
   try {
     const configStr = await fs.readFile(CONFIG_PATH, "utf-8");
     return JSON.parse(configStr);
   } catch (error) {
-    logger.error(`Failed to load MCP config, using default config: ${error}`);
-    return DEFAULT_MCP_CONFIG;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return DEFAULT_MCP_CONFIG;
+    }
+    throw error;
   }
 }
 
@@ -375,11 +423,5 @@ async function updateMcpConfig(config: McpConfigData): Promise<void> {
 
 // 检查 MCP 是否启用
 export async function isMcpEnabled() {
-  try {
-    const serverConfig = getServerSideConfig();
-    return serverConfig.enableMcp;
-  } catch (error) {
-    logger.error(`Failed to check MCP status: ${error}`);
-    return false;
-  }
+  return hasMcpAdminAccess();
 }

@@ -5,6 +5,7 @@ export type RagKgDocumentSource = {
   id: string;
   title: string;
   sourceUrl?: string;
+  evidence?: RagEvidenceReference;
 };
 
 export type RagKgGraphSource = {
@@ -15,6 +16,7 @@ export type RagKgGraphSource = {
   relation: string;
   target: string;
   targetType: string;
+  evidence?: RagEvidenceReference;
 };
 
 export type RagKgSource = RagKgDocumentSource | RagKgGraphSource;
@@ -46,3 +48,4 @@ export function parseRagKgSourcesHeader(response?: Response) {
     return [];
   }
 }
+import type { RagEvidenceReference } from "./rag-evidence";

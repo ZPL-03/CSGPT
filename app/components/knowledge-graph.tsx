@@ -15,40 +15,15 @@ import { ErrorBoundary } from "./error";
 import Locale from "../locales";
 import { useUserStore } from "../store/user";
 import styles from "./knowledge-graph.module.scss";
+import { RagEvidenceView } from "./rag-evidence-view";
+import type { KnowledgeGraphQueryResult } from "../utils/server-rag-kg";
 
 type CytoscapeCore = import("cytoscape").Core;
 type CytoscapeElementDefinition = import("cytoscape").ElementDefinition;
 
-type GraphNode = {
-  id: string;
-  label: string;
-  type: string;
-  count: number;
-  degree: number;
-};
-
-type GraphEdge = {
-  id: string;
-  source: string;
-  target: string;
-  relation: string;
-  recordId: string;
-  score: number;
-};
-
-type GraphData = {
-  mode: "overview" | "query";
-  query: string;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  stats: {
-    totalEntities: number;
-    totalRelations: number;
-    matchedRelations: number;
-    returnedNodes: number;
-    returnedEdges: number;
-  };
-};
+type GraphData = KnowledgeGraphQueryResult;
+type GraphNode = GraphData["nodes"][number];
+type GraphEdge = GraphData["edges"][number];
 
 const GRAPH_QUERY_LIMIT = 42;
 
@@ -567,7 +542,11 @@ export function KnowledgeGraphPage() {
           </div>
         </div>
 
-        <div className={styles["graph-body"]}>
+        <div
+          className={styles["graph-body"]}
+          role="region"
+          aria-label={Locale.KnowledgeGraph.Title}
+        >
           <div className={styles["graph-toolbar"]}>
             <div className={styles["graph-search"]}>
               <GraphIcon />
@@ -774,17 +753,19 @@ export function KnowledgeGraphPage() {
                     const source = nodesById.get(edge.source);
                     const target = nodesById.get(edge.target);
                     return (
-                      <button
-                        key={edge.id}
-                        className={styles["relation-item"]}
-                        onClick={() =>
-                          setSelectedNodeId(target?.id || edge.target)
-                        }
-                      >
-                        <span>{source?.label || edge.source}</span>
-                        <strong>{edge.relation}</strong>
-                        <span>{target?.label || edge.target}</span>
-                      </button>
+                      <div key={edge.id}>
+                        <button
+                          className={styles["relation-item"]}
+                          onClick={() =>
+                            setSelectedNodeId(target?.id || edge.target)
+                          }
+                        >
+                          <span>{source?.label || edge.source}</span>
+                          <strong>{edge.relation}</strong>
+                          <span>{target?.label || edge.target}</span>
+                        </button>
+                        <RagEvidenceView evidence={edge.evidence} />
+                      </div>
                     );
                   })}
                 </div>

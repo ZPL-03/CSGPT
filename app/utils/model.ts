@@ -1,6 +1,36 @@
 import { DEFAULT_MODELS, ServiceProvider } from "../constant";
 import { LLMModel } from "../client/api";
 
+export type CSGPTModelSource = {
+  id: string;
+  displayName: string;
+  upstreamModel: string | null;
+};
+
+/** 展示当前部署配置，路由 ID 保持不变；历史响应的真实基座不由当前配置推断。 */
+export function applyCSGPTModelSources<
+  T extends Pick<LLMModel, "name" | "displayName"> & {
+    provider?: LLMModel["provider"];
+  },
+>(models: T[], sources: readonly CSGPTModelSource[]): T[] {
+  return models.map((model) => {
+    if (!isSameProvider(model.provider, ServiceProvider.CSGPT)) return model;
+    const source = sources.find((item) => item.id === model.name);
+    const builtin: LLMModel | undefined = DEFAULT_MODELS.find(
+      (item) => item.name === model.name && item.provider.id === "csgpt",
+    );
+    if (!source && !builtin) return model;
+    return {
+      ...model,
+      displayName: source
+        ? `${source.displayName}（当前上游：${
+            source.upstreamModel || "未显式配置"
+          }）`
+        : `${builtin!.displayName}（当前上游未确认）`,
+    };
+  });
+}
+
 const CustomSeq = {
   val: -1000, // 确保自定义模型排在前面，从 -1000 开始
   cache: new Map<string, number>(),

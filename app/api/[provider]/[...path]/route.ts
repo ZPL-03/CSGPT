@@ -65,6 +65,7 @@ import {
   prepareDesignNarrativeRest,
   validateTextCompletion,
   validateTextStream,
+  completionErrorEvents,
 } from "@/app/utils/server-design-completion";
 import {
   applyCSGPTContextBudget,
@@ -75,6 +76,8 @@ import {
   VLLMTokenizerError,
 } from "@/app/utils/server-vllm-tokenizer";
 import { buildLaminateCalculationContext } from "@/app/utils/server-laminate-analysis";
+import { bindDesignArtifactMessages } from "@/app/utils/design-context";
+import { designNarrativeValidator } from "@/app/utils/design-narrative";
 
 // 通用 API 代理路由：处理 /api/{provider}/{...path} 请求
 // 根据 Provider 将请求转发到对应的后端服务
@@ -146,7 +149,7 @@ function getCSGPTContextLength(
 }
 
 function prepareDesignNarrativeMessages(messages: any[], instruction: string) {
-  const result = [...messages];
+  const result = messages.filter((message) => !message.designArtifact);
   let insertIndex = 0;
   while (
     insertIndex < result.length &&
@@ -158,6 +161,7 @@ function prepareDesignNarrativeMessages(messages: any[], instruction: string) {
     role: "system",
     content: instruction,
     _csgptContextPriority: 80,
+    _csgptContextAtomic: true,
   });
   return result;
 }
@@ -392,8 +396,11 @@ function buildControlledToolRecords(input: {
   return records.filter(Boolean) as ControlledToolRecord[];
 }
 
-async function handle(req: NextRequest, { params }: { params: RouteParams }) {
-  const { provider, path: pathSegments } = params;
+async function handle(
+  req: NextRequest,
+  { params }: { params: Promise<RouteParams> },
+) {
+  const { provider, path: pathSegments } = await params;
   const rawPath = pathSegments.join("/");
 
   const config = getServerSideConfig();
@@ -699,6 +706,7 @@ async function prepareProxyMessages(
         : "system",
       content: contextBlocks.join("\n\n"),
       _csgptContextPriority: 20,
+      _csgptContextAtomic: options.ragKgEnabled,
     });
   }
 
@@ -740,7 +748,7 @@ async function handleDedicatedCSGPTChatCompletions(
     userId?: string | null;
   },
 ) {
-  const {
+  let {
     messages,
     stream,
     model,
@@ -778,6 +786,24 @@ async function handleDedicatedCSGPTChatCompletions(
     );
   }
   let laminateContext: string | null = null;
+  try {
+    messages = designIntent
+      ? messages.filter((message) => !message.designArtifact)
+      : bindDesignArtifactMessages(messages);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: true,
+        message: error instanceof Error ? error.message : "设计工件无效。",
+      },
+      { status: 422 },
+    );
+  }
+  const boundArtifact = messages.find((message) => message.designArtifact)
+    ?.designArtifact;
+  const validateNarrative = boundArtifact
+    ? designNarrativeValidator(boundArtifact)
+    : undefined;
   if (model === CSGPT_MODEL_2 && !designIntent) {
     try {
       laminateContext = await buildLaminateCalculationContext(messages);
@@ -848,6 +874,8 @@ async function handleDedicatedCSGPTChatCompletions(
         content:
           "以下是按用户输入得到的计算工具结果，仅作为回答依据。解释理论与结果时保留单位、层序、参考面和计算范围。\n" +
           laminateContext,
+        _csgptContextAtomic: true,
+        _csgptContextPriority: 95,
       },
       requestMessages.at(-1),
     ];
@@ -875,6 +903,10 @@ async function handleDedicatedCSGPTChatCompletions(
     designArtifact = toCSGPTDesignArtifact(
       designResponse as unknown as Record<string, unknown>,
     );
+    designArtifact.input_provenance = {
+      user_fixed: designIntent.facts,
+      tool_selected: designIntent.assumptions,
+    };
     const record = createControlledToolRecord({
       id: "csgpt-deterministic-design",
       name: "确定性方案生成",
@@ -906,6 +938,7 @@ async function handleDedicatedCSGPTChatCompletions(
         model: upstreamModel,
         messages: normalizeMessagesToText(budgetedRequest.messages),
         contextLength: upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
+        chatTemplateKwargs: budgetedRequest.rest.chat_template_kwargs,
       });
       budgetedRequest = reconcileCSGPTMeasuredBudget(
         budgetedRequest,
@@ -1003,16 +1036,14 @@ async function handleDedicatedCSGPTChatCompletions(
             model,
             designArtifact,
           )
-        : laminateContext
-        ? validateTextStream(response.body, model)
-        : response.body;
+        : validateTextStream(response.body, model, validateNarrative);
     if (designArtifact) {
       responseHeaders.set(
         CSGPT_DESIGN_ARTIFACT_HEADER,
         encodeCSGPTDesignArtifactHeader(designArtifact),
       );
     }
-    return new Response(responseBody, {
+    return new Response(completionErrorEvents(responseBody), {
       status: 200,
       headers: responseHeaders,
     });
@@ -1027,8 +1058,8 @@ async function handleDedicatedCSGPTChatCompletions(
         designAppendix,
         designArtifact,
       );
-    } else if (laminateContext) {
-      validateTextCompletion(data);
+    } else {
+      validateTextCompletion(data, validateNarrative);
     }
   } catch (error: any) {
     return NextResponse.json(
@@ -1072,7 +1103,7 @@ async function handleChatCompletions(
 ) {
   const body = await req.json();
   const {
-    messages,
+    messages: rawMessages,
     stream = true,
     model,
     csgpt_internal_knowledge_enabled = false,
@@ -1085,6 +1116,20 @@ async function handleChatCompletions(
     csgpt_upstream_url,
     ...rest
   } = body;
+  let messages;
+  try {
+    if (!Array.isArray(rawMessages) || !rawMessages.length)
+      throw new Error("messages 必须是非空数组。");
+    messages = rawMessages;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: true,
+        message: error instanceof Error ? error.message : "设计工件无效。",
+      },
+      { status: 422 },
+    );
+  }
   const ragKgEnabled = !!csgpt_internal_knowledge_enabled;
   const webSearchEnabled = !!csgpt_web_search_enabled;
   const academicSearchEnabled = !!csgpt_academic_search_enabled;
@@ -1146,7 +1191,24 @@ async function handleChatCompletions(
     });
   }
 
+  try {
+    messages = bindDesignArtifactMessages(messages);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: true,
+        message: error instanceof Error ? error.message : "设计工件无效。",
+      },
+      { status: 422 },
+    );
+  }
   let processedMessages = [...messages];
+  const continuedArtifact = messages.find(
+    (message: any) => message.designArtifact,
+  )?.designArtifact;
+  const validateNarrative = continuedArtifact
+    ? designNarrativeValidator(continuedArtifact)
+    : undefined;
   let ragKgSources: RagKgSource[] = [];
   let researchSources: ResearchSource[] = [];
   let sessionFileSources: SessionFileSource[] = [];
@@ -1262,7 +1324,7 @@ async function handleChatCompletions(
   }
 
   if (stream && response.body) {
-    // 直接透传上游 SSE 流，避免 TransformStream 在 Node.js 环境下导致流阻塞
+    // CSGPT 问答共用完成协议；其他 Provider 保留各自的工具调用协议。
     const responseHeaders = new Headers({
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -1274,12 +1336,33 @@ async function handleChatCompletions(
     attachSessionFileSourcesHeader(responseHeaders, sessionFileSources);
     attachUserFileSourcesHeader(responseHeaders, userFileSources);
     attachControlledToolRecordsHeader(responseHeaders, controlledToolRecords);
-    return new Response(response.body, {
-      status: 200,
-      headers: responseHeaders,
-    });
+    return new Response(
+      backend.isCSGPT
+        ? completionErrorEvents(
+            validateTextStream(response.body, model, validateNarrative),
+          )
+        : response.body,
+      {
+        status: 200,
+        headers: responseHeaders,
+      },
+    );
   } else {
-    const data = await response.json();
+    let data;
+    try {
+      if (backend.isCSGPT && stream)
+        throw new Error("CSGPT 上游没有返回 SSE 响应体。");
+      data = await response.json();
+      if (backend.isCSGPT) validateTextCompletion(data, validateNarrative);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: true,
+          message: error instanceof Error ? error.message : "上游响应无效。",
+        },
+        { status: 502 },
+      );
+    }
     const nextResponse = NextResponse.json(data);
     attachRagKgSourcesHeader(nextResponse.headers, ragKgSources);
     attachResearchSourcesHeader(nextResponse.headers, researchSources);

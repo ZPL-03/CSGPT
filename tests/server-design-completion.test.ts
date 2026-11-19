@@ -32,6 +32,35 @@ test("实际分词约束共享窗口且不覆盖当前消息", () => {
   );
 });
 
+test("CSGPT 默认关闭 thinking，显式启用仍共用输出预算", () => {
+  const messages = [{ role: "user", content: "解释候选" }];
+  const direct = applyCSGPTContextBudget(messages, { max_tokens: 4096 }, 16384);
+  assert.deepEqual(direct.rest.chat_template_kwargs, {
+    enable_thinking: false,
+  });
+  const thinking = applyCSGPTContextBudget(
+    messages,
+    { max_tokens: 4096, chat_template_kwargs: { enable_thinking: true } },
+    16384,
+  );
+  assert.equal(thinking.rest.chat_template_kwargs.enable_thinking, true);
+  assert.equal(thinking.rest.max_tokens, direct.rest.max_tokens);
+  assert.equal(
+    reconcileCSGPTMeasuredBudget(thinking, 13806, 16384).rest.max_tokens,
+    2066,
+  );
+  for (const chat_template_kwargs of [
+    null,
+    [],
+    "false",
+    { enable_thinking: "false" },
+  ]) {
+    assert.throws(() =>
+      applyCSGPTContextBudget(messages, { chat_template_kwargs }, 16384),
+    );
+  }
+});
+
 test("分词请求使用上游模型和实际消息，失败不回退为估算", async () => {
   const original = globalThis.fetch;
   let payload: any;
@@ -46,10 +75,12 @@ test("分词请求使用上游模型和实际消息，失败不回退为估算",
       model: "adapter",
       messages: [{ role: "user", content: "问题" }],
       contextLength: 16384,
+      chatTemplateKwargs: { enable_thinking: false },
     });
     assert.deepEqual(result, { inputTokens: 123, contextLength: 8192 });
     assert.equal(payload.model, "adapter");
     assert.equal(payload.add_generation_prompt, true);
+    assert.deepEqual(payload.chat_template_kwargs, { enable_thinking: false });
     globalThis.fetch = async () => new Response("", { status: 503 });
     await assert.rejects(
       countVLLMChatTokens({
@@ -75,6 +106,7 @@ import {
   appendDesignToOpenAIStream,
   prepareDesignNarrativeRest,
   validateTextCompletion,
+  completionErrorEvents,
   validateTextStream,
 } from "../app/utils/server-design-completion";
 import {
@@ -101,7 +133,7 @@ test("普通批量设计请求调用概念工具，FEM-ready 使用独立合同"
   const intent = detectDeterministicDesignIntent(messages);
   assert.equal(intent?.mode, "concept_layup_enumeration");
   assert.equal(intent?.candidateCount, 50);
-  assert.ok(intent?.assumptions.some((item) => item.includes("层数未给定")));
+  assert.equal(intent?.payload.layer_count, 60);
   assert.ok(!intent?.facts.some((item) => item.includes("层")));
 });
 
@@ -415,14 +447,14 @@ function inputStream(text: string, fragmentSize = 19) {
   });
 }
 
-test("层合板流式解释保留正文和真实完成原因，缺少完成事件时失败", async () => {
+test("层合板流式解释只接受正常终态，缺少完成事件时失败", async () => {
   const complete =
-    event(delta("计算结果")) + event(delta("", "length")) + "data: [DONE]\n\n";
+    event(delta("计算结果")) + event(delta("", "stop")) + "data: [DONE]\n\n";
   const output = await new Response(
     validateTextStream(inputStream(complete, 1), "csllm"),
   ).text();
   assert.match(output, /计算结果/);
-  assert.match(output, /"finish_reason":"length"/);
+  assert.match(output, /"finish_reason":"stop"/);
   assert.doesNotMatch(output, new RegExp(CSGPT_DESIGN_ARTIFACT_CHUNK_FIELD));
   assert.equal(output.endsWith("data: [DONE]\n\n"), true);
   await assert.rejects(
@@ -451,7 +483,7 @@ async function outputEvents(text: string, fragmentSize?: number) {
     .map((entry) => JSON.parse(entry.slice(6)));
 }
 
-for (const reason of ["stop", "length", "content_filter", "tool_calls"]) {
+for (const reason of ["stop"]) {
   test(`非流式保留 ${reason} 并完整追加表格和合同`, () => {
     const input = {
       choices: [
@@ -515,7 +547,16 @@ for (const reason of ["stop", "length", "content_filter", "tool_calls"]) {
     });
   }
 }
-for (const reason of [null, undefined, "", 0]) {
+for (const reason of [
+  null,
+  undefined,
+  "",
+  0,
+  "length",
+  "content_filter",
+  "tool_calls",
+  "unknown",
+]) {
   test(`非流式缺失或无效完成状态 ${String(reason)} 不伪装为成功`, () => {
     assert.throws(
       () =>
@@ -528,6 +569,19 @@ for (const reason of [null, undefined, "", 0]) {
           appendix,
           artifact,
         ),
+      /finish_reason/,
+    );
+  });
+  test(`流式非 stop 终态 ${String(reason)} 不追加表格或工件`, async () => {
+    await assert.rejects(
+      new Response(
+        appendDesignToOpenAIStream(
+          inputStream(event(delta(narrative, reason)) + "data: [DONE]\n\n"),
+          appendix,
+          "csllm",
+          artifact,
+        ),
+      ).text(),
       /finish_reason/,
     );
   });
@@ -588,6 +642,33 @@ test("客户端取消后取消上游读取", async () => {
     "user cancelled",
   );
   assert.equal(cancelled, true);
+});
+
+test("有工件的错误解释只返回错误事件，不展示伪造安全说明或成功附录", async () => {
+  const body = completionErrorEvents(
+    appendDesignToOpenAIStream(
+      inputStream(
+        event(delta("当前没有候选达到安全阈值。", "stop")) + "data: [DONE]\n\n",
+      ),
+      appendix,
+      "csllm",
+      artifact,
+    ),
+  );
+  const text = await new Response(body).text();
+  assert.match(text, /invalid_completion/);
+  assert.doesNotMatch(text, /"delta"|\[DONE\]|csgpt_design_artifact/);
+});
+
+test("取消错误事件适配器会取消上游，且不发送正常终态", async () => {
+  let reason: unknown;
+  const stream = new ReadableStream<Uint8Array>({
+    cancel(value) {
+      reason = value;
+    },
+  });
+  await completionErrorEvents(stream).cancel("用户停止");
+  assert.equal(reason, "用户停止");
 });
 test("说明输出预算受共享窗口约束且尊重较小用户预算", () => {
   assert.equal(prepareDesignNarrativeRest({}).max_tokens, 4096);

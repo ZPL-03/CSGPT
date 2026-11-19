@@ -4,6 +4,7 @@
 .logs/
 coverage/
 output/
+evals/csgpt/results/
 .playwright-cli/
 node_modules/
 

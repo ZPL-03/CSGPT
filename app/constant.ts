@@ -108,8 +108,6 @@ export const REQUEST_TIMEOUT_MS_FOR_CSGPT_CS2 = REQUEST_TIMEOUT_MS * 5;
 export const MAX_FILE_UPLOAD_SIZE = 50 * 1024 * 1024;
 export const FILE_UPLOAD_CHUNK_SIZE = 2 * 1024 * 1024;
 
-export const EXPORT_MESSAGE_CLASS_NAME = "export-markdown";
-
 export enum ServiceProvider {
   CSGPT = "CSGPT",
   OpenAI = "OpenAI",
@@ -377,11 +375,11 @@ You are an AI assistant with access to system tools. Your role is to help users 
 `;
 
 export const CSGPT_DEFAULT_MODEL = "QWen3-14B-CS1";
-export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "QWen3-14B-CS1";
+export const CSGPT_DEFAULT_MODEL_DISPLAY_NAME = "CS1";
 export const CSGPT_MODEL_2 = "QWen3-14B-CS2";
-export const CSGPT_MODEL_2_DISPLAY_NAME = "QWen3-14B-CS2";
+export const CSGPT_MODEL_2_DISPLAY_NAME = "CS2";
 export const CSGPT_MODEL_3 = "QWen3-14B-CS3";
-export const CSGPT_MODEL_3_DISPLAY_NAME = "QWen3-14B-CS3";
+export const CSGPT_MODEL_3_DISPLAY_NAME = "CS3";
 export const CSGPT_CONTEXT_LENGTH = 16384;
 export const CSGPT_DEFAULT_MAX_TOKENS = CSGPT_CONTEXT_LENGTH;
 

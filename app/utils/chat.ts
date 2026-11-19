@@ -1,4 +1,8 @@
-import { FILES_URL_PREFIX, FILE_UPLOAD_CHUNK_SIZE } from "@/app/constant";
+import {
+  FILES_URL_PREFIX,
+  FILE_UPLOAD_CHUNK_SIZE,
+  ServiceProvider,
+} from "@/app/constant";
 import { MultimodalContent, RequestMessage } from "@/app/client/api";
 import Locale from "@/app/locales";
 import { useUserStore } from "@/app/store/user";
@@ -474,6 +478,16 @@ export function streamWithThink(
     if (!finished) {
       if (!controller.signal.aborted) {
         try {
+          if (
+            options.config?.providerName === ServiceProvider.CSGPT &&
+            finishReason !== "stop"
+          ) {
+            throw new Error(
+              `CSGPT finish_reason 必须为 stop，实际为 ${String(
+                finishReason,
+              )}。`,
+            );
+          }
           validateCompletedDesignArtifact({
             response: responseRes,
             artifact: designArtifact,

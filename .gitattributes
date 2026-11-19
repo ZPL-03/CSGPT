@@ -1,0 +1,2 @@
+# 运行包文本文件的字节参与 manifest 校验，禁止换行转换。
+data/csllm/** -text

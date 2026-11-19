@@ -6,6 +6,7 @@ export async function countVLLMChatTokens(options: {
   model: string;
   messages: Array<{ role: string; content: unknown }>;
   contextLength: number;
+  chatTemplateKwargs?: Record<string, unknown>;
 }) {
   const root = options.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
   const response = await fetch(`${root}/tokenize`, {
@@ -19,6 +20,8 @@ export async function countVLLMChatTokens(options: {
       messages: options.messages,
       add_generation_prompt: true,
       add_special_tokens: false,
+      // 分词与生成使用相同模板参数，包含 thinking 模式和生成前缀。
+      chat_template_kwargs: options.chatTemplateKwargs,
     }),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),

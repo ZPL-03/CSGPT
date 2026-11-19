@@ -49,6 +49,8 @@ import {
   uniqueFileIds,
 } from "@/app/utils/file-context-ids";
 import type { CSGPTDesignArtifactChunk } from "@/app/utils/structured-design";
+import { validateCompletedDesignArtifact } from "@/app/utils/structured-design";
+import { validateTextCompletion } from "@/app/utils/server-design-completion";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -314,6 +316,9 @@ export class ChatGPTApi implements LLMApi {
               v as any
             )._csgptContextPriority;
           }
+          if ((v as ChatMessage).designArtifact) {
+            requestMessage.designArtifact = (v as ChatMessage).designArtifact;
+          }
           messages.push(requestMessage);
         }
       }
@@ -459,15 +464,7 @@ export class ChatGPTApi implements LLMApi {
               | CSGPTDesignArtifactChunk
               | undefined;
             if (json.error) {
-              return {
-                isThinking: false,
-                content: prettyObject({
-                  error: true,
-                  message: json.error.message || String(json.error),
-                }),
-                designArtifact,
-                designArtifactChunk,
-              };
+              throw new Error(json.error.message || String(json.error));
             }
             const choices = json.choices as Array<{
               finish_reason?: string | null;
@@ -589,6 +586,19 @@ export class ChatGPTApi implements LLMApi {
         clearTimeout(requestTimeoutId);
 
         const resJson = await res.json();
+        if (!res.ok || resJson?.error)
+          throw new Error(
+            resJson?.message || `聊天请求失败：HTTP ${res.status}`,
+          );
+        if (modelConfig.providerName === ServiceProvider.CSGPT && !isDalle3) {
+          validateTextCompletion(resJson);
+        }
+        validateCompletedDesignArtifact({
+          response: res,
+          artifact: resJson?.csgpt_design_artifact,
+          chunksStarted: false,
+          finishReason: resJson?.choices?.[0]?.finish_reason,
+        });
         const message = await this.extractMessage(resJson);
         options.onFinish(message, res, {
           finishReason: resJson?.choices?.[0]?.finish_reason,

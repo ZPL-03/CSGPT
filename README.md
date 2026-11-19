@@ -31,7 +31,7 @@ CSGPT 基于 NextChat 改造，提供 CSGPT 系列复合材料领域模型、通
 
 ## 技术栈
 
-- 前端：Next.js 14、React 18、TypeScript、Zustand。
+- 前端：Next.js 15、React 18、TypeScript、Zustand。
 - 后端：Next.js Route Handlers、OpenAI 兼容流式代理。
 - 数据库：PostgreSQL、Prisma ORM。
 - 文件解析：pdfjs-dist、mammoth、xlsx、tesseract.js、内置 OLE 文本读取器。
@@ -40,9 +40,11 @@ CSGPT 基于 NextChat 改造，提供 CSGPT 系列复合材料领域模型、通
 
 ## 模型
 
-- 默认模型：`QWen3-14B-CS1`
-- 第二模型：`QWen3-14B-CS2`
-- 第三模型：`QWen3-14B-CS3`
+- CS1 默认路由 ID：`QWen3-14B-CS1`
+- CS2 路由 ID：`QWen3-14B-CS2`
+- CS3 路由 ID：`QWen3-14B-CS3`
+
+这些 ID 用于请求和会话持久化，不代表实际基座。模型选择、消息标签和图片导出显示 CS1/CS2/CS3 及服务端 `CSGPT_CS*_UPSTREAM_MODEL_NAME` 指定的当前上游标识；图片导出单列路由 ID。来源信息由现有 `/api/config` 提供，不包含上游地址或密钥。当前配置不证明历史回答的实际生成模型；自定义接口模式不引用内置服务的来源声明。
 
 三个内置模型均通过自训练微调接口部署，并以 OpenAI 兼容协议接入。OpenAI、Anthropic 等 Provider 和用户自定义 Provider 使用同一套会话配置和增强链路。
 
@@ -217,14 +219,24 @@ SPRINGER_OPENACCESS_API_KEY=
 
 FEM-ready 请求中的单层厚度按 40 层转换为源表总厚度筛选条件；同时给出总厚度时须满足厚度算术。指定分析缺陷比时只选择对应源行，不覆盖源行工况。缺陷比支持小数、百分比和千分比；未指定时保留各源行取值。端部边界的肯定与否定要求分别解析，冲突或仅排除边界的请求返回输入错误。
 
-CS2 客户端请求超时为 5 分钟，以覆盖确定性候选生成、知识库上下文和长表格响应所需的等待时间。流式响应仍以服务端返回的 `[DONE]` 作为完成标志。
+CS2 客户端请求超时为 5 分钟，以覆盖确定性候选生成、知识库上下文和长表格响应所需的等待时间。CS1、CS2、CS3 的成功回答要求正文非空且 `finish_reason=stop`；流式回答还要求完整 SSE 结束标记 `[DONE]`。截断、过滤、缺少终态和错误事件均返回错误，不追加成功候选表或工件。
 
-当系统提示词、检索上下文和最新消息本身超过上游总上下文窗口时，服务端返回明确的上下文超限错误；它不会发送一个必然被上游拒绝的请求。流式回答以 `length` 结束时，聊天记录会显示输出长度提示，用户可发送“继续”延续未完成内容。
+CSGPT 默认请求 `chat_template_kwargs.enable_thinking=false`。显式启用 thinking 时，推理与正文共用输出额度；CS2 的 `/tokenize` 和生成请求使用同一组模板参数。终态为 `length` 时按截断处理，不扩大预算自动重试。
+
+工程工具上下文和内部检索单元保持完整；预算不足时返回上下文超限错误，不从中间裁切层序、单位、公式或适用条件。普通历史对话仍可按窗口预算压缩。
+
+候选摘要的 `schema_version=1` 包含完整层序已生成数量、实际使用角度、按 `{angle_deg, layer_count}` 保存的角度层数合计，以及当前求解状态分组。CSGPT 从完整候选复算并核对这些事实。用户固定项与工具选择项分开保存；用户未指定层数不等于候选没有层数。`not_run/pending` 表示未求解、待判定，不表示安全通过或未达阈值。
+
+连续追问携带消息中已完成的 `designArtifact`，服务端重新校验合同并构造解释上下文。汇总覆盖全部候选，点名候选才展开完整层序、实际角度分布、材料、几何和历史参考；无需模型重新枚举 50 行。清空上下文后不再携带旧工件。可识别的错误安全状态、层序未知声明和角度集合混淆会使解释失败，不生成替代答案；自由文本检查不是完整科学语义验证。
+
+ABD 接口严格检查字段、单位、计算模式、指纹格式、截面身份、逐层坐标、贡献合计和终态。中文定义及范围说明检查字段形状，不要求逐字相等。内部 RAG 排除可识别的公式缺失、损坏定界符、缺表头或列单位的表格，并完整保留入选文本块。质量通过不证明公式正确；相邻块中缺失的条件、未标记的 OCR 错误仍需源库修订和人工核查。
 
 ## 本地运行
 
+运行环境为 Node.js 22.13+（22 LTS）或 24 LTS，部署建议使用 24 LTS。包管理器为 npm，`package-lock.json` 锁定生产与开发依赖；SheetJS 使用官方 CDN 的 0.20.3 tarball，保留 XLS 与 XLSX 解析能力。
+
 ```bash
-npm install
+npm ci
 npm run db:migrate
 npm run dev
 ```
@@ -233,18 +245,31 @@ npm run dev
 
 ```bash
 npm run build
-npm run start
+npm audit --omit=dev
 ```
+
+自托管使用 Next.js standalone 入口 `node .next/standalone/server.js`，并配套 `public`、`.next/static` 和运行知识库。静态文件位置及 Vercel 配置见 [工程验收指南](docs/engineering-validation.md)。
 
 ## 验证命令
 
 ```bash
+npm test
 npm run eval:csgpt
 npx prisma validate
-npx tsc --noEmit
+npx next typegen
+npx tsc --noEmit --incremental false
 npm run lint
 npm run build
+npm run test:ui:compat
+npm run test:parsers
+npm audit
 ```
+
+`npm run lint` 使用 ESLint flat config 和 Next core-web-vitals 规则；单元测试包含工具链兼容检查。浏览器兼容测试覆盖本地 Markdown/JSON/PNG 导出及面具分享，页面不提供 ShareGPT 发布动作。依赖版本、审计原始结果与撤回公告证据见 [依赖核查](docs/dependency-audit.md)。
+
+真实登录态测试支持已授权账号中新建测试会话，原有会话只读；凭据保留在仓库外，清理仅按登记的新建会话 ID 执行。配置、证据范围和部署方式见 [工程验收指南](docs/engineering-validation.md)。
+
+MCP Server Actions 仅允许 `ENABLE_MCP=true` 且用户名位于 `ADMIN_USERNAMES` 的登录用户调用。配置与子进程是服务端全局资源，管理员凭据具有执行工具进程的权限；普通账号的聊天、文件及会话认证不受该权限控制影响。
 
 在线检索样例：
 

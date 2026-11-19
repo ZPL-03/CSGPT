@@ -268,7 +268,6 @@ export default function AdminPage() {
     } else {
       setPhase("login");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userStore.isLoggedIn]);
 
   // 授权状态下的统计数据加载

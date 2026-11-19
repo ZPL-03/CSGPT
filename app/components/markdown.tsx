@@ -1,10 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import "katex/dist/katex.min.css";
-import RemarkMath from "remark-math";
-import RemarkBreaks from "remark-breaks";
-import RehypeKatex from "rehype-katex";
-import RemarkGfm from "remark-gfm";
-import RehypeHighlight from "rehype-highlight";
+import { remarkPlugins, rehypePlugins } from "../utils/markdown-plugins";
 import { useRef, useState, RefObject, useEffect, useMemo } from "react";
 import { copyToClipboard, useWindowSize } from "../utils";
 import mermaid from "mermaid";
@@ -30,14 +26,13 @@ export function Mermaid(props: { code: string }) {
       mermaid
         .run({
           nodes: [ref.current],
-          suppressErrors: true,
+          suppressErrors: false,
         })
         .catch((e) => {
           setHasError(true);
           console.error("[Mermaid] ", e.message);
         });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.code]);
 
   function viewSvgInNewWindow() {
@@ -67,7 +62,7 @@ export function Mermaid(props: { code: string }) {
   );
 }
 
-export function PreCode(props: { children: any }) {
+export function PreCode(props: { children?: React.ReactNode }) {
   const ref = useRef<HTMLPreElement>(null);
   const [mermaidCode, setMermaidCode] = useState("");
 
@@ -128,7 +123,7 @@ export function PreCode(props: { children: any }) {
   );
 }
 
-function CustomCode(props: { children: any; className?: string }) {
+function CustomCode(props: { children?: React.ReactNode; className?: string }) {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
   const config = useAppConfig();
@@ -228,26 +223,13 @@ function MarkdownRenderer(props: { content: string }) {
 
   return (
     <ReactMarkdown
-      remarkPlugins={[
-        RemarkMath,
-        [RemarkGfm, { singleTilde: false }],
-        RemarkBreaks,
-      ]}
-      rehypePlugins={[
-        RehypeKatex,
-        [
-          RehypeHighlight,
-          {
-            detect: false,
-            ignoreMissing: true,
-          },
-        ],
-      ]}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
       components={{
         pre: PreCode,
         code: CustomCode,
-        p: (pProps) => <p {...pProps} dir="auto" />,
-        a: (aProps) => {
+        p: ({ node: _node, ...pProps }) => <p {...pProps} dir="auto" />,
+        a: ({ node: _node, ...aProps }) => {
           const href = aProps.href || "";
           if (/\.(aac|mp3|opus|wav)$/.test(href)) {
             return (
@@ -285,7 +267,7 @@ function ThinkingBlock(props: { content: string }) {
   );
 }
 
-function _MarkDownContent(props: { content: string }) {
+function MarkdownContentView(props: { content: string }) {
   const segments = useMemo(
     () => splitThinkingContent(props.content),
     [props.content],
@@ -304,7 +286,7 @@ function _MarkDownContent(props: { content: string }) {
   );
 }
 
-export const MarkdownContent = React.memo(_MarkDownContent);
+export const MarkdownContent = React.memo(MarkdownContentView);
 
 export function Markdown(
   props: {

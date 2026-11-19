@@ -120,10 +120,9 @@ const cn = {
     },
   },
   Export: {
-    Title: "分享聊天记录",
+    Title: "导出聊天记录",
     Copy: "全部复制",
     Download: "下载文件",
-    Share: "分享到 ShareGPT",
     MessageFromYou: "用户",
     MessageFromChatGPT: "CSGPT",
     Format: {
@@ -315,9 +314,8 @@ const cn = {
     Access: {
       SaasStart: {
         Title: "使用 CSGPT",
-        Label: "（复合材料结构设计内置模型）",
-        SubTitle:
-          "基于 Qwen3-14B 微调的复合材料领域大模型，面向层合板、壳体、加筋壁板、夹层结构、缠绕结构、压力容器和深海外压结构等工程场景",
+        Label: "（工程问答）",
+        SubTitle: "复合材料结构设计与工程验证",
         ChatNow: "立刻对话",
       },
       AccessCode: {
@@ -342,7 +340,7 @@ const cn = {
 
         Endpoint: {
           Title: "推理服务地址",
-          SubTitle: "vLLM 推理服务端点，默认使用内置 CSGPT 服务",
+          SubTitle: "OpenAI 兼容推理接口地址",
         },
       },
       OpenAI: {
@@ -766,7 +764,8 @@ const cn = {
     Description: {
       Title: "只有清除上下文之后的消息会被展示",
     },
-    Model: "模型",
+    Model: "当前模型配置",
+    RouteId: "路由 ID",
     Messages: "消息",
     Topic: "主题",
     Time: "时间",

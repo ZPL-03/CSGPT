@@ -56,10 +56,10 @@ function parseOffset(request: NextRequest) {
 // GET：读取文件内容
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } },
+  { params }: { params: Promise<{ filename: string }> },
 ) {
   try {
-    const fileId = params.filename;
+    const { filename: fileId } = await params;
     if (!isValidFileId(fileId)) {
       return NextResponse.json({ error: "无效的文件名" }, { status: 400 });
     }
@@ -106,7 +106,7 @@ export async function GET(
 // PATCH：按顺序追加一个文件分片
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { filename: string } },
+  { params }: { params: Promise<{ filename: string }> },
 ) {
   try {
     const userId = await getUserFromRequest(request);
@@ -114,7 +114,7 @@ export async function PATCH(
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const fileId = params.filename;
+    const { filename: fileId } = await params;
     if (!isValidFileId(fileId)) {
       return NextResponse.json({ error: "无效的文件名" }, { status: 400 });
     }
@@ -176,7 +176,7 @@ export async function PATCH(
 // POST：文件分片完整性确认
 export async function POST(
   request: NextRequest,
-  { params }: { params: { filename: string } },
+  { params }: { params: Promise<{ filename: string }> },
 ) {
   try {
     const userId = await getUserFromRequest(request);
@@ -184,7 +184,7 @@ export async function POST(
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const fileId = params.filename;
+    const { filename: fileId } = await params;
     if (!isValidFileId(fileId)) {
       return NextResponse.json({ error: "无效的文件名" }, { status: 400 });
     }
@@ -306,7 +306,7 @@ export async function POST(
 // DELETE：删除当前用户的文件
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { filename: string } },
+  { params }: { params: Promise<{ filename: string }> },
 ) {
   try {
     const userId = await getUserFromRequest(request);
@@ -314,7 +314,7 @@ export async function DELETE(
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
-    const fileId = params.filename;
+    const { filename: fileId } = await params;
     if (!isValidFileId(fileId)) {
       return NextResponse.json({ error: "无效的文件名" }, { status: 400 });
     }

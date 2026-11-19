@@ -205,7 +205,13 @@ function RagKgSourcesView({
                 href={source.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                title={source.title}
+                title={[
+                  source.title,
+                  source.evidence?.chunk_id,
+                  source.evidence?.chunk_fingerprint,
+                ]
+                  .filter(Boolean)
+                  .join("\n")}
               >
                 <span className={styles["rag-kg-source-id"]}>{source.id}</span>
                 <span className={styles["rag-kg-source-title"]}>
@@ -216,7 +222,13 @@ function RagKgSourcesView({
               <div
                 key={source.id}
                 className={styles["rag-kg-source-item"]}
-                title={source.title}
+                title={[
+                  source.title,
+                  source.evidence?.chunk_id,
+                  source.evidence?.chunk_fingerprint,
+                ]
+                  .filter(Boolean)
+                  .join("\n")}
               >
                 <span className={styles["rag-kg-source-id"]}>{source.id}</span>
                 <span className={styles["rag-kg-source-title"]}>
@@ -239,6 +251,20 @@ function RagKgSourcesView({
                   {source.relation}
                 </span>
                 <span>{source.target}</span>
+                <details
+                  style={{ gridColumn: "1 / -1", overflowWrap: "anywhere" }}
+                >
+                  <summary>分块依据</summary>
+                  {source.evidence ? (
+                    <div>
+                      {source.evidence.chunk_id}
+                      <br />
+                      {source.evidence.chunk_fingerprint}
+                    </div>
+                  ) : (
+                    <div>分块身份未提供</div>
+                  )}
+                </details>
               </div>
             ))}
           </div>
@@ -692,6 +718,7 @@ function ClearContextDivider() {
 }
 
 export function ChatAction(props: {
+  testId?: string;
   text: string;
   icon: JSX.Element;
   onClick: () => void;
@@ -717,6 +744,7 @@ export function ChatAction(props: {
 
   return (
     <div
+      data-testid={props.testId}
       className={clsx(styles["chat-input-action"], "clickable", {
         [styles["chat-input-action-active"]]: props.active,
       })}
@@ -998,6 +1026,7 @@ export function ChatActions(props: {
           <ChatAction
             onClick={props.showPromptModal}
             text={Locale.Chat.InputActions.Settings}
+            testId="chat-settings"
             icon={<SettingsIcon />}
           />
         )}
@@ -1059,6 +1088,7 @@ export function ChatActions(props: {
 
         <ChatAction
           onClick={() => setShowModelSelector(true)}
+          testId="chat-model-selector"
           text={currentModelName}
           icon={
             <Avatar model={currentModel} providerName={currentProviderName} />
@@ -1088,16 +1118,11 @@ export function ChatActions(props: {
                 session.lastUpdate = Date.now();
               });
               void syncExistingSessionSettings();
-              if (providerName == "ByteDance") {
-                const selectedModel = models.find(
-                  (m) =>
-                    m.name == model &&
-                    m?.provider?.providerName == providerName,
-                );
-                showToast(selectedModel?.displayName ?? "");
-              } else {
-                showToast(model);
-              }
+              const selectedModel = models.find(
+                (m) =>
+                  m.name === model && m.provider?.providerName === providerName,
+              );
+              showToast(selectedModel?.displayName || model);
             }}
           />
         )}
@@ -1266,6 +1291,7 @@ export function EditMessageModal(props: { onClose: () => void }) {
             subTitle={Locale.Chat.EditMessage.Topic.SubTitle}
           >
             <input
+              data-testid="chat-topic-input"
               type="text"
               value={session.topic}
               onInput={(e) => {
@@ -1370,7 +1396,7 @@ export function ShortcutKeyModal(props: { onClose: () => void }) {
   );
 }
 
-function _Chat() {
+function ChatContent() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
   const config = useAppConfig();
@@ -2175,7 +2201,12 @@ function _Chat() {
 
   return (
     <>
-      <div className={styles.chat} key={session.id}>
+      <div
+        className={styles.chat}
+        key={session.id}
+        data-testid="chat-session"
+        data-session-id={session.id}
+      >
         <div className="window-header" data-tauri-drag-region>
           {isMobileScreen && (
             <div className="window-actions">
@@ -2199,6 +2230,7 @@ function _Chat() {
                 styles["chat-body-main-title"],
               )}
               onClickCapture={() => setIsEditingMessage(true)}
+              data-testid="chat-topic"
             >
               {!session.topic ? DEFAULT_TOPIC : session.topic}
             </div>
@@ -2287,6 +2319,14 @@ function _Chat() {
                 return (
                   <Fragment key={message.id}>
                     <div
+                      data-testid={isUser ? "chat-user" : "chat-assistant"}
+                      data-message-state={
+                        message.isError
+                          ? "error"
+                          : message.streaming
+                          ? "streaming"
+                          : "complete"
+                      }
                       className={
                         isUser
                           ? styles["chat-message-user"]
@@ -2771,5 +2811,5 @@ function _Chat() {
 export function Chat() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
-  return <_Chat key={session.id}></_Chat>;
+  return <ChatContent key={session.id}></ChatContent>;
 }

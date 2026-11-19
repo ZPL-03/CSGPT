@@ -6,6 +6,44 @@
     "interpretation_context": {
       "design_fingerprint": "791a245c6329e6314887cc40fe38ccfabc1338844f6558052be54bfe5d00a2f5",
       "facts": {
+        "完整层序已生成的候选数量": 50,
+        "实际使用角度/deg": [
+          -60,
+          -45,
+          -30,
+          30,
+          45,
+          60
+        ],
+        "实际角度层数合计": [
+          {
+            "angle_deg": -60,
+            "layer_count": 456
+          },
+          {
+            "angle_deg": -45,
+            "layer_count": 572
+          },
+          {
+            "angle_deg": -30,
+            "layer_count": 472
+          },
+          {
+            "angle_deg": 30,
+            "layer_count": 472
+          },
+          {
+            "angle_deg": 45,
+            "layer_count": 572
+          },
+          {
+            "angle_deg": 60,
+            "layer_count": 456
+          }
+        ],
+        "当前求解状态分组": {
+          "not_run": 50
+        },
         "候选参数取值": {},
         "候选数量": 50,
         "允许角度族/deg": [
@@ -4295,6 +4333,44 @@
     "interpretation_context": {
       "design_fingerprint": "bcc37f96f67b6dc33c9f636cb6df3c214673a822f98880f02b74311a4d647234",
       "facts": {
+        "完整层序已生成的候选数量": 2,
+        "实际使用角度/deg": [
+          -60,
+          -45,
+          -30,
+          30,
+          45,
+          60
+        ],
+        "实际角度层数合计": [
+          {
+            "angle_deg": -60,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -45,
+            "layer_count": 20
+          },
+          {
+            "angle_deg": -30,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 30,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 45,
+            "layer_count": 20
+          },
+          {
+            "angle_deg": 60,
+            "layer_count": 16
+          }
+        ],
+        "当前求解状态分组": {
+          "not_run": 2
+        },
         "候选参数取值": {
           "known_partial": [
             150
@@ -4552,6 +4628,526 @@
     "interpretation_context": {
       "design_fingerprint": "373f93b725eafce43d619612b965f303115fe3063ddf99b02fac3fa24826df86",
       "facts": {
+        "完整层序已生成的候选数量": 50,
+        "实际使用角度/deg": [
+          -80,
+          -79,
+          -78,
+          -77,
+          -76,
+          -75,
+          -72,
+          -71,
+          -69,
+          -68,
+          -67,
+          -66,
+          -65,
+          -64,
+          -63,
+          -62,
+          -61,
+          -60,
+          -58,
+          -57,
+          -56,
+          -54,
+          -53,
+          -51,
+          -48,
+          -45,
+          -43,
+          -42,
+          -41,
+          -40,
+          -39,
+          -37,
+          -36,
+          -34,
+          -33,
+          -32,
+          -30,
+          -29,
+          -28,
+          -26,
+          -25,
+          -24,
+          -23,
+          -22,
+          -20,
+          -18,
+          -16,
+          -15,
+          -14,
+          -13,
+          -10,
+          10,
+          13,
+          14,
+          15,
+          16,
+          18,
+          20,
+          22,
+          23,
+          24,
+          25,
+          26,
+          28,
+          29,
+          30,
+          32,
+          33,
+          34,
+          36,
+          37,
+          39,
+          40,
+          41,
+          42,
+          43,
+          45,
+          48,
+          51,
+          53,
+          54,
+          56,
+          57,
+          58,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          71,
+          72,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          90
+        ],
+        "实际角度层数合计": [
+          {
+            "angle_deg": -80,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -79,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -78,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -77,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -76,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -75,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -72,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -71,
+            "layer_count": 28
+          },
+          {
+            "angle_deg": -69,
+            "layer_count": 18
+          },
+          {
+            "angle_deg": -68,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -67,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -66,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -65,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -64,
+            "layer_count": 28
+          },
+          {
+            "angle_deg": -63,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -62,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -61,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -60,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -58,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -57,
+            "layer_count": 18
+          },
+          {
+            "angle_deg": -56,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -54,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -53,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": -51,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -48,
+            "layer_count": 28
+          },
+          {
+            "angle_deg": -45,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": -43,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -42,
+            "layer_count": 36
+          },
+          {
+            "angle_deg": -41,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -40,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -39,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -37,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -36,
+            "layer_count": 26
+          },
+          {
+            "angle_deg": -34,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -33,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -32,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -30,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": -29,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -28,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -26,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -25,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -24,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -23,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": -22,
+            "layer_count": 42
+          },
+          {
+            "angle_deg": -20,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": -18,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": -16,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -15,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": -14,
+            "layer_count": 34
+          },
+          {
+            "angle_deg": -13,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -10,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 10,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 13,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 14,
+            "layer_count": 34
+          },
+          {
+            "angle_deg": 15,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 16,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 18,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 20,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": 22,
+            "layer_count": 42
+          },
+          {
+            "angle_deg": 23,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": 24,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 25,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 26,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 28,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 29,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 30,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": 32,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 33,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 34,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 36,
+            "layer_count": 26
+          },
+          {
+            "angle_deg": 37,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 39,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 40,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 41,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 42,
+            "layer_count": 36
+          },
+          {
+            "angle_deg": 43,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 45,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": 48,
+            "layer_count": 28
+          },
+          {
+            "angle_deg": 51,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 53,
+            "layer_count": 10
+          },
+          {
+            "angle_deg": 54,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 56,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 57,
+            "layer_count": 18
+          },
+          {
+            "angle_deg": 58,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 60,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 61,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 62,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 63,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 64,
+            "layer_count": 28
+          },
+          {
+            "angle_deg": 65,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 66,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 67,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 68,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 69,
+            "layer_count": 18
+          },
+          {
+            "angle_deg": 71,
+            "layer_count": 28
+          },
+          {
+            "angle_deg": 72,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 75,
+            "layer_count": 24
+          },
+          {
+            "angle_deg": 76,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 77,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 78,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 79,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 80,
+            "layer_count": 16
+          },
+          {
+            "angle_deg": 90,
+            "layer_count": 328
+          }
+        ],
         "候选参数取值": {
           "alpha/deg": [
             10,
@@ -14078,6 +14674,56 @@
     "interpretation_context": {
       "design_fingerprint": "c32007377b406c2da5c393f22506b43d410c2adcc3618eb239b6017ebdd55c49",
       "facts": {
+        "完整层序已生成的候选数量": 2,
+        "实际使用角度/deg": [
+          -70,
+          -63,
+          -58,
+          -12,
+          12,
+          58,
+          63,
+          70,
+          90
+        ],
+        "实际角度层数合计": [
+          {
+            "angle_deg": -70,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -63,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -58,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": -12,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 12,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 58,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 63,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 70,
+            "layer_count": 8
+          },
+          {
+            "angle_deg": 90,
+            "layer_count": 16
+          }
+        ],
         "候选参数取值": {
           "alpha/deg": [
             63,

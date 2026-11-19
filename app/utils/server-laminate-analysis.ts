@@ -1,4 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
+import { validateDesignContract } from "./design-contract";
+import { buildDesignFacts, requestedDesignIds } from "./design-context";
 
 type LaminateCandidate = {
   candidateId: string;
@@ -34,24 +36,44 @@ const EXPECTED_ABD_CONTRACT = {
     B: "Bij = sum(Qbarij,k * (z_upper^2 - z_lower^2) / 2)",
     D: "Dij = sum(Qbarij,k * (z_upper^3 - z_lower^3) / 3)",
   },
-  coupling_definitions: {
-    A16_A26: "面内拉伸-剪切耦合",
-    B16_B26: "膜力-曲率与弯矩-中面应变的交叉耦合",
-    D16_D26: "弯曲-扭转耦合",
-  },
-  stiffness_scope: {
-    model: "平面应力经典层合板线弹性截面刚度",
-    does_not_prove: ["壳体承载", "屈曲压力", "材料失效", "整机安全"],
-    structural_check_requires: [
-      "几何",
-      "载荷",
-      "边界条件",
-      "初始缺陷",
-      "材料失效模型",
-      "有限元或试验结果",
-    ],
-  },
 } as const;
+
+type ABDContract = typeof EXPECTED_ABD_CONTRACT & {
+  coupling_definitions: { A16_A26: string; B16_B26: string; D16_D26: string };
+  stiffness_scope: {
+    model: string;
+    does_not_prove: string[];
+    structural_check_requires: string[];
+  };
+};
+
+// 数学协议保持严格；解释文字只验证字段形状，不绑定中文措辞。
+function validABDContract(value: ABDContract | undefined) {
+  const text = (value: unknown) => typeof value === "string" && !!value.trim();
+  const texts = (value: unknown) =>
+    Array.isArray(value) && value.length > 0 && value.every(text);
+  return (
+    !!value &&
+    isDeepStrictEqual(
+      value.integral_weights,
+      EXPECTED_ABD_CONTRACT.integral_weights,
+    ) &&
+    isDeepStrictEqual(
+      value.discrete_formulas,
+      EXPECTED_ABD_CONTRACT.discrete_formulas,
+    ) &&
+    ["A16_A26", "B16_B26", "D16_D26"].every((key) =>
+      text(
+        value.coupling_definitions?.[
+          key as keyof ABDContract["coupling_definitions"]
+        ],
+      ),
+    ) &&
+    text(value.stiffness_scope?.model) &&
+    texts(value.stiffness_scope?.does_not_prove) &&
+    texts(value.stiffness_scope?.structural_check_requires)
+  );
+}
 
 type LaminateServiceResponse = {
   status: string;
@@ -66,7 +88,7 @@ type LaminateServiceResponse = {
     reference_plane: string;
     layer_order: string;
     coupling_units: { A: string; B: string; D: string };
-    abd_contract: typeof EXPECTED_ABD_CONTRACT;
+    abd_contract: ABDContract;
     cases: LaminateServiceCase[];
   };
 };
@@ -257,22 +279,13 @@ export function detectLaminateAnalysisIntent(messages: any[]) {
     return false;
   }
   const laminateQuestion =
-    /(?:ABD|层合|铺层|laminate|layup|对称|均衡|symmetric|balanced|B\s*矩阵)/i.test(
+    /(?:ABD|层合|铺层|层序|laminate|layup|对称|均衡|symmetric|balanced|B\s*矩阵)/i.test(
       text,
     );
   return (
     laminateQuestion &&
-    (extractEmbeddedJson(text) !== null ||
-      requestedCandidateIds(text).length > 0)
+    (extractEmbeddedJson(text) !== null || requestedDesignIds(text).length > 0)
   );
-}
-
-function requestedCandidateIds(text: string) {
-  return [
-    ...new Set(
-      [...text.matchAll(/TMP[_\s-]?(\d+)/gi)].map((match) => `TMP_${match[1]}`),
-    ),
-  ];
 }
 
 function formatAngle(value: number) {
@@ -342,6 +355,7 @@ async function requestLaminateService(
     !/^[a-f0-9]{64}$/.test(data.engine_fingerprint) ||
     !/^[a-f0-9]{64}$/.test(data.calculation_fingerprint) ||
     !Number.isInteger(data.engine_version) ||
+    data.engine_version < 1 ||
     data.calculation_mode !== payload.calculation_mode ||
     data.result?.schema_version !== "2" ||
     data.result.calculation_mode !== payload.calculation_mode ||
@@ -350,7 +364,7 @@ async function requestLaminateService(
     data.result.coupling_units?.A !== "N/mm" ||
     data.result.coupling_units?.B !== "N" ||
     data.result.coupling_units?.D !== "N*mm" ||
-    !isDeepStrictEqual(data.result.abd_contract, EXPECTED_ABD_CONTRACT) ||
+    !validABDContract(data.result.abd_contract) ||
     !Array.isArray(data.result.cases) ||
     data.result.cases.length !== payload.cases.length
   ) {
@@ -644,14 +658,22 @@ export async function buildLaminateCalculationContext(
   if (numeric) {
     return renderNumericResult(await requestLaminateService(numeric), numeric);
   }
-  const candidates = parseCandidates(latestCandidateContext(messages));
-  const requestedIds = requestedCandidateIds(userText);
-  const selected = requestedIds.length
-    ? candidates.filter((candidate) =>
-        requestedIds.includes(candidate.candidateId),
-      )
-    : [];
+  const artifact = messages.find((message) => message.designArtifact)
+    ?.designArtifact;
+  const validated = artifact ? validateDesignContract(artifact) : null;
+  const requestedIds = requestedDesignIds(userText, validated?.generation_mode);
   if (!requestedIds.length) return null;
+  const facts = validated ? buildDesignFacts(validated, requestedIds) : null;
+  const selected = facts
+    ? facts.candidates.map((item) => ({
+        candidateId: String(item.candidate_id).toUpperCase(),
+        sequence: facts.sequences[item.sequence_index].angles_deg,
+        declaredSymmetric: item.symmetric,
+        declaredBalanced: item.balanced,
+      }))
+    : parseCandidates(latestCandidateContext(messages)).filter((candidate) =>
+        requestedIds.includes(candidate.candidateId),
+      );
   if (selected.length !== requestedIds.length)
     throw new Error("请求的候选缺少可核对的完整物理层序列。");
   const service = await requestLaminateService(buildSemanticsPayload(selected));

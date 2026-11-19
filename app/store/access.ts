@@ -23,7 +23,7 @@ import { getHeaders } from "../client/api";
 import { getClientConfig } from "../config/client";
 import { createPersistStore } from "../utils/store";
 import { useAppConfig } from "./config";
-import { getModelProvider } from "../utils/model";
+import { getModelProvider, type CSGPTModelSource } from "../utils/model";
 
 let fetchState = 0; // 0 not fetch, 1 fetching, 2 done
 const STORE_SCHEMA_VERSION = 1;
@@ -72,7 +72,7 @@ const DEFAULT_ACCESS_STATE = {
 
   provider: ServiceProvider.CSGPT,
 
-  // csgpt（内置 Qwen3-14B 微调模型）
+  // CSGPT 服务入口，实际模型由服务端配置。
   csgptUrl: DEFAULT_CSGPT_URL,
   csgptApiKey: "",
 
@@ -151,6 +151,7 @@ const DEFAULT_ACCESS_STATE = {
   disableFastLink: false,
   customModels: "",
   defaultModel: "",
+  csgptModelSources: [] as CSGPTModelSource[],
 };
 
 type AccessState = typeof DEFAULT_ACCESS_STATE;
@@ -232,6 +233,7 @@ export const useAccessStore = createPersistStore(
           // 服务端控制的配置字段始终以 currentState（服务端配置）为准
           customModels: currentState.customModels,
           defaultModel: currentState.defaultModel,
+          csgptModelSources: currentState.csgptModelSources,
           needCode: currentState.needCode,
           hideUserApiKey: currentState.hideUserApiKey,
           hideBalanceQuery: currentState.hideBalanceQuery,

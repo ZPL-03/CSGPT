@@ -95,8 +95,15 @@ const comparisonLabels = {
 const context = z.object({
   schema_version: z.literal("1"),
   design_fingerprint: hash,
-  facts: z.record(z.unknown()),
+  facts: z.record(z.string(), z.unknown()),
 });
+const inputProvenance = z
+  .object({
+    user_fixed: z.array(z.string().min(1)),
+    tool_selected: z.array(z.string().min(1)),
+  })
+  .strict()
+  .optional();
 const conceptRequest = z
   .object({
     schema_version: z.literal("1"),
@@ -108,7 +115,7 @@ const conceptRequest = z
     balanced: z.boolean(),
     materials: z.array(z.string().min(1)).min(1),
     ply_thickness_mm: positive.nullable(),
-    parameter_values: z.record(z.array(scalar).min(1)),
+    parameter_values: z.record(z.string(), z.array(scalar).min(1)),
     non_neutral_angle_family_count: count.nullable().optional(),
   })
   .passthrough();
@@ -116,7 +123,7 @@ const conceptCandidate = z
   .object({
     candidate_id: count,
     material: z.string().min(1),
-    parameters: z.record(scalar),
+    parameters: z.record(z.string(), scalar),
     layup_deg: sequence,
     layer_count: count,
     ply_thickness_mm: positive.nullable(),
@@ -132,6 +139,7 @@ const conceptResponse = z
     engine_version: count,
     engine_fingerprint: hash,
     interpretation_context: context,
+    input_provenance: inputProvenance,
     result: z
       .object({
         schema_version: z.literal("1"),
@@ -241,6 +249,7 @@ const femCandidate = z
   .passthrough();
 const femResponse = z
   .object({
+    input_provenance: inputProvenance,
     status: z.literal("passed"),
     generation_mode: z.literal("fem_ready_cylindrical_shell"),
     contract_version: z.literal("1"),
@@ -397,6 +406,10 @@ export function buildDesignInterpretationContext(
   const layups = fem
     ? response.result.candidates.map((item) => item.layup)
     : response.result.candidates;
+  const sequences = fem
+    ? response.result.candidates.map((item) => item.layup.angles_deg)
+    : response.result.candidates.map((item) => item.layup_deg);
+  const allAngles = sequences.flat();
   const facts: Record<string, unknown> = {
     候选数量: rows.length,
     材料分组: tally(
@@ -408,6 +421,14 @@ export function buildDesignInterpretationContext(
     候选参数取值: varying,
     参数未知候选数量: unknown,
     物理层数: distinct(plies),
+    完整层序已生成的候选数量: sequences.filter(
+      (angles, index) => angles.length === plies[index],
+    ).length,
+    "实际使用角度/deg": distinct(allAngles),
+    实际角度层数合计: (distinct(allAngles) as number[]).map((angle_deg) => ({
+      angle_deg,
+      layer_count: allAngles.filter((angle) => angle === angle_deg).length,
+    })),
     "单层厚度/mm": distinct(thicknesses),
     单层厚度未知的候选数量: thicknesses.filter((value) => value === null)
       .length,
@@ -416,6 +437,7 @@ export function buildDesignInterpretationContext(
     角度序列镜像对称的候选数量: layups.filter((item) => item.symmetric).length,
     正负角层数均衡的候选数量: layups.filter((item) => item.balanced).length,
     当前有限元结果: null,
+    当前求解状态分组: { not_run: rows.length },
   };
   if (fem) {
     const { candidates, request } = response.result;

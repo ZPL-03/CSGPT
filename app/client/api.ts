@@ -1,6 +1,5 @@
 import { ACCESS_CODE_PREFIX, ServiceProvider } from "../constant";
 import {
-  ChatMessage,
   ChatMessageTool,
   ModelType,
   useAccessStore,
@@ -116,10 +115,6 @@ export class ClientApi {
 
   constructor() {
     this.llm = new ChatGPTApi();
-  }
-
-  async share(_messages: ChatMessage[], _avatarUrl: string | null = null) {
-    return undefined;
   }
 }
 

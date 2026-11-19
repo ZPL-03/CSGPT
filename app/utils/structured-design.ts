@@ -10,6 +10,7 @@ export type CSGPTDesignArtifact = {
   contract_version?: string;
   engine_version?: number;
   engine_fingerprint?: string;
+  input_provenance?: { user_fixed: string[]; tool_selected: string[] };
   result: Record<string, unknown>;
 };
 
@@ -98,8 +99,8 @@ export function validateCompletedDesignArtifact(options: {
 }) {
   const expected = parseCSGPTDesignArtifactHeader(options.response);
   if (expected || options.chunksStarted || options.artifact !== undefined) {
-    if (typeof options.finishReason !== "string" || !options.finishReason) {
-      throw new Error("设计回答缺少完成状态。");
+    if (options.finishReason !== "stop") {
+      throw new Error("设计回答的 finish_reason 必须为 stop。");
     }
     validateCSGPTDesignArtifact(options.artifact, expected);
   }

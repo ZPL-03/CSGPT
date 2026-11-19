@@ -1,6 +1,7 @@
 {
-  "total_entities": 2219,
-  "total_relations": 250606,
+  "rag_sha256": "1694d22eae5ae809492bd7316fb05fd7bd736af61b65a33344ddc54301f9c7e1",
+  "total_entities": 2218,
+  "total_relations": 234030,
   "entity_counts": {
     "Material": 54,
     "Structure": 36,
@@ -10,7 +11,7 @@
     "Property": 38,
     "Application": 25,
     "TaskCategory": 18,
-    "Literature": 1931,
+    "Literature": 1930,
     "LoadCase": 2,
     "DesignFormula": 9,
     "StiffnessCoeff": 12,
@@ -18,436 +19,436 @@
     "VerificationMethod": 5
   },
   "relation_type_counts": {
-    "CATEGORIZED_AS": 15804,
-    "MENTIONED_IN": 51906,
-    "EXPERIENCES": 76485,
-    "HAS_PROPERTY": 49691,
-    "REQUIRES": 14924,
-    "CONSTRAINS": 1340,
-    "VERIFIED_BY": 10570,
-    "UNDER_LOAD": 8013,
-    "USED_IN": 8074,
-    "PREDICTED_BY": 13204,
-    "FOLLOWS_STANDARD": 325,
-    "GOVERNED_BY": 270
+    "CATEGORIZED_AS": 15510,
+    "MENTIONED_IN": 49414,
+    "EXPERIENCES": 71395,
+    "HAS_PROPERTY": 45120,
+    "VERIFIED_BY": 9928,
+    "UNDER_LOAD": 7453,
+    "REQUIRES": 13839,
+    "CONSTRAINS": 1232,
+    "USED_IN": 7634,
+    "PREDICTED_BY": 11996,
+    "FOLLOWS_STANDARD": 268,
+    "GOVERNED_BY": 241
   },
   "top_entities": {
     "Material": [
       {
         "name": "Composite Material",
-        "count": 24295
+        "count": 22859
       },
       {
         "name": "Carbon Fiber",
-        "count": 6496
+        "count": 5867
       },
       {
         "name": "CFRP",
-        "count": 4835
+        "count": 4401
       },
       {
         "name": "Polymer Matrix Composite",
-        "count": 2884
-      },
-      {
-        "name": "Aluminum Alloy",
-        "count": 1718
+        "count": 2707
       },
       {
         "name": "T700",
-        "count": 1694
+        "count": 1497
       },
       {
         "name": "Glass Fiber",
-        "count": 1618
+        "count": 1325
+      },
+      {
+        "name": "Aluminum Alloy",
+        "count": 1266
       },
       {
         "name": "Epoxy Resin",
-        "count": 1415
+        "count": 1208
       },
       {
         "name": "IM7",
-        "count": 951
+        "count": 771
       },
       {
-        "name": "Titanium Alloy",
-        "count": 903
+        "name": "GFRP",
+        "count": 752
       }
     ],
     "Structure": [
       {
         "name": "Laminate",
-        "count": 18829
+        "count": 17228
       },
       {
         "name": "Pressure Vessel",
-        "count": 17624
+        "count": 16216
       },
       {
         "name": "Composite Pressure Vessel",
-        "count": 7650
+        "count": 7104
       },
       {
         "name": "Layup",
-        "count": 7037
+        "count": 6480
       },
       {
         "name": "Boss",
-        "count": 5482
+        "count": 4714
       },
       {
         "name": "Liner",
-        "count": 4854
+        "count": 4326
       },
       {
         "name": "Dome",
-        "count": 3861
+        "count": 3556
       },
       {
         "name": "COPV",
-        "count": 3201
+        "count": 2886
       },
       {
         "name": "Cylindrical Shell",
-        "count": 2563
+        "count": 2339
       },
       {
         "name": "Type IV Vessel",
-        "count": 2480
+        "count": 2249
       }
     ],
     "FailureMode": [
       {
         "name": "Failure",
-        "count": 24037
+        "count": 21793
       },
       {
         "name": "Damage",
-        "count": 21257
+        "count": 19879
       },
       {
         "name": "Buckling",
-        "count": 15793
+        "count": 14541
       },
       {
         "name": "Delamination",
-        "count": 6730
+        "count": 6246
       },
       {
         "name": "Fatigue",
-        "count": 6238
+        "count": 5660
       },
       {
         "name": "Crack",
-        "count": 6162
+        "count": 5619
       },
       {
         "name": "Burst",
-        "count": 4476
+        "count": 3892
       },
       {
         "name": "Debonding",
-        "count": 2417
-      },
-      {
-        "name": "Hashin Criterion",
-        "count": 1799
+        "count": 2282
       },
       {
         "name": "Impact Damage",
-        "count": 1759
+        "count": 1642
+      },
+      {
+        "name": "Hashin Criterion",
+        "count": 1622
       }
     ],
     "ManufacturingProcess": [
       {
         "name": "Curing",
-        "count": 2857
+        "count": 2553
       },
       {
         "name": "Filament Winding",
-        "count": 2515
+        "count": 2366
       },
       {
         "name": "Fiber Placement",
-        "count": 2243
+        "count": 2173
       },
       {
         "name": "Automated Fiber Placement",
-        "count": 2008
+        "count": 1947
       },
       {
         "name": "Prepreg",
-        "count": 1493
+        "count": 1319
       },
       {
         "name": "Mandrel",
-        "count": 1331
+        "count": 1242
       },
       {
         "name": "Autoclave",
-        "count": 946
-      },
-      {
-        "name": "Winding Tension",
-        "count": 312
+        "count": 881
       },
       {
         "name": "Resin Transfer Molding",
-        "count": 305
+        "count": 288
+      },
+      {
+        "name": "Winding Tension",
+        "count": 278
       },
       {
         "name": "Vacuum Bag",
-        "count": 270
+        "count": 247
       }
     ],
     "Standard": [
       {
         "name": "ASTM D",
-        "count": 294
+        "count": 235
       },
       {
         "name": "GB/T",
-        "count": 124
+        "count": 89
       },
       {
         "name": "ASTM D3039",
-        "count": 95
+        "count": 71
       },
       {
         "name": "ASTM D7136",
-        "count": 44
-      },
-      {
-        "name": "ASTM D3518",
-        "count": 31
+        "count": 38
       },
       {
         "name": "ASME Section X",
-        "count": 31
-      },
-      {
-        "name": "ASTM D7137",
-        "count": 27
+        "count": 30
       },
       {
         "name": "ASTM D5766",
-        "count": 26
+        "count": 23
       },
       {
-        "name": "ISO 11119",
-        "count": 26
+        "name": "ASTM D7137",
+        "count": 23
       },
       {
         "name": "ADR",
-        "count": 25
+        "count": 21
+      },
+      {
+        "name": "ASTM D3518",
+        "count": 20
+      },
+      {
+        "name": "ISO 11119",
+        "count": 18
       }
     ],
     "Property": [
       {
         "name": "Stress",
-        "count": 20560
+        "count": 18538
       },
       {
         "name": "Stiffness",
-        "count": 12551
+        "count": 11651
       },
       {
         "name": "Strain",
-        "count": 12267
+        "count": 11141
       },
       {
         "name": "Density",
-        "count": 5146
-      },
-      {
-        "name": "Tensile Strength",
-        "count": 2958
+        "count": 3899
       },
       {
         "name": "Burst Pressure",
-        "count": 2667
+        "count": 2330
       },
       {
         "name": "Yield",
-        "count": 2341
+        "count": 2061
+      },
+      {
+        "name": "Tensile Strength",
+        "count": 2005
       },
       {
         "name": "Toughness",
-        "count": 1903
-      },
-      {
-        "name": "Shear Strength",
-        "count": 1881
+        "count": 1563
       },
       {
         "name": "Compressive Strength",
-        "count": 1845
+        "count": 1401
+      },
+      {
+        "name": "Shear Strength",
+        "count": 1292
       }
     ],
     "Application": [
       {
         "name": "Hydrogen Storage",
-        "count": 5297
+        "count": 4971
       },
       {
         "name": "Aviation",
-        "count": 4410
+        "count": 3717
       },
       {
         "name": "Aerospace",
-        "count": 3348
+        "count": 3120
       },
       {
         "name": "Fuel Cell",
-        "count": 2443
+        "count": 2264
       },
       {
         "name": "Underwater",
-        "count": 2015
+        "count": 1860
       },
       {
         "name": "Rocket",
-        "count": 1639
+        "count": 1527
       },
       {
         "name": "UAV",
-        "count": 1490
+        "count": 1405
       },
       {
         "name": "Submersible",
-        "count": 989
+        "count": 935
       },
       {
         "name": "Automotive",
-        "count": 967
+        "count": 919
       },
       {
-        "name": "Deep Sea",
-        "count": 641
+        "name": "Diving",
+        "count": 600
       }
     ],
     "TaskCategory": [
       {
         "name": "标准与手册",
-        "count": 78802
+        "count": 69175
       },
       {
         "name": "强度刚度校核",
-        "count": 37046
+        "count": 32537
       },
       {
         "name": "铺层与层合优化",
-        "count": 22232
+        "count": 20325
       },
       {
         "name": "试验验证",
-        "count": 21464
+        "count": 19133
       },
       {
         "name": "通用复合材料承载结构",
-        "count": 20640
+        "count": 19126
       },
       {
         "name": "承压壳/容器设计",
-        "count": 19331
+        "count": 17931
       },
       {
         "name": "屈曲与稳定性",
-        "count": 18352
+        "count": 16994
       },
       {
         "name": "损伤失效",
-        "count": 16222
+        "count": 14921
       },
       {
         "name": "数据驱动方法",
-        "count": 15478
+        "count": 14248
       },
       {
         "name": "仿真建模",
-        "count": 14129
+        "count": 13202
       }
     ],
     "Literature": [
       {
         "name": "SRC_5fdb7fbaaecdb4c1",
-        "count": 8424
+        "count": 6676
       },
       {
         "name": "SRC_9f5605a51940481f",
-        "count": 5281
+        "count": 4960
       },
       {
         "name": "SRC_92f906f713b57200",
-        "count": 5007
-      },
-      {
-        "name": "SRC_c5d1f72f6017eb50",
-        "count": 4583
+        "count": 4624
       },
       {
         "name": "SRC_408c17511a74fea4",
-        "count": 4280
+        "count": 4119
       },
       {
         "name": "SRC_7ae97e188dddac89",
-        "count": 3962
+        "count": 3769
       },
       {
-        "name": "SRC_7f39b509197a3b60",
-        "count": 3841
+        "name": "SRC_c5d1f72f6017eb50",
+        "count": 3634
       },
       {
         "name": "SRC_920887d733776461",
-        "count": 3780
+        "count": 3559
       },
       {
         "name": "SRC_60b4959e90bed1c2",
-        "count": 3697
+        "count": 3337
+      },
+      {
+        "name": "SRC_7f39b509197a3b60",
+        "count": 3036
       },
       {
         "name": "SRC_78a143eb865423ed",
-        "count": 2782
+        "count": 2618
       }
     ],
     "LoadCase": [
       {
         "name": "Internal Pressure",
-        "count": 4559
+        "count": 4083
       },
       {
         "name": "External Pressure",
-        "count": 2936
+        "count": 2705
       }
     ],
     "DesignFormula": [
       {
         "name": "Hashin Criterion",
-        "count": 1799
+        "count": 1622
       },
       {
         "name": "Tsai-Wu Criterion",
-        "count": 1098
+        "count": 941
       },
       {
         "name": "Puck Criterion",
-        "count": 632
+        "count": 571
       },
       {
         "name": "Symbolic Regression Formula",
-        "count": 300
+        "count": 266
       },
       {
         "name": "SISSO Design Formula",
-        "count": 54
+        "count": 43
       },
       {
         "name": "NASA SP-8700 Formula",
-        "count": 24
+        "count": 20
       },
       {
         "name": "Chang Stiffness Degradation",
-        "count": 5
+        "count": 4
       },
       {
         "name": "Ultimate Strength Formula",
@@ -460,104 +461,104 @@
     ],
     "StiffnessCoeff": [
       {
+        "name": "Laminate Stiffness Coefficient",
+        "count": 210
+      },
+      {
         "name": "A11",
-        "count": 2029
+        "count": 55
       },
       {
         "name": "A12",
-        "count": 2012
-      },
-      {
-        "name": "D11",
-        "count": 1999
+        "count": 50
       },
       {
         "name": "A22",
-        "count": 1997
+        "count": 37
+      },
+      {
+        "name": "D11",
+        "count": 22
       },
       {
         "name": "D12",
-        "count": 1979
+        "count": 19
       },
       {
         "name": "B11",
-        "count": 1975
+        "count": 11
+      },
+      {
+        "name": "A66",
+        "count": 10
       },
       {
         "name": "B12",
-        "count": 1973
+        "count": 10
       },
       {
         "name": "D22",
-        "count": 1968
-      },
-      {
-        "name": "D33",
-        "count": 1962
-      },
-      {
-        "name": "B23",
-        "count": 1959
+        "count": 9
       }
     ],
     "DesignVariable": [
       {
         "name": "Thickness",
-        "count": 11560
+        "count": 10095
       },
       {
         "name": "Length",
-        "count": 6720
+        "count": 5810
       },
       {
         "name": "Radius",
-        "count": 4087
+        "count": 3672
       },
       {
         "name": "Winding Angle",
-        "count": 1566
-      },
-      {
-        "name": "Inner Diameter",
-        "count": 527
+        "count": 1385
       },
       {
         "name": "Layup Angle",
-        "count": 383
+        "count": 341
+      },
+      {
+        "name": "Inner Diameter",
+        "count": 299
       },
       {
         "name": "Imperfection",
-        "count": 253
+        "count": 234
       },
       {
         "name": "Imperfection Ratio",
-        "count": 20
+        "count": 12
       },
       {
         "name": "Linear Buckling Eigenvalue",
-        "count": 15
+        "count": 10
       }
     ],
     "VerificationMethod": [
       {
         "name": "Finite Element Verification",
-        "count": 14178
+        "count": 13249
       },
       {
         "name": "Progressive Damage Verification",
-        "count": 3166
+        "count": 2980
       },
       {
         "name": "Abaqus Verification",
-        "count": 2906
+        "count": 2683
       },
       {
         "name": "Mesh Convergence",
-        "count": 274
+        "count": 235
       },
       {
         "name": "Hydrostatic Test",
-        "count": 255
+        "count": 222
       }
     ]
   }

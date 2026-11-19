@@ -2,6 +2,10 @@ import {
   CSGPT_CONTEXT_LENGTH,
   CSGPT_DEFAULT_MODEL,
   CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
+  CSGPT_MODEL_2,
+  CSGPT_MODEL_2_DISPLAY_NAME,
+  CSGPT_MODEL_3,
+  CSGPT_MODEL_3_DISPLAY_NAME,
   DEFAULT_GA_ID,
   DEFAULT_MODELS,
   ServiceProvider,
@@ -100,7 +104,7 @@ declare global {
       CSGPT_CS1_BASE_URL?: string; // CS1 上游服务地址
       CSGPT_CS1_API_KEY?: string; // CS1 上游 API 密钥
       CSGPT_CS1_UPSTREAM_MODEL_NAME?: string; // CS1 上游实际模型名称
-      CSGPT_MODEL_NAME?: string; // 前端展示的 CSGPT 默认模型名称
+      CSGPT_MODEL_NAME?: string; // CS1 对外请求与会话持久化的路由 ID
       CSGPT_CS2_BASE_URL?: string; // CS2 上游服务地址
       CSGPT_CS2_API_KEY?: string; // CS2 上游 API 密钥
       CSGPT_CS2_UPSTREAM_MODEL_NAME?: string; // CS2 上游实际模型名称
@@ -280,6 +284,27 @@ export const getServerSideConfig = () => {
     csgptBaseUrl: process.env.CSGPT_CS1_BASE_URL,
     csgptApiKey: process.env.CSGPT_CS1_API_KEY,
     csgptModelName,
+    // 公开模型标识与路由 ID，不包含服务地址、密钥或模型权重身份声明。
+    csgptModelSources: [
+      {
+        id: csgptModelName,
+        displayName: CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
+        upstreamModel:
+          process.env.CSGPT_CS1_UPSTREAM_MODEL_NAME?.trim() || null,
+      },
+      {
+        id: CSGPT_MODEL_2,
+        displayName: CSGPT_MODEL_2_DISPLAY_NAME,
+        upstreamModel:
+          process.env.CSGPT_CS2_UPSTREAM_MODEL_NAME?.trim() || null,
+      },
+      {
+        id: CSGPT_MODEL_3,
+        displayName: CSGPT_MODEL_3_DISPLAY_NAME,
+        upstreamModel:
+          process.env.CSGPT_CS3_UPSTREAM_MODEL_NAME?.trim() || null,
+      },
+    ],
     csgptUpstreamModelName: process.env.CSGPT_CS1_UPSTREAM_MODEL_NAME,
     csgptContextLength: getPositiveInteger(
       process.env.CSGPT_CS1_CONTEXT_LENGTH,

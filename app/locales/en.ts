@@ -136,7 +136,6 @@ const en: LocaleType = {
     Download: "Download",
     MessageFromYou: "Message From You",
     MessageFromChatGPT: "Message From CSGPT",
-    Share: "Share to ShareGPT",
     Format: {
       Title: "Export Format",
       SubTitle: "Markdown or PNG Image",
@@ -328,10 +327,8 @@ const en: LocaleType = {
     Access: {
       SaasStart: {
         Title: "Use CSGPT",
-        Label: " (Built-in Composite Material Model)",
-        SubTitle:
-          "Fine-tuned on Qwen3-14B for composite materials, ready to use," +
-          " covering laminates, shells, stiffened panels, sandwich structures, wound structures, pressure vessels, and deep-sea external-pressure structures",
+        Label: " (Engineering Q&A)",
+        SubTitle: "Composite structural design and engineering verification",
         ChatNow: "Start Now",
       },
       AccessCode: {
@@ -357,8 +354,7 @@ const en: LocaleType = {
 
         Endpoint: {
           Title: "Inference Endpoint",
-          SubTitle:
-            "vLLM inference service endpoint, defaults to built-in CSGPT",
+          SubTitle: "OpenAI-compatible inference endpoint",
         },
       },
       OpenAI: {
@@ -790,7 +786,8 @@ const en: LocaleType = {
     Description: {
       Title: "Only messages after clearing the context will be displayed",
     },
-    Model: "Model",
+    Model: "Current model configuration",
+    RouteId: "Route ID",
     Messages: "Messages",
     Topic: "Topic",
     Time: "Time",

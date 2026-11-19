@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 // 获取对话详情
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const userId = await getUserFromRequest(request);
@@ -26,8 +26,9 @@ export async function GET(
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
+    const { id } = await params;
     const conversation = await prisma.conversation.findFirst({
-      where: { id: params.id, userId },
+      where: { id, userId },
       include: {
         messages: {
           orderBy: { createdAt: "asc" },
@@ -100,7 +101,7 @@ export async function GET(
 // 删除对话
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const userId = await getUserFromRequest(request);
@@ -108,9 +109,10 @@ export async function DELETE(
       return NextResponse.json({ error: "未授权" }, { status: 401 });
     }
 
+    const { id } = await params;
     // 确保只能删除自己的对话
     const conversation = await prisma.conversation.findFirst({
-      where: { id: params.id, userId },
+      where: { id, userId },
       include: {
         messages: {
           select: { content: true },
@@ -132,7 +134,7 @@ export async function DELETE(
 
     await prisma.$transaction(async (tx) => {
       await tx.conversation.delete({
-        where: { id: params.id },
+        where: { id },
       });
       if (fileIds.length > 0) {
         await deleteUnreferencedFiles(tx, fileIds, userId);

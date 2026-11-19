@@ -19,6 +19,13 @@
       "requiredEvidencePattern": "[ABD]\\s*_?\\s*\\{?\\s*[12]\\s*6"
     },
     {
+      "name": "表格列投影证据检索",
+      "query": "ASME NASA ANSYS buckling pressure t1 t2",
+      "minDocumentSources": 1,
+      "forbiddenPatterns": [],
+      "requiredTableProjection": true
+    },
+    {
       "name": "数值和单位不作为知识检索词",
       "query": "18.6 MPa、15.0 MPa、0.008、600 mm",
       "minDocumentSources": 0,

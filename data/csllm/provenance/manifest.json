@@ -1,6 +1,6 @@
 {
   "package": "csllm",
-  "generated_at": "2026-11-16T19:32:12.188939+00:00",
+  "generated_at": "2026-11-19T02:20:22.345703+00:00",
   "source_files": {
     "rag_chunks": "dataset/processed/rag/rag_chunks.jsonl",
     "relations": "dataset/processed/kg/relations.jsonl",
@@ -8,13 +8,20 @@
     "kg_stats": "dataset/processed/kg/kg_stats.json"
   },
   "record_counts": {
-    "rag_chunks": 173228,
-    "relations": 250606,
-    "entities": 2219,
+    "rag_chunks": 157480,
+    "relations": 234030,
+    "entities": 2218,
     "sources": 1931
   },
   "schemas": {
     "rag_chunks": [
+      "content_quality_version",
+      "content_quality_issues",
+      "retrieval_eligible",
+      "evidence_kind",
+      "evidence_usage",
+      "applicability_context",
+      "table_evidence",
       "chunk_id",
       "chunk_fingerprint",
       "content_hash",
@@ -57,6 +64,9 @@
       "content_plain"
     ],
     "relations": [
+      "evidence_kind",
+      "evidence_usage",
+      "applicability_context",
       "source_type",
       "source",
       "relation",
@@ -77,26 +87,26 @@
   "files": [
     {
       "path": "runtime/rag_chunks.compact.jsonl.gz",
-      "bytes": 98616296,
-      "sha256": "a04f6139218947e7fb86a74f1476cc8fdf70c75d28cc6b53d15a624bd72a3469",
-      "records": 173228
+      "bytes": 88749776,
+      "sha256": "e48896afc6e0c4828878a583401ae51fb8c68c6ab0b51769f17ef605c8b39800",
+      "records": 157480
     },
     {
       "path": "runtime/relations.compact.jsonl.gz",
-      "bytes": 7101644,
-      "sha256": "c5ea0ae10ed2257fb9fc2056c52280bf810b14bcf59fd5a3568a9d00da2de3bc",
-      "records": 250606
+      "bytes": 21757843,
+      "sha256": "47781ab6c1f6496834f520a174c40961408c2ccfc59a08f3b4659ce4a07a1bf1",
+      "records": 234030
     },
     {
       "path": "kg/entities.jsonl",
-      "bytes": 1709708,
-      "sha256": "6a475d967cd1cd4edbbc1366fbb2932f4d8d5298961c6cd64c506c1c4b858ff5",
-      "records": 2219
+      "bytes": 1645654,
+      "sha256": "e0a6a4f4ab931546bc31d1a74481f916961fdf4b3542287d34ac87e5dde8e709",
+      "records": 2218
     },
     {
       "path": "kg/kg_stats.json",
-      "bytes": 10644,
-      "sha256": "0e6043ed43eae05e721424ded8a9113d3d9a048016c785c49509a39652465345",
+      "bytes": 10157,
+      "sha256": "11091186b0ea38e277c8b6bbb9ccf30eaeafb67bf604bea2037a977d9c169579",
       "records": null
     },
     {
@@ -107,8 +117,8 @@
     },
     {
       "path": "provenance/file_manifest.jsonl",
-      "bytes": 716,
-      "sha256": "06eafb409d3b6401b1fc493c2825325bb4cd04070b5c8e6cdfa1b17f33b95e7e",
+      "bytes": 717,
+      "sha256": "6679f552e8a0f5a912be534abb49e6e67e6cbfd2395c128ca277169c11ea9d34",
       "records": 5
     }
   ]

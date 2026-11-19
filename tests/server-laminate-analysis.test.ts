@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildLaminateCalculationContext } from "../app/utils/server-laminate-analysis";
+import { designArtifactMessage } from "../app/utils/design-context";
+import { designFixture } from "./helpers/design-fixtures";
 
 const layer = {
   angle_deg: 45,
@@ -210,8 +212,20 @@ test("响应必须保留全部截面、层序、单位、有限数值和计算�
     reordered.result.abd_contract = Object.fromEntries(
       Object.entries(reordered.result.abd_contract).reverse(),
     ) as typeof reordered.result.abd_contract;
-    reordered.result.abd_contract.integral_weights = { D: "z^2", B: "z", A: "1" };
+    reordered.result.abd_contract.integral_weights = {
+      D: "z^2",
+      B: "z",
+      A: "1",
+    };
     globalThis.fetch = async () => Response.json(reordered);
+    assert.ok(await buildLaminateCalculationContext(messages([section])));
+    const paraphrased = response();
+    paraphrased.result.abd_contract.coupling_definitions.A16_A26 =
+      "面内正应变与剪切的相互耦合";
+    paraphrased.result.abd_contract.stiffness_scope.model =
+      "经典层合理论下的平面应力线弹性截面";
+    paraphrased.result.abd_contract.stiffness_scope.does_not_prove.reverse();
+    globalThis.fetch = async () => Response.json(paraphrased);
     assert.ok(await buildLaminateCalculationContext(messages([section])));
   } finally {
     globalThis.fetch = fetch;
@@ -231,6 +245,126 @@ test("请求不存在的候选编号时明确失败", async () => {
     ]),
     /缺少/,
   );
+});
+
+test("概念候选追问读取工件层序，忽略后来回答中的伪造层序", async (t) => {
+  const previous = process.env.CSGPT_CS2_DESIGN_BASE_URL;
+  process.env.CSGPT_CS2_DESIGN_BASE_URL = "https://calculation.invalid";
+  t.after(() => {
+    if (previous === undefined) delete process.env.CSGPT_CS2_DESIGN_BASE_URL;
+    else process.env.CSGPT_CS2_DESIGN_BASE_URL = previous;
+  });
+  const artifact = designFixture("concept");
+  const angles = artifact.result.candidates[0].layup_deg as number[];
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async (_url: string, init: RequestInit) => {
+      const request = JSON.parse(String(init.body));
+      assert.deepEqual(request.cases, [
+        { case_id: "1", layers: angles.map((angle_deg) => ({ angle_deg })) },
+      ]);
+      const data = response();
+      data.calculation_mode = data.result.calculation_mode =
+        "laminate_layup_semantics";
+      Object.assign(data.result.cases[0], {
+        case_id: "1",
+        layer_count: 60,
+        sequence_deg: angles,
+        angle_count_balanced: true,
+        calculated_coupling: null,
+        contributions: [],
+      });
+      return Response.json(data);
+    },
+  );
+  const content = await buildLaminateCalculationContext([
+    designArtifactMessage(artifact),
+    {
+      role: "assistant",
+      content:
+        '{"candidates":[{"candidate_id":"1","layup":{"angles_deg":[90]}}]}',
+    },
+    { role: "user", content: "核对候选1的对称性与均衡性" },
+  ]);
+  assert.match(content!, /60 层/);
+});
+
+test("FEM-ready 自然语言层序核对绑定 TMP 编号和工件中的完整层序", async (t) => {
+  const previous = process.env.CSGPT_CS2_DESIGN_BASE_URL;
+  process.env.CSGPT_CS2_DESIGN_BASE_URL = "https://calculation.invalid";
+  t.after(() => {
+    if (previous === undefined) delete process.env.CSGPT_CS2_DESIGN_BASE_URL;
+    else process.env.CSGPT_CS2_DESIGN_BASE_URL = previous;
+  });
+  const artifact = designFixture("fem");
+  assert.equal(artifact.generation_mode, "fem_ready_cylindrical_shell");
+  if (artifact.generation_mode !== "fem_ready_cylindrical_shell")
+    throw new Error("FEM 候选样本类型错误");
+  const candidate = artifact.result.candidates[0];
+  const angles = candidate.layup.angles_deg;
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    calls++;
+    assert.equal(
+      url,
+      "https://calculation.invalid/v1/design/laminate-stiffness",
+    );
+    const request = JSON.parse(String(init.body));
+    assert.equal(request.calculation_mode, "laminate_layup_semantics");
+    assert.deepEqual(request.cases, [
+      { case_id: "TMP_1", layers: angles.map((angle_deg) => ({ angle_deg })) },
+    ]);
+    const data: any = response();
+    const mismatchIndex = angles.findIndex(
+      (angle, index) => angle !== angles[angles.length - index - 1],
+    );
+    data.calculation_mode = data.result.calculation_mode =
+      "laminate_layup_semantics";
+    Object.assign(data.result.cases[0], {
+      case_id: "TMP_1",
+      layer_count: angles.length,
+      sequence_deg: angles,
+      angle_sequence_symmetric: candidate.layup.symmetric,
+      angle_count_balanced: candidate.layup.balanced,
+      symmetry_mismatch:
+        mismatchIndex < 0
+          ? null
+          : {
+              first_layer: mismatchIndex + 1,
+              mirror_layer: angles.length - mismatchIndex,
+              first_angle: angles[mismatchIndex],
+              mirror_angle: angles[angles.length - mismatchIndex - 1],
+            },
+      calculated_coupling: null,
+      contributions: [],
+    });
+    return Response.json(data);
+  });
+  for (const question of [
+    "核对候选1的对称性与均衡性",
+    "核对方案编号1的铺层",
+    "核对第1组的层序",
+    "核对候选1和TMP_1的对称性",
+  ]) {
+    const content = await buildLaminateCalculationContext([
+      designArtifactMessage(artifact),
+      { role: "assistant", content: "| 编号 | 显式铺层 |\n| TMP_1 | [90] |" },
+      { role: "user", content: question },
+    ]);
+    assert.match(content!, /TMP_1：40 层/);
+    assert.match(content!, /角度序列对称=false/);
+    assert.match(content!, /正负角层数均衡=true/);
+  }
+  assert.equal(calls, 4);
+  await assert.rejects(
+    buildLaminateCalculationContext([
+      designArtifactMessage(artifact),
+      { role: "user", content: "核对候选1和候选51的层序" },
+    ]),
+    /候选编号/,
+  );
+  assert.equal(calls, 4);
 });
 
 test("候选核对采用最近的候选内容，不按表格或 JSON 格式排序", async () => {

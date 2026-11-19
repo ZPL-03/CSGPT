@@ -3,10 +3,48 @@ import {
   CSGPT_DESIGN_ARTIFACT_FIELD,
   type CSGPTDesignArtifact,
 } from "./structured-design";
+import { designNarrativeValidator } from "./design-narrative";
 
 const DESIGN_NARRATIVE_MAX_TOKENS = 4096;
 const CONTENT_CHUNK_CHARS = 1200;
 const ARTIFACT_CHUNK_CHARS = 12000;
+
+/** HTTP 头发出后用 SSE 错误事件表达失败，不发送成功终态。 */
+export function completionErrorEvents(body: ReadableStream<Uint8Array>) {
+  const reader = body.getReader();
+  let cancelled = false;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (cancelled) return;
+        if (done) {
+          reader.releaseLock();
+          controller.close();
+        } else controller.enqueue(value);
+      } catch (error) {
+        if (cancelled) return;
+        controller.enqueue(
+          new TextEncoder().encode(
+            `data: ${JSON.stringify({
+              error: {
+                code: "invalid_completion",
+                message:
+                  error instanceof Error ? error.message : "回答未完整完成。",
+              },
+            })}\n\n`,
+          ),
+        );
+        reader.releaseLock();
+        controller.close();
+      }
+    },
+    cancel(reason) {
+      cancelled = true;
+      return reader.cancel(reason).finally(() => reader.releaseLock());
+    },
+  });
+}
 
 export function prepareDesignNarrativeRest(rest: Record<string, any>) {
   if (rest.n !== undefined && rest.n !== 1) {
@@ -32,14 +70,21 @@ export function prepareDesignNarrativeRest(rest: Record<string, any>) {
 }
 
 function requireFinishReason(reason: unknown): string {
-  if (typeof reason !== "string" || !reason.trim()) {
-    throw new Error("上游缺少有效的 finish_reason，无法确认回答是否完整。");
+  if (reason !== "stop") {
+    throw new Error(
+      `上游 finish_reason 必须为 stop，实际为 ${String(
+        reason,
+      )}。回答未完整完成。`,
+    );
   }
   return reason;
 }
 
-/** 工具解释的正文与完成原因均需保留，不能用计算成功代替回答完成。 */
-export function validateTextCompletion(data: any) {
+/** 成功回答必须有正文且正常结束，截断、过滤和工具调用终态不算文本完成。 */
+export function validateTextCompletion(
+  data: any,
+  validateNarrative?: (text: string) => void,
+) {
   const choice = data?.choices?.[0];
   if (
     data?.error ||
@@ -50,6 +95,7 @@ export function validateTextCompletion(data: any) {
     throw new Error("上游返回的非流式消息结构无效。");
   }
   requireFinishReason(choice.finish_reason);
+  validateNarrative?.(choice.message.content);
   return data;
 }
 
@@ -58,7 +104,7 @@ export function appendDesignToOpenAICompletion(
   appendix: string,
   designArtifact: CSGPTDesignArtifact,
 ) {
-  validateTextCompletion(data);
+  validateTextCompletion(data, designNarrativeValidator(designArtifact));
   const choice = data.choices[0];
   return {
     ...data,
@@ -82,20 +128,27 @@ export function appendDesignToOpenAIStream(
   model: string,
   designArtifact: CSGPTDesignArtifact,
 ) {
-  return completeTextStream(upstreamBody, model, { appendix, designArtifact });
+  return completeTextStream(
+    upstreamBody,
+    model,
+    designNarrativeValidator(designArtifact),
+    { appendix, designArtifact },
+  );
 }
 
 /** 层合板解释使用同一完成协议，但不追加候选或伪造设计工件。 */
 export function validateTextStream(
   upstreamBody: ReadableStream<Uint8Array>,
   model: string,
+  validateNarrative?: (text: string) => void,
 ) {
-  return completeTextStream(upstreamBody, model);
+  return completeTextStream(upstreamBody, model, validateNarrative);
 }
 
 function completeTextStream(
   upstreamBody: ReadableStream<Uint8Array>,
   model: string,
+  validateNarrative?: (text: string) => void,
   extension?: { appendix: string; designArtifact: CSGPTDesignArtifact },
 ) {
   const reader = upstreamBody.getReader();
@@ -111,6 +164,8 @@ function completeTextStream(
       let upstreamFinishReason: string | null = null;
       let receivedDone = false;
       let receivedContent = false;
+      let narrative = "";
+      const heldEvents: unknown[] = [];
       const send = (payload: unknown) => {
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify(payload)}\n\n`),
@@ -152,6 +207,7 @@ function completeTextStream(
             throw new Error("上游 SSE 正文必须是文本。");
           }
           if (content?.trim()) receivedContent = true;
+          if (typeof content === "string") narrative += content;
           if (choice.finish_reason != null) {
             if (upstreamFinishReason) {
               throw new Error("设计说明上游重复返回完成结果。");
@@ -161,7 +217,9 @@ function completeTextStream(
             choice.finish_reason = null;
           }
         }
-        send(payload);
+        // 有工件的解释先完成事实检查，错误说明不能作为候选结果展示。
+        if (validateNarrative) heldEvents.push(payload);
+        else send(payload);
       };
 
       try {
@@ -181,6 +239,8 @@ function completeTextStream(
         const finishReason = requireFinishReason(upstreamFinishReason);
         if (!receivedDone) throw new Error("设计说明上游缺少 SSE 结束标记。");
         if (!receivedContent) throw new Error("上游未返回回答正文。");
+        validateNarrative?.(narrative);
+        for (const payload of heldEvents) send(payload);
 
         const appendix = extension?.appendix || "";
         for (

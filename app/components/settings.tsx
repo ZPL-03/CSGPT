@@ -361,7 +361,7 @@ export function Settings() {
       </ListItem>
     );
 
-  // CSGPT 内置模型配置：Qwen3-14B 微调大模型
+  // CSGPT 服务配置，模型来源由当前部署提供。
   const csgptConfigComponent = accessStore.provider ===
     ServiceProvider.CSGPT && (
     <>

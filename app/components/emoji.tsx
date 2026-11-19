@@ -6,6 +6,7 @@ import EmojiPicker, {
 
 import { ModelType } from "../store";
 import { ServiceProvider } from "../constant";
+import { BrandLogo } from "./brand-logo";
 
 import BotIconDefault from "../icons/llm-icons/default.svg";
 import BotIconOpenAI from "../icons/llm-icons/openai.svg";
@@ -68,7 +69,11 @@ export function Avatar(props: {
 
     // 第一步：根据 Provider 名称匹配图标（同 Provider 下所有模型使用统一图标）
     if (providerName === ServiceProvider.CSGPT.toLowerCase()) {
-      LlmIcon = BotIconQwen;
+      return (
+        <div className="user-avatar no-dark">
+          <BrandLogo size={30} style={{ width: "100%", height: "100%" }} />
+        </div>
+      );
     } else if (providerName === ServiceProvider.OpenAI.toLowerCase()) {
       LlmIcon = BotIconOpenAI;
     } else if (providerName === ServiceProvider.Azure.toLowerCase()) {

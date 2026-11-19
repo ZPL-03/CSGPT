@@ -3,6 +3,9 @@
  * 文本接口读取解析文本，多模态接口同时接收原始图片或渲染图片。
  */
 
+import type { PDFPageProxy } from "pdfjs-dist";
+import type { DocumentInitParameters } from "pdfjs-dist/types/src/display/api";
+
 const TEXT_EXTENSIONS = new Set([
   "txt",
   "md",
@@ -76,7 +79,6 @@ const SPREADSHEET_EXTENSIONS = new Set([
 ]);
 const PRESENTATION_EXTENSIONS = new Set(["pptx", "pptm"]);
 const IMAGE_OCR_MAX_SIDE = 2200;
-const PDFJS_CDN_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379";
 
 export interface FileExtractionResult {
   /** 模型可读取的解析文本 */
@@ -823,7 +825,7 @@ async function recognizeImages(
   return sections;
 }
 
-function getPdfRenderScale(page: any, preferredScale = 2.2) {
+function getPdfRenderScale(page: PDFPageProxy, preferredScale = 2.2) {
   const viewport = page.getViewport({ scale: 1 });
   const maxPixels = 3_200_000;
   const maxSide = 2200;
@@ -834,7 +836,10 @@ function getPdfRenderScale(page: any, preferredScale = 2.2) {
   return Math.max(0.8, Math.min(preferredScale, scaleByPixels, scaleBySide));
 }
 
-async function renderPdfPageToImage(page: any, scale = 2.2): Promise<string> {
+async function renderPdfPageToImage(
+  page: PDFPageProxy,
+  scale = 2.2,
+): Promise<string> {
   if (typeof document === "undefined") {
     return "";
   }
@@ -847,7 +852,7 @@ async function renderPdfPageToImage(page: any, scale = 2.2): Promise<string> {
   if (!ctx) return "";
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  await page.render({ canvas, viewport }).promise;
   return canvas.toDataURL("image/jpeg", 0.9);
 }
 
@@ -1215,123 +1220,132 @@ async function extractPdf(
   options: Required<FileExtractionOptions>,
 ) {
   options.onProgress(10, "读取 PDF");
-  const pdfjsLib = await import("pdfjs-dist");
-  const loadingOptions: any = {
+  const pdfjsLib =
+    typeof window === "undefined"
+      ? await import("pdfjs-dist/legacy/build/pdf.mjs")
+      : await import("pdfjs-dist");
+  const loadingOptions: DocumentInitParameters = {
     data: new Uint8Array(bytes),
     stopAtErrors: false,
     useSystemFonts: true,
-    isEvalSupported: false,
   };
 
-  if (typeof window === "undefined") {
-    loadingOptions.disableWorker = true;
-  } else if (pdfjsLib.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN_BASE}/pdf.worker.min.mjs`;
-    loadingOptions.cMapUrl = `${PDFJS_CDN_BASE}/cmaps/`;
+  if (typeof window !== "undefined") {
+    // worker、字符映射、字体和图像解码资源与运行库使用相同版本。
+    const cdnBase = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `${cdnBase}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.rendererSrc = `${cdnBase}/build/pdf.renderer.min.mjs`;
+    loadingOptions.cMapUrl = `${cdnBase}/cmaps/`;
     loadingOptions.cMapPacked = true;
-    loadingOptions.standardFontDataUrl = `${PDFJS_CDN_BASE}/standard_fonts/`;
+    loadingOptions.standardFontDataUrl = `${cdnBase}/standard_fonts/`;
+    loadingOptions.wasmUrl = `${cdnBase}/wasm/`;
+    loadingOptions.iccUrl = `${cdnBase}/iccs/`;
   }
 
   const loadingTask = pdfjsLib.getDocument(loadingOptions);
-  const pdf = await loadingTask.promise;
-  const pages: string[] = [];
-  const pagesNeedingOcr: number[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    let page: any = null;
-    let pageText = "";
-    try {
-      page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      pageText = extractStructuredPdfText(textContent);
-    } catch {
-      pageText = "";
-    } finally {
-      page?.cleanup?.();
-    }
-    if (shouldOcrPdfPage(pageText)) {
-      pagesNeedingOcr.push(i);
-    }
-    pages.push(
-      pageText ? `第 ${i} 页\n${pageText}` : `第 ${i} 页\n未提取到可读文本`,
-    );
-    options.onProgress(
-      10 + Math.round((i / pdf.numPages) * 25),
-      `提取 PDF 文本 ${i}/${pdf.numPages}`,
-    );
-    await yieldToBrowser();
-  }
-
-  const renderedImages: string[] = [];
-  if (options.includeImages) {
+  try {
+    const pdf = await loadingTask.promise;
+    const pages: string[] = [];
+    const pagesNeedingOcr: number[] = [];
     for (let i = 1; i <= pdf.numPages; i++) {
-      let page: any = null;
+      let page: PDFPageProxy | null = null;
+      let pageText = "";
       try {
         page = await pdf.getPage(i);
-        const image = await renderPdfPageToImage(page);
-        if (image) renderedImages[i - 1] = image;
+        const textContent = await page.getTextContent();
+        pageText = extractStructuredPdfText(textContent);
       } catch {
-        renderedImages[i - 1] = "";
+        pageText = "";
       } finally {
-        page?.cleanup?.();
+        page?.cleanup();
       }
+      if (shouldOcrPdfPage(pageText)) {
+        pagesNeedingOcr.push(i);
+      }
+      pages.push(
+        pageText ? `第 ${i} 页\n${pageText}` : `第 ${i} 页\n未提取到可读文本`,
+      );
       options.onProgress(
-        35 + Math.round((i / pdf.numPages) * 25),
-        `渲染 PDF 页面 ${i}/${pdf.numPages}`,
+        10 + Math.round((i / pdf.numPages) * 25),
+        `提取 PDF 文本 ${i}/${pdf.numPages}`,
       );
       await yieldToBrowser();
     }
-  }
 
-  const textSections = [buildSection("PDF 文本", pages.join("\n\n"))];
-  let ocrPageCount = 0;
-  if (options.ocrImages && pagesNeedingOcr.length > 0) {
-    const ocrSections: string[] = [];
-    for (let i = 0; i < pagesNeedingOcr.length; i++) {
-      const pageNumber = pagesNeedingOcr[i];
-      let page: any = null;
-      try {
-        page = await pdf.getPage(pageNumber);
-        const image =
-          renderedImages[pageNumber - 1] || (await renderPdfPageToImage(page));
-        const text = image
-          ? await recognizeImage(image, { retryOriginal: false })
-          : "";
-        ocrSections.push(
-          text
-            ? `## PDF 页面 ${pageNumber} OCR\n${text}`
-            : `## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`,
+    const renderedImages: string[] = [];
+    if (options.includeImages) {
+      for (let i = 1; i <= pdf.numPages; i++) {
+        let page: PDFPageProxy | null = null;
+        try {
+          page = await pdf.getPage(i);
+          const image = await renderPdfPageToImage(page);
+          if (image) renderedImages[i - 1] = image;
+        } catch {
+          renderedImages[i - 1] = "";
+        } finally {
+          page?.cleanup();
+        }
+        options.onProgress(
+          35 + Math.round((i / pdf.numPages) * 25),
+          `渲染 PDF 页面 ${i}/${pdf.numPages}`,
         );
-      } catch {
-        ocrSections.push(`## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`);
-      } finally {
-        page?.cleanup?.();
+        await yieldToBrowser();
       }
-      ocrPageCount += 1;
-      options.onProgress(
-        60 + Math.round(((i + 1) / pagesNeedingOcr.length) * 35),
-        `识别 PDF 页面 ${i + 1}/${pagesNeedingOcr.length}`,
-      );
-      await yieldToBrowser();
     }
-    textSections.push(...ocrSections);
-  }
-  options.onProgress(100, "PDF 解析完成");
-  pdf.cleanup?.();
-  pdf.destroy?.();
 
-  return {
-    text:
-      cleanText(textSections.filter(Boolean).join("\n\n")) ||
-      `[文件: ${fileName}，未提取到可读文本]`,
-    images: options.includeImages ? renderedImages : [],
-    metadata: {
-      parser: "pdf",
-      fileName,
-      pageCount: pdf.numPages,
-      renderedPageCount: renderedImages.filter(Boolean).length,
-      ocrPageCount,
-    },
-  };
+    const textSections = [buildSection("PDF 文本", pages.join("\n\n"))];
+    let ocrPageCount = 0;
+    if (options.ocrImages && pagesNeedingOcr.length > 0) {
+      const ocrSections: string[] = [];
+      for (let i = 0; i < pagesNeedingOcr.length; i++) {
+        const pageNumber = pagesNeedingOcr[i];
+        let page: PDFPageProxy | null = null;
+        try {
+          page = await pdf.getPage(pageNumber);
+          const image =
+            renderedImages[pageNumber - 1] ||
+            (await renderPdfPageToImage(page));
+          const text = image
+            ? await recognizeImage(image, { retryOriginal: false })
+            : "";
+          ocrSections.push(
+            text
+              ? `## PDF 页面 ${pageNumber} OCR\n${text}`
+              : `## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`,
+          );
+        } catch {
+          ocrSections.push(`## PDF 页面 ${pageNumber} OCR\n未提取到可读文本`);
+        } finally {
+          page?.cleanup();
+        }
+        ocrPageCount += 1;
+        options.onProgress(
+          60 + Math.round(((i + 1) / pagesNeedingOcr.length) * 35),
+          `识别 PDF 页面 ${i + 1}/${pagesNeedingOcr.length}`,
+        );
+        await yieldToBrowser();
+      }
+      textSections.push(...ocrSections);
+    }
+    options.onProgress(100, "PDF 解析完成");
+
+    return {
+      text:
+        cleanText(textSections.filter(Boolean).join("\n\n")) ||
+        `[文件: ${fileName}，未提取到可读文本]`,
+      images: options.includeImages ? renderedImages : [],
+      metadata: {
+        parser: "pdf",
+        fileName,
+        pageCount: pdf.numPages,
+        renderedPageCount: renderedImages.filter(Boolean).length,
+        ocrPageCount,
+      },
+    };
+  } finally {
+    // loadingTask 拥有文档和 worker，解析失败时同样释放资源。
+    await loadingTask.destroy();
+  }
 }
 
 async function extractPresentation(

@@ -28,6 +28,10 @@ const nextConfig = {
     return config;
   },
   output: mode,
+  // 运行包的清单覆盖 README 与全部数据文件，必须整体进入 standalone/Vercel 函数。
+  outputFileTracingIncludes: {
+    "/*": ["./data/csllm/**/*"],
+  },
   images: {
     unoptimized: mode === "export",
   },

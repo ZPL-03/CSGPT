@@ -27,6 +27,37 @@ const DEFAULT_ACADEMIC_RESULTS = 8;
 const MAX_RESULTS = 10;
 const SEARCH_TIMEOUT_MS = 20000;
 const ACADEMIC_RESULT_CANDIDATE_MULTIPLIER = 3;
+const PATENT_SEARCH_DOMAINS = [
+  "patents.google.com",
+  "patentscope.wipo.int",
+  "worldwide.espacenet.com",
+];
+
+// 专利模式接受可定位到具体文献的来源，产业报道和检索首页不作为专利记录。
+export function isPatentDocumentUrl(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+    if (url.hostname === "patents.google.com") {
+      return /^\/patent\/[A-Z]{2}\d[A-Z0-9-]*(?:\/|$)/i.test(url.pathname);
+    }
+    if (url.hostname === "patentscope.wipo.int") {
+      return (
+        /\/detail\.jsf$/.test(url.pathname) && !!url.searchParams.get("docId")
+      );
+    }
+    if (url.hostname === "worldwide.espacenet.com") {
+      return (
+        /\/publication\/[A-Z]{2}\d/i.test(url.pathname) ||
+        (/\/publicationDetails\//.test(url.pathname) &&
+          !!url.searchParams.get("NR"))
+      );
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 const providerDefinitions = [
   {
@@ -105,11 +136,14 @@ const chineseAcademicTermMap = [
   ["环氧", ["epoxy resin"]],
   ["热塑性", ["thermoplastic composites"]],
   ["层合板", ["composite laminates"]],
+  ["层合", ["composite laminates"]],
+  ["层压", ["laminated structures"]],
   ["铺层", ["laminate layup"]],
   ["缠绕", ["filament winding"]],
   ["加筋", ["stiffened composite structures"]],
   ["壁板", ["composite panels"]],
   ["壳体", ["composite shells"]],
+  ["圆柱壳", ["cylindrical shells"]],
   ["耐压壳", ["external pressure composite pressure hull"]],
   ["压力容器", ["composite pressure vessels"]],
   ["储氢", ["hydrogen storage pressure vessels"]],
@@ -130,6 +164,10 @@ const chineseAcademicTermMap = [
 ] as const;
 
 const academicStopWords = new Set([
+  "研究进展",
+  "进展",
+  "最新",
+  "综述",
   "latest",
   "recent",
   "advance",
@@ -376,8 +414,9 @@ function buildAcademicSearchQuery(query: string) {
 
 function normalizeTerm(value: string) {
   return value
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^a-z0-9+\s]/g, " ")
+    .replace(/[^a-z0-9+\u3400-\u9fff\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -386,7 +425,7 @@ function academicQueryTerms(originalQuery: string, providerQuery: string) {
   const mappedTerms: string[] = [];
   chineseAcademicTermMap.forEach(([term, translations]) => {
     if (originalQuery.includes(term)) {
-      mappedTerms.push(...translations);
+      mappedTerms.push(term, ...translations);
     }
   });
 
@@ -397,7 +436,9 @@ function academicQueryTerms(originalQuery: string, providerQuery: string) {
         term.length >= 4 && !academicStopWords.has(term) && !/^\d+$/.test(term),
     );
 
-  return uniqueStrings([...mappedTerms, ...wordTerms]);
+  return uniqueStrings([...mappedTerms, ...wordTerms]).filter(
+    (term) => !academicStopWords.has(term),
+  );
 }
 
 function resultText(result: ResearchSearchResult) {
@@ -429,6 +470,12 @@ function scoreAcademicResult(
   terms.forEach((term) => {
     const normalized = normalizeTerm(term);
     if (!normalized) return;
+    // 中文主题按词段匹配，空格分词不能识别连续中文题名。
+    if (hasCjkText(normalized)) {
+      if (text.includes(normalized)) score += 2;
+      if (title.includes(normalized)) score += 2;
+      return;
+    }
     const words = normalized.split(/\s+/);
     const phraseMatched = words.length > 1 && text.includes(normalized);
     if (phraseMatched) score += words.length + 4;
@@ -446,35 +493,45 @@ function scoreAcademicResult(
   return score;
 }
 
-function requiresCompositeTitleMatch(
+function requiresCompositeMaterialMatch(
   originalQuery: string,
   providerQuery: string,
 ) {
   return (
-    /复合材料|纤维增强|碳纤维|玻璃纤维|芳纶/i.test(originalQuery) ||
-    /\b(composite|composites|fiber|fibre|polymer|laminate|cfrp|gfrp)\b/i.test(
+    /复合材料|纤维增强|碳纤维|玻璃纤维|芳纶|层合|层压/i.test(originalQuery) ||
+    /\b(composites?|laminates?|laminated|cfrp|gfrp)\b|\bfib(?:er|re)[\s-]+reinforced\b/i.test(
       providerQuery,
     )
   );
 }
 
-function hasCompositeTitleMatch(result: ResearchSearchResult) {
-  const title = normalizeTerm(result.title);
-  const venue = normalizeTerm(result.venue || result.source || "");
-  const words = new Set(`${title} ${venue}`.split(/\s+/).filter(Boolean));
-  return [
-    "composite",
-    "composites",
-    "fiber",
-    "fibre",
-    "polymer",
-    "laminate",
-    "laminates",
-    "cfrp",
-    "gfrp",
-    "carbon",
-    "epoxy",
-  ].some((word) => words.has(word));
+// 复合或层合表述须有材料体系或工程结构语境，单独的 fiber/carbon 或期刊名不参与判定。
+export function isCompositeMaterialsResult(result: ResearchSearchResult) {
+  const text = normalizeTerm(
+    [result.title, result.snippet].filter(Boolean).join(" "),
+  );
+  if (/\b(cfrp|gfrp|frp)\b/.test(text)) return true;
+  const hasMaterialSystem =
+    /\b(materials?|matrix|matrices|polymers?|resins?|epoxy|ceramics?|metals?|concrete|cement|fibers?|fibres?|reinforcement)\b|材料|基体|聚合物|树脂|环氧|陶瓷|金属|混凝土|水泥|纤维/.test(
+      text,
+    );
+  const hasEngineeringStructure =
+    /\b(hulls?|shells?|plates?|panels?|beams?|tanks?|cylinders?|pipes?|stiffeners?|airframes?|wings?)\b|\bpressure\s+vessels?\b|\b(?:composite|laminated)\s+structures?\b|壳|圆筒|压力容器|储罐|壁板|平板|层合板|层压板|夹芯板|加筋板|梁|加筋|机翼|机身|(?:复合|层合|层压)结构/.test(
+      text,
+    );
+  return (
+    ((hasMaterialSystem || hasEngineeringStructure) &&
+      /\b(composites?|nanocomposites?|laminates?|laminated)\b|复合|层合|层压|铺层/.test(
+        text,
+      )) ||
+    (((/\bfib(?:er|re)s?\b/.test(text) &&
+      /\breinforc(?:ed|ement|ing)\b/.test(text)) ||
+      (/纤维/.test(text) && /增强|加固/.test(text))) &&
+      (hasEngineeringStructure ||
+        /\b(polymers?|resins?|epoxy|matrix|matrices|concrete|cement|ceramics?|metals?)\b|聚合物|树脂|环氧|基体|混凝土|水泥|陶瓷|金属/.test(
+          text,
+        )))
+  );
 }
 
 function filterAcademicResults(
@@ -485,7 +542,7 @@ function filterAcademicResults(
 ) {
   const terms = academicQueryTerms(originalQuery, providerQuery);
   if (!terms.length) return results.slice(0, maxResults);
-  const requireCompositeTitle = requiresCompositeTitleMatch(
+  const requireCompositeMaterial = requiresCompositeMaterialMatch(
     originalQuery,
     providerQuery,
   );
@@ -498,7 +555,7 @@ function filterAcademicResults(
     .filter(
       (item) =>
         item.score >= 4 &&
-        (!requireCompositeTitle || hasCompositeTitleMatch(item.result)),
+        (!requireCompositeMaterial || isCompositeMaterialsResult(item.result)),
     )
     .sort((left, right) => {
       const yearDelta = (right.result.year || 0) - (left.result.year || 0);
@@ -708,7 +765,11 @@ async function runTavilySearch(input: z.infer<typeof requestSchema>) {
       body: JSON.stringify({
         query: buildExternalWebQuery(input.query, mode),
         search_depth: input.searchDepth ?? "basic",
-        max_results: maxResults,
+        max_results:
+          mode === "patent"
+            ? Math.min(maxResults * 3, MAX_RESULTS)
+            : maxResults,
+        include_domains: mode === "patent" ? PATENT_SEARCH_DOMAINS : undefined,
         include_answer: input.includeAnswer ?? false,
         include_raw_content: false,
         topic: "general",
@@ -735,7 +796,11 @@ async function runTavilySearch(input: z.infer<typeof requestSchema>) {
         score: typeof item?.score === "number" ? item.score : undefined,
       };
     })
-    .filter(Boolean);
+    .filter(
+      (result: ResearchSearchResult | null) =>
+        result && (mode !== "patent" || isPatentDocumentUrl(result.url)),
+    )
+    .slice(0, maxResults);
 
   return {
     provider: "tavily" as const,

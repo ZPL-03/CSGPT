@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NextRequest } from "next/server";
-import { CSGPT_MODEL_2 } from "../app/constant";
+import {
+  CSGPT_DEFAULT_MODEL,
+  CSGPT_MODEL_2,
+  CSGPT_MODEL_3,
+} from "../app/constant";
+import { designArtifactMessage } from "../app/utils/design-context";
 import { CSGPT_NUMBER_DISPLAY_RULE } from "../app/prompts/csgpt";
 import { POST } from "../app/api/[provider]/[...path]/route";
 import { CSGPT_DESIGN_ARTIFACT_FIELD } from "../app/utils/structured-design";
@@ -62,6 +67,9 @@ for (const mode of [
         }
         if (url === "https://llm.invalid/tokenize") {
           assert.equal(body.model, "test-adapter");
+          assert.deepEqual(body.chat_template_kwargs, {
+            enable_thinking: false,
+          });
           assert.ok(
             body.messages.some((message: any) => message.content === question),
           );
@@ -71,6 +79,7 @@ for (const mode of [
         }
         assert.equal(url, "https://llm.invalid/v1/chat/completions");
         assert.equal(body.model, "test-adapter");
+        assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
         assert.ok(body.max_tokens > 0 && body.max_tokens < 4096);
         assert.ok(
           body.messages.some((message: any) => message.content === question),
@@ -138,7 +147,12 @@ for (const mode of [
           ],
         }),
       }),
-      { params: { provider: "csgpt", path: ["chat", "completions"] } },
+      {
+        params: Promise.resolve({
+          provider: "csgpt",
+          path: ["chat", "completions"],
+        }),
+      },
     );
     if (mode === "complete") {
       assert.equal(response.status, 200);
@@ -171,6 +185,244 @@ for (const mode of [
   });
 }
 
+// 普通问答走 CS1 通用代理或 CS2/CS3 专用代理，均需要验证终态。
+for (const model of [CSGPT_DEFAULT_MODEL, CSGPT_MODEL_2, CSGPT_MODEL_3]) {
+  for (const stream of [false, true]) {
+    for (const reason of [
+      "stop",
+      "length",
+      "content_filter",
+      "tool_calls",
+      null,
+    ]) {
+      test(`${model} 普通问答 stream=${stream} finish_reason=${reason}`, async (t) => {
+        const env = {
+          CSGPT_CS1_BASE_URL: "https://llm.invalid/v1",
+          CSGPT_CS2_BASE_URL: "https://llm.invalid/v1",
+          CSGPT_CS3_BASE_URL: "https://llm.invalid/v1",
+        };
+        const previous = Object.fromEntries(
+          Object.keys(env).map((key) => [key, process.env[key]]),
+        );
+        Object.assign(process.env, env);
+        t.after(() => {
+          for (const [key, value] of Object.entries(previous)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+          }
+        });
+        t.mock.method(
+          globalThis,
+          "fetch",
+          async (url: string, init: RequestInit) => {
+            const body = JSON.parse(String(init.body));
+            assert.deepEqual(body.chat_template_kwargs, {
+              enable_thinking: false,
+            });
+            if (url.endsWith("/tokenize"))
+              return Response.json({ count: 1000, max_model_len: 32768 });
+            assert.equal(url, "https://llm.invalid/v1/chat/completions");
+            return stream
+              ? new Response(
+                  `data: ${JSON.stringify({
+                    choices: [
+                      {
+                        index: 0,
+                        delta: { content: "一般理论说明" },
+                        finish_reason: reason,
+                      },
+                    ],
+                  })}\n\ndata: [DONE]\n\n`,
+                )
+              : Response.json({
+                  choices: [
+                    {
+                      message: { content: "一般理论说明" },
+                      finish_reason: reason,
+                    },
+                  ],
+                });
+          },
+        );
+        const response = await POST(
+          new NextRequest("http://localhost/api/csgpt/chat/completions", {
+            method: "POST",
+            body: JSON.stringify({
+              model,
+              stream,
+              messages: [{ role: "user", content: "什么是复合材料" }],
+            }),
+          }),
+          {
+            params: Promise.resolve({
+              provider: "csgpt",
+              path: ["chat", "completions"],
+            }),
+          },
+        );
+        if (stream) {
+          const text = await response.text();
+          assert.equal(
+            text.includes('"finish_reason":"stop"'),
+            reason === "stop",
+          );
+          assert.equal(text.endsWith("data: [DONE]\n\n"), reason === "stop");
+          assert.equal(
+            text.includes('"code":"invalid_completion"'),
+            reason !== "stop",
+          );
+        } else {
+          assert.equal(response.status, reason === "stop" ? 200 : 502);
+          assert.equal(
+            Boolean((await response.json()).error),
+            reason !== "stop",
+          );
+        }
+      });
+    }
+  }
+}
+
+test("长历史追问绑定完整工件，拒绝模型把未求解写成未达标", async (t) => {
+  const previous = process.env.CSGPT_CS2_BASE_URL;
+  process.env.CSGPT_CS2_BASE_URL = "https://llm.invalid/v1";
+  t.after(() => {
+    if (previous === undefined) delete process.env.CSGPT_CS2_BASE_URL;
+    else process.env.CSGPT_CS2_BASE_URL = previous;
+  });
+  const artifact = designFixture("concept");
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    assert.ok(!url.includes("design/"));
+    const factsMessage = body.messages.find((message: any) =>
+      message.content.includes('"design_fingerprint"'),
+    );
+    const facts = JSON.parse(
+      factsMessage.content.slice(factsMessage.content.indexOf("{")),
+    );
+    assert.equal(facts.design_fingerprint, artifact.result.design_fingerprint);
+    assert.equal(facts.candidate_count, 50);
+    assert.deepEqual(facts.calculated_facts["当前求解状态分组"], {
+      not_run: 50,
+    });
+    if (url.endsWith("tokenize"))
+      return Response.json({ count: 8000, max_model_len: 32768 });
+    calls++;
+    return Response.json({
+      choices: [
+        {
+          message: { content: "当前没有候选达到安全阈值。" },
+          finish_reason: "stop",
+        },
+      ],
+    });
+  });
+  const response = await POST(
+    new NextRequest("http://localhost/api/csgpt/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: CSGPT_MODEL_2,
+        stream: false,
+        messages: [
+          designArtifactMessage(artifact),
+          ...Array.from({ length: 35 }, () => [
+            { role: "user", content: "继续讨论" },
+            { role: "assistant", content: "候选层数未知" },
+          ]).flat(),
+          {
+            role: "user",
+            content: "从已有候选中推荐最安全的方案，不要生成候选。",
+          },
+        ],
+      }),
+    }),
+    {
+      params: Promise.resolve({
+        provider: "csgpt",
+        path: ["chat", "completions"],
+      }),
+    },
+  );
+  assert.equal(calls, 1);
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).message, /未求解/);
+});
+
+test("FEM-ready 自然语言追问按 TMP 编号绑定工件，未知编号在请求模型前返回 422", async (t) => {
+  const previous = process.env.CSGPT_CS2_BASE_URL;
+  process.env.CSGPT_CS2_BASE_URL = "https://llm.invalid/v1";
+  t.after(() => {
+    if (previous === undefined) delete process.env.CSGPT_CS2_BASE_URL;
+    else process.env.CSGPT_CS2_BASE_URL = previous;
+  });
+  const artifact = designFixture("fem");
+  const answer =
+    "TMP_1 包含40层，当前未求解，不能根据历史参考判定当前设计安全。";
+  const calls: string[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    calls.push(url);
+    assert.ok(
+      url === "https://llm.invalid/tokenize" ||
+        url === "https://llm.invalid/v1/chat/completions",
+    );
+    const body = JSON.parse(String(init.body));
+    const factMessage = body.messages.find((message: any) =>
+      message.content.includes('"design_fingerprint"'),
+    );
+    const facts = JSON.parse(
+      factMessage.content.slice(factMessage.content.indexOf("{")),
+    );
+    assert.equal(facts.design_fingerprint, artifact.result.design_fingerprint);
+    assert.deepEqual(
+      facts.candidates.map((item: any) => item.candidate_id),
+      ["TMP_1"],
+    );
+    assert.equal(facts.candidates[0].layer_count, 40);
+    assert.equal(
+      facts.candidates[0].screening.current_design_verdict,
+      "pending",
+    );
+    if (url.endsWith("tokenize"))
+      return Response.json({ count: 8000, max_model_len: 32768 });
+    return Response.json({
+      choices: [{ message: { content: answer }, finish_reason: "stop" }],
+    });
+  });
+  const ask = (question: string) =>
+    POST(
+      new NextRequest("http://localhost/api/csgpt/chat/completions", {
+        method: "POST",
+        body: JSON.stringify({
+          model: CSGPT_MODEL_2,
+          stream: false,
+          messages: [
+            designArtifactMessage(artifact),
+            { role: "user", content: question },
+          ],
+        }),
+      }),
+      {
+        params: Promise.resolve({
+          provider: "csgpt",
+          path: ["chat", "completions"],
+        }),
+      },
+    );
+  const response = await ask("解释候选1");
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.choices[0].message.content, answer);
+  assert.equal(body.choices[0].finish_reason, "stop");
+  assert.equal(body.csgpt_design_artifact, undefined);
+  const completedCalls = calls.length;
+  assert.ok(completedCalls > 0);
+  const unknown = await ask("解释候选51");
+  assert.equal(unknown.status, 422);
+  assert.match((await unknown.json()).message, /候选编号/);
+  assert.equal(calls.length, completedCalls);
+});
+
 test("冲突输入通过路由返回 422，不调用设计或模型服务", async (t) => {
   const previous = process.env.CSGPT_CS2_BASE_URL;
   process.env.CSGPT_CS2_BASE_URL = "https://llm.invalid/v1";
@@ -196,7 +448,12 @@ test("冲突输入通过路由返回 422，不调用设计或模型服务", asyn
         ],
       }),
     }),
-    { params: { provider: "csgpt", path: ["chat", "completions"] } },
+    {
+      params: Promise.resolve({
+        provider: "csgpt",
+        path: ["chat", "completions"],
+      }),
+    },
   );
   assert.equal(response.status, 422);
   assert.match((await response.json()).message, /边界.*冲突/);
