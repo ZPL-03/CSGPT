@@ -13,11 +13,16 @@ import {
 import { countVLLMChatTokens } from "../app/utils/server-vllm-tokenizer";
 
 test("实际分词约束共享窗口且不覆盖当前消息", () => {
-  const messages = [{ role: "user", content: "请总结候选及证据边界" }];
+  const messages = [{ role: "user", content: "铺层".repeat(4400) }];
   const request = applyCSGPTContextBudget(
     messages,
     { max_tokens: 3153 },
     16384,
+  );
+  assert.ok(request.rest.max_tokens < 3153);
+  assert.equal(
+    reconcileCSGPTMeasuredBudget(request, 8662, 16384).rest.max_tokens,
+    3153,
   );
   const result = reconcileCSGPTMeasuredBudget(request, 13806, 16384);
   assert.equal(result.rest.max_tokens, 2066);

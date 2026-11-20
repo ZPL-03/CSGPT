@@ -71,9 +71,9 @@ for (const mode of [
           assert.deepEqual(body.chat_template_kwargs, {
             enable_thinking: false,
           });
-          assert.ok(
-            body.messages.some((message: any) => message.content === question),
-          );
+          assert.equal(body.messages.at(-1)?.role, "user");
+          assert.ok(body.messages.at(-1)?.content.includes(question));
+          assert.ok(body.messages.at(-1)?.content.includes('"当前有限元结果":null'));
           return mode === "tokenizer_error"
             ? Response.json({ error: "unavailable" }, { status: 503 })
             : Response.json({ count: 31000, max_model_len: 32768 });
@@ -82,9 +82,8 @@ for (const mode of [
         assert.equal(body.model, "test-adapter");
         assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
         assert.ok(body.max_tokens > 0 && body.max_tokens < 4096);
-        assert.ok(
-          body.messages.some((message: any) => message.content === question),
-        );
+        assert.equal(body.messages.at(-1)?.role, "user");
+        assert.ok(body.messages.at(-1)?.content.includes(question));
         assert.equal(
           body.messages.filter(
             (message: any) =>
@@ -100,13 +99,7 @@ for (const mode of [
           ),
           mode === "stream",
         );
-        assert.ok(
-          body.messages.some(
-            (message: any) =>
-              typeof message.content === "string" &&
-              message.content.includes('"当前有限元结果":null'),
-          ),
-        );
+        assert.ok(body.messages.at(-1)?.content.includes('"当前有限元结果":null'));
         if (mode === "stream") {
           const events = [
             {

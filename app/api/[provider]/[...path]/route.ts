@@ -147,24 +147,6 @@ function getCSGPTContextLength(
   return config.csgptContextLength || DEFAULT_CSGPT_CONTEXT_LENGTH;
 }
 
-function prepareDesignNarrativeMessages(messages: any[], instruction: string) {
-  const result = messages.filter((message) => !message.designArtifact);
-  let insertIndex = 0;
-  while (
-    insertIndex < result.length &&
-    ["developer", "system"].includes(result[insertIndex]?.role)
-  ) {
-    insertIndex += 1;
-  }
-  result.splice(insertIndex, 0, {
-    role: "system",
-    content: instruction,
-    _csgptContextPriority: 80,
-    _csgptContextAtomic: true,
-  });
-  return result;
-}
-
 function openAIStreamEvent(payload: unknown) {
   return `data: ${JSON.stringify(payload)}\n\n`;
 }
@@ -618,9 +600,15 @@ async function prepareProxyMessages(
     userFileExcludedFileIds: string[];
     userId?: string | null;
     tokenBudget?: { rest: Record<string, any>; contextLength: number };
+    modelTurn?: string;
   },
 ) {
   const processedMessages = [...messages];
+  // 检索读取原问题；生成请求使用应用已分派的工程任务。
+  if (options.modelTurn !== undefined) {
+    const last = processedMessages.length - 1;
+    processedMessages[last] = { ...messages[last], content: options.modelTurn };
+  }
   let ragKgSources: RagKgSource[] = [];
   let researchSources: ResearchSource[] = [];
   let sessionFileSources: SessionFileSource[] = [];
@@ -637,13 +625,10 @@ async function prepareProxyMessages(
   }
 
   if (options.webSearchEnabled || options.academicSearchEnabled) {
-    const researchContext = await buildExternalResearchContext(
-      processedMessages,
-      {
-        webSearchEnabled: options.webSearchEnabled,
-        academicSearchEnabled: options.academicSearchEnabled,
-      },
-    );
+    const researchContext = await buildExternalResearchContext(messages, {
+      webSearchEnabled: options.webSearchEnabled,
+      academicSearchEnabled: options.academicSearchEnabled,
+    });
     if (researchContext?.message) {
       researchSources = researchContext.sources;
       contextBlocks.push(researchContext.message);
@@ -652,7 +637,7 @@ async function prepareProxyMessages(
 
   if (options.sessionFileRagEnabled) {
     const sessionFileContext = buildSessionFileRagContext(
-      processedMessages,
+      messages,
       options.sessionFileRecords,
     );
     if (sessionFileContext?.message) {
@@ -663,7 +648,7 @@ async function prepareProxyMessages(
 
   if (options.userFileRagEnabled && options.userId) {
     const userFileContext = await buildUserFileRagContext(
-      processedMessages,
+      messages,
       options.userId,
       options.userFileExcludedFileIds,
     );
@@ -685,10 +670,9 @@ async function prepareProxyMessages(
           options.tokenBudget.contextLength,
         ) - estimateTokenLength([prefix, ...contextBlocks].join("\n\n")),
       );
-    const ragKgContext = await buildInternalKnowledgeContext(
-      processedMessages,
-      { maxTokens },
-    );
+    const ragKgContext = await buildInternalKnowledgeContext(messages, {
+      maxTokens,
+    });
     if (ragKgContext) {
       ragKgSources = ragKgContext.sources;
       contextBlocks.unshift(prefix + ragKgContext.message);
@@ -875,12 +859,14 @@ async function handleDedicatedCSGPTChatCompletions(
     if (record) controlledToolRecords.push(record);
   }
   let designAppendix = "";
+  let modelTurn: string | undefined;
   let designArtifact: CSGPTDesignArtifact | null = null;
   if (designIntent && designResponse) {
-    requestMessages = prepareDesignNarrativeMessages(
-      requestMessages,
-      buildDesignNarrativeInstruction(designIntent, designResponse),
-    );
+    const requirement = normalizeContentToText(requestMessages.at(-1)?.content);
+    modelTurn = `用户需求：\n${requirement}\n\n候选工件已由设计工具生成。\n${buildDesignNarrativeInstruction(
+      designIntent,
+      designResponse,
+    )}`;
     designAppendix = renderDeterministicDesignAppendix(
       designIntent,
       designResponse,
@@ -926,6 +912,7 @@ async function handleDedicatedCSGPTChatCompletions(
         userFileExcludedFileIds,
         userId,
         tokenBudget: { rest: requestRest, contextLength },
+        modelTurn,
       });
     } catch (error: any) {
       return NextResponse.json(

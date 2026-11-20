@@ -336,7 +336,11 @@ export function applyCSGPTContextBudget(
     boundedRest.max_tokens = outputTokens;
   }
 
-  return { messages: boundedMessages, rest: boundedRest };
+  return {
+    messages: boundedMessages,
+    rest: boundedRest,
+    requestedOutput: normalizedOutput,
+  };
 }
 
 export function reconcileCSGPTMeasuredBudget(
@@ -352,8 +356,8 @@ export function reconcileCSGPTMeasuredBudget(
   ) {
     throw new Error("后端分词计数无效，无法确认上下文预算。");
   }
-  const requested =
-    request.rest.max_completion_tokens ?? request.rest.max_tokens;
+  // 分词结果取代估算值，输出仍受原请求和实际共享窗口约束。
+  const requested = request.requestedOutput;
   const available =
     contextLength - measuredInputTokens - CSGPT_CONTEXT_SAFETY_MARGIN;
   if (available < Math.min(requested, CSGPT_MIN_OUTPUT_RESERVE)) {
@@ -367,5 +371,5 @@ export function reconcileCSGPTMeasuredBudget(
     if (Object.prototype.hasOwnProperty.call(rest, key))
       rest[key] = outputTokens;
   }
-  return { messages: request.messages, rest };
+  return { ...request, rest };
 }
