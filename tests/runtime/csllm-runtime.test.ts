@@ -52,6 +52,7 @@ let initialHashes: Record<string, string>;
 let networkAttempts = 0;
 let databaseAttempts = 0;
 const contexts: Array<{ text: string; sources: RagKgSource[] }> = [];
+let fullWindowSourceCount = 0;
 const graphPackets: RagEvidence[] = [];
 
 async function packageHashes() {
@@ -139,9 +140,22 @@ for (const scenario of [
     stream: true,
     query: "ASME NASA ANSYS buckling pressure t1 t2",
   },
+  {
+    enabled: true,
+    stream: true,
+    query: "ASME NASA ANSYS buckling pressure t1 t2",
+    contextLength: 8192,
+  },
   { enabled: false, stream: false, query: "复合材料耐压壳 外压 屈曲 设计" },
 ]) {
-  test(`聊天路由真实运行包 enabled=${scenario.enabled} stream=${scenario.stream}`, async (t) => {
+  test(`聊天路由真实运行包 enabled=${scenario.enabled} stream=${scenario.stream} context=${scenario.contextLength ?? environment.CSGPT_CS1_CONTEXT_LENGTH}`, async (t) => {
+    if (scenario.contextLength) {
+      process.env.CSGPT_CS1_CONTEXT_LENGTH = String(scenario.contextLength);
+      t.after(() => {
+        process.env.CSGPT_CS1_CONTEXT_LENGTH =
+          environment.CSGPT_CS1_CONTEXT_LENGTH;
+      });
+    }
     let messages: Array<{ role: string; content: string }> = [];
     const upstream = t.mock.method(
       globalThis,
@@ -175,7 +189,17 @@ for (const scenario of [
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: CSGPT_DEFAULT_MODEL,
-          messages: [{ role: "user", content: scenario.query }],
+          messages: [
+            ...(scenario.contextLength
+              ? [
+                  {
+                    role: "system",
+                    content: "载荷与边界条件使用已给定的单位。".repeat(90),
+                  },
+                ]
+              : []),
+            { role: "user", content: scenario.query },
+          ],
           stream: scenario.stream,
           max_tokens: 512,
           csgpt_internal_knowledge_enabled: scenario.enabled,
@@ -199,6 +223,11 @@ for (const scenario of [
     const tools = parseControlledToolRecordsHeader(response);
     if (scenario.enabled) {
       assert.ok(sources.some((source) => source.kind === "document"));
+      if (scenario.contextLength) {
+        assert.ok(sources.length < fullWindowSourceCount);
+      } else if (scenario.stream) {
+        fullWindowSourceCount = sources.length;
+      }
       assert.equal(
         new Set(sources.map((source) => source.id)).size,
         sources.length,
@@ -379,6 +408,8 @@ test("路由引用逐项对应当前 gzip 分块，条件及表格列投影完�
   for (const context of contexts) {
     for (const source of context.sources) {
       const row = rows.get(source.evidence!.chunk_id)!;
+      assert.ok(context.text.includes(`分块标识：${row.chunk_id}`), source.id);
+      assert.ok(context.text.includes(`分块指纹：${row.chunk_fingerprint}`), source.id);
       for (const condition of row.applicability_context)
         assert.ok(context.text.includes(condition), source.id);
       if (row.table_evidence.length)

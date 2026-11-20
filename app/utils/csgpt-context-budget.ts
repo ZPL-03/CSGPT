@@ -109,6 +109,51 @@ function contextPriority(message: any, index: number): number {
   return 0;
 }
 
+function isSystemMessage(message: any): boolean {
+  return message?.role === "system" || message?.role === "developer";
+}
+
+function requestedOutputTokens(
+  rest: Record<string, any>,
+  contextLength: number,
+) {
+  const requested = [rest.max_completion_tokens, rest.max_tokens].find(
+    (value) => typeof value === "number",
+  );
+  return Math.max(1, Math.floor(requested ?? contextLength));
+}
+
+function inputTokenBudget(contextLength: number, outputTokens: number) {
+  return Math.max(
+    1,
+    contextLength -
+      CSGPT_CONTEXT_SAFETY_MARGIN -
+      Math.min(outputTokens, CSGPT_MIN_OUTPUT_RESERVE),
+  );
+}
+
+/** 工程指令、工件与当前问题确定后，再给完整检索证据分配空间。 */
+export function referenceContextTokenBudget(
+  messages: any[],
+  rest: Record<string, any>,
+  contextLength: number,
+) {
+  const fixed = messages.filter(
+    (message, index) =>
+      isSystemMessage(message) || index === messages.length - 1,
+  );
+  return Math.max(
+    0,
+    inputTokenBudget(
+      contextLength,
+      requestedOutputTokens(rest, contextLength),
+    ) -
+      estimateMessagesTokens(fixed) -
+      CSGPT_HISTORY_COMPACTION_RESERVE -
+      4,
+  );
+}
+
 function retainMessagesWithinBudget(
   messages: any[],
   tokenBudget: number,
@@ -137,14 +182,12 @@ function retainMessagesWithinBudget(
     tokenCount = latestMessageTokens;
   }
 
-  // 系统提示词分为核心约束和可压缩增强上下文。优先保留高优先级内容，
-  // 低优先级检索文本在剩余预算中截取，而不是让整条请求因检索结果过长失败。
+  // 工程工件与检索证据作为完整单元保留，其余系统上下文按优先级分配空间。
   const systemIndexes = messages
     .map((message, index) => ({ message, index }))
     .filter(
       ({ message, index }) =>
-        index !== latestMessageIndex &&
-        (message?.role === "system" || message?.role === "developer"),
+        index !== latestMessageIndex && isSystemMessage(message),
     )
     .sort(
       (left, right) =>
@@ -187,7 +230,7 @@ function retainMessagesWithinBudget(
   // 按完整 user-assistant 轮次向前加入历史，避免超长回答被裁掉后留下孤立的旧用户消息，或反向留下没有问题的旧回答。
   let index = latestMessageIndex - 1;
   while (index >= 0) {
-    if (selectedIndexes.has(index)) {
+    if (selectedIndexes.has(index) || isSystemMessage(messages[index])) {
       index -= 1;
       continue;
     }
@@ -257,21 +300,8 @@ export function applyCSGPTContextBudget(
   ) {
     throw new Error("enable_thinking 必须是布尔值。");
   }
-  const requestedOutput =
-    typeof rest.max_completion_tokens === "number"
-      ? rest.max_completion_tokens
-      : typeof rest.max_tokens === "number"
-      ? rest.max_tokens
-      : contextLength;
-  const normalizedOutput = Math.max(1, Math.floor(requestedOutput));
-  const minimumOutputReserve = Math.min(
-    normalizedOutput,
-    CSGPT_MIN_OUTPUT_RESERVE,
-  );
-  const inputBudget = Math.max(
-    1,
-    contextLength - CSGPT_CONTEXT_SAFETY_MARGIN - minimumOutputReserve,
-  );
+  const normalizedOutput = requestedOutputTokens(rest, contextLength);
+  const inputBudget = inputTokenBudget(contextLength, normalizedOutput);
   const boundedMessages = retainMessagesWithinBudget(messages, inputBudget);
   const inputTokens = estimateMessagesTokens(boundedMessages);
   const availableOutput = Math.max(

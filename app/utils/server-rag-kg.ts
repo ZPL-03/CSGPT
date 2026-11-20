@@ -4,6 +4,7 @@ import * as readline from "readline";
 import * as zlib from "zlib";
 import { createHash } from "node:crypto";
 import { normalizeKnowledgeGraphQuery } from "./knowledge-graph";
+import { estimateTokenLength } from "./token";
 import {
   parseRagEvidenceMetadata,
   isUsableRagEvidence,
@@ -996,10 +997,10 @@ export async function queryKnowledgeGraph(
 
 export async function buildInternalKnowledgeContext(
   messages: ChatMessageLike[],
-  options: { maxChars?: number } = {},
+  options: { maxChars?: number; maxTokens?: number } = {},
 ) {
   const query = lastUserMessage(messages);
-  if (!query) return null;
+  if (!query || options.maxTokens === 0) return null;
 
   const evidenceIndex: EvidenceIndex = new Map();
   const chunks = await searchRag(query, evidenceIndex);
@@ -1039,17 +1040,22 @@ export async function buildInternalKnowledgeContext(
     "reference 表示文献参考，source_conditions_only 表示仅在证据原文条件下使用。适用条件与表格列投影属于证据的一部分，不得删除条件、补写缺失单位或恢复已排除的表格列。质量标记不证明科学结论正确。知识图谱关系是定位线索，其引用以绑定的当前分块为准。",
   ].join("\n");
   let usedChars = preamble.length;
+  let usedTokens = estimateTokenLength(preamble);
   const maxChars = options.maxChars ?? MAX_CONTEXT_CHARS;
+  const maxTokens = options.maxTokens ?? Infinity;
   // 原文、全部条件、列投影和引用身份一起计入预算，超限时整包不纳入。
   const appendContext = (block: string, additions: RagKgSource[]) => {
+    const tokens = estimateTokenLength(block) + 1;
     if (
       usedChars + block.length + 2 > maxChars ||
+      usedTokens + tokens > maxTokens ||
       !ragKgSourcesFitHeader([...sources, ...additions])
     )
       return false;
     contextParts.push(block);
     sources.push(...additions);
     usedChars += block.length + 2;
+    usedTokens += tokens;
     return true;
   };
   const documentBlock = (source: RagKgDocumentSource, evidence: RagEvidence) =>

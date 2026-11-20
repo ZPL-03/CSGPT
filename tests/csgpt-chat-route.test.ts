@@ -7,13 +7,14 @@ import {
   CSGPT_MODEL_3,
 } from "../app/constant";
 import { designArtifactMessage } from "../app/utils/design-context";
-import { CSGPT_NUMBER_DISPLAY_RULE } from "../app/prompts/csgpt";
+import { CSGPT_SYSTEM_PROMPT } from "../app/prompts/csgpt";
 import { POST } from "../app/api/[provider]/[...path]/route";
 import { CSGPT_DESIGN_ARTIFACT_FIELD } from "../app/utils/structured-design";
 import { designFixture } from "./helpers/design-fixtures";
 
 const question =
   "设计50组复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm。";
+const sessionPrompt = "按用户指定工况解释设计。";
 
 // 路由测试只替换 HTTP 服务，保留意图解析、合同校验和响应拼装。
 
@@ -88,9 +89,16 @@ for (const mode of [
           body.messages.filter(
             (message: any) =>
               message.role === "system" &&
-              message.content === CSGPT_NUMBER_DISPLAY_RULE,
+              message.content === CSGPT_SYSTEM_PROMPT,
           ).length,
           1,
+        );
+        assert.equal(
+          body.messages.some(
+            (message: any) =>
+              message.role === "system" && message.content === sessionPrompt,
+          ),
+          mode === "stream",
         );
         assert.ok(
           body.messages.some(
@@ -141,7 +149,7 @@ for (const mode of [
           stream: mode === "stream",
           messages: [
             ...(mode === "stream"
-              ? [{ role: "system", content: "按用户指定工况解释设计。" }]
+              ? [{ role: "system", content: sessionPrompt }]
               : []),
             { role: "user", content: question },
           ],
@@ -360,6 +368,7 @@ test("FEM-ready 自然语言追问按 TMP 编号绑定工件，未知编号在�
   const answer =
     "TMP_1 包含40层，当前未求解，不能根据历史参考判定当前设计安全。";
   const calls: string[] = [];
+  let tokenizedMessages: unknown;
   t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
     calls.push(url);
     assert.ok(
@@ -370,6 +379,8 @@ test("FEM-ready 自然语言追问按 TMP 编号绑定工件，未知编号在�
     const factMessage = body.messages.find((message: any) =>
       message.content.includes('"design_fingerprint"'),
     );
+    assert.equal(factMessage.role, "system");
+    assert.deepEqual(Object.keys(factMessage).sort(), ["content", "role"]);
     const facts = JSON.parse(
       factMessage.content.slice(factMessage.content.indexOf("{")),
     );
@@ -383,8 +394,11 @@ test("FEM-ready 自然语言追问按 TMP 编号绑定工件，未知编号在�
       facts.candidates[0].screening.current_design_verdict,
       "pending",
     );
-    if (url.endsWith("tokenize"))
+    if (url.endsWith("tokenize")) {
+      tokenizedMessages = body.messages;
       return Response.json({ count: 8000, max_model_len: 32768 });
+    }
+    assert.deepEqual(body.messages, tokenizedMessages);
     return Response.json({
       choices: [{ message: { content: answer }, finish_reason: "stop" }],
     });

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import cases from "../../evals/csgpt/conversation-cases.json";
 import { CSGPT_MODEL_2, StoreKey } from "../../app/constant";
+import { validateDesignContract } from "../../app/utils/design-contract";
 import { readE2EConfiguration, TestConversationScope } from "./safety";
 import {
   CSGPTDesignArtifactAssembler,
@@ -275,7 +276,10 @@ test("登录态页面：RAG对照、50候选、连续追问、重载和ABD", asy
     const design = await ask(page, cases.design, evidence, scope);
     expect(design.artifact).toBeTruthy();
     const artifact = design.artifact!;
+    expect(artifact.generation_mode).toBe("fem_ready_cylindrical_shell");
     expect(artifact.result.candidate_count).toBe(50);
+    expect(validateDesignContract(artifact).result.candidates.at(-1)?.candidate_id).toBe("TMP_50");
+    expect(design.text).toMatch(/^\|\s*TMP_50\s*\|/m);
     for (const [index, prompt] of cases.followups.entries()) {
       const answer = await ask(page, prompt, evidence, scope, artifact);
       expect(answer.artifact, "解释追问不能重新生成工件").toBeUndefined();

@@ -7,10 +7,7 @@ import {
   CSGPT_MODEL_2,
   CSGPT_MODEL_3,
 } from "@/app/constant";
-import {
-  CSGPT_NUMBER_DISPLAY_RULE,
-  CSGPT_SYSTEM_PROMPT,
-} from "@/app/prompts/csgpt";
+import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 import { buildInternalKnowledgeContext } from "@/app/utils/server-rag-kg";
 import {
   encodeRagKgSourcesHeader,
@@ -70,7 +67,9 @@ import {
 import {
   applyCSGPTContextBudget,
   reconcileCSGPTMeasuredBudget,
+  referenceContextTokenBudget,
 } from "@/app/utils/csgpt-context-budget";
+import { estimateTokenLength } from "@/app/utils/token";
 import {
   countVLLMChatTokens,
   VLLMTokenizerError,
@@ -618,6 +617,7 @@ async function prepareProxyMessages(
     userFileRagEnabled: boolean;
     userFileExcludedFileIds: string[];
     userId?: string | null;
+    tokenBudget?: { rest: Record<string, any>; contextLength: number };
   },
 ) {
   const processedMessages = [...messages];
@@ -626,31 +626,14 @@ async function prepareProxyMessages(
   let sessionFileSources: SessionFileSource[] = [];
   let userFileSources: UserFileSource[] = [];
   const contextBlocks: string[] = [];
-  if (
-    options.injectCSGPTPrompt &&
-    !processedMessages.some((msg: any) => msg.role === "system")
-  ) {
+  // 会话记忆与面具提示只补充上下文，内置模型始终使用平台工程约定。
+  if (options.injectCSGPTPrompt) {
     processedMessages.unshift({
       role: "system",
       content: CSGPT_SYSTEM_PROMPT,
       _csgptContextPriority: 100,
+      _csgptContextAtomic: true,
     });
-  }
-
-  if (options.injectCSGPTPrompt) {
-    processedMessages.unshift({
-      role: "system",
-      content: CSGPT_NUMBER_DISPLAY_RULE,
-      _csgptContextPriority: 100,
-    });
-  }
-
-  if (options.ragKgEnabled) {
-    const ragKgContext = await buildInternalKnowledgeContext(processedMessages);
-    if (ragKgContext?.message) {
-      ragKgSources = ragKgContext.sources;
-      contextBlocks.push(`项目内部知识库上下文\n${ragKgContext.message}`);
-    }
   }
 
   if (options.webSearchEnabled || options.academicSearchEnabled) {
@@ -690,6 +673,28 @@ async function prepareProxyMessages(
     }
   }
 
+  if (options.ragKgEnabled) {
+    const prefix = "项目内部知识库上下文\n";
+    const maxTokens =
+      options.tokenBudget &&
+      Math.max(
+        0,
+        referenceContextTokenBudget(
+          processedMessages,
+          options.tokenBudget.rest,
+          options.tokenBudget.contextLength,
+        ) - estimateTokenLength([prefix, ...contextBlocks].join("\n\n")),
+      );
+    const ragKgContext = await buildInternalKnowledgeContext(
+      processedMessages,
+      { maxTokens },
+    );
+    if (ragKgContext) {
+      ragKgSources = ragKgContext.sources;
+      contextBlocks.unshift(prefix + ragKgContext.message);
+    }
+  }
+
   if (contextBlocks.length > 0) {
     let insertIndex = 0;
     while (
@@ -706,7 +711,7 @@ async function prepareProxyMessages(
         : "system",
       content: contextBlocks.join("\n\n"),
       _csgptContextPriority: 20,
-      _csgptContextAtomic: options.ragKgEnabled,
+      _csgptContextAtomic: ragKgSources.length > 0,
     });
   }
 
@@ -843,29 +848,9 @@ async function handleDedicatedCSGPTChatCompletions(
     }
   }
 
-  let preparedMessages: Awaited<ReturnType<typeof prepareProxyMessages>>;
-  try {
-    preparedMessages = await prepareProxyMessages(messages, {
-      injectCSGPTPrompt: true,
-      ragKgEnabled,
-      webSearchEnabled,
-      academicSearchEnabled,
-      sessionFileRagEnabled,
-      sessionFileRecords,
-      userFileRagEnabled,
-      userFileExcludedFileIds,
-      userId,
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: true, message: error?.message || "外部增强失败" },
-      { status: 500 },
-    );
-  }
-
-  let requestMessages = preparedMessages.messages;
+  let requestMessages = messages;
   let requestRest = rest;
-  const controlledToolRecords = [...preparedMessages.controlledToolRecords];
+  const controlledToolRecords: ControlledToolRecord[] = [];
   if (laminateContext) {
     requestMessages = [
       ...requestMessages.slice(0, -1),
@@ -921,23 +906,52 @@ async function handleDedicatedCSGPTChatCompletions(
     if (record) controlledToolRecords.push(record);
   }
 
+  const contextLength = upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH;
+  let preparedMessages: Awaited<ReturnType<typeof prepareProxyMessages>>;
   let budgetedRequest: ReturnType<typeof applyCSGPTContextBudget>;
+  let upstreamMessages: ReturnType<typeof normalizeMessagesToText>;
   try {
     if (designIntent && designResponse) {
       requestRest = prepareDesignNarrativeRest(rest);
     }
+    try {
+      preparedMessages = await prepareProxyMessages(requestMessages, {
+        injectCSGPTPrompt: true,
+        ragKgEnabled,
+        webSearchEnabled,
+        academicSearchEnabled,
+        sessionFileRagEnabled,
+        sessionFileRecords,
+        userFileRagEnabled,
+        userFileExcludedFileIds,
+        userId,
+        tokenBudget: { rest: requestRest, contextLength },
+      });
+    } catch (error: any) {
+      return NextResponse.json(
+        { error: true, message: error?.message || "外部增强失败" },
+        { status: 500 },
+      );
+    }
+    controlledToolRecords.unshift(...preparedMessages.controlledToolRecords);
     budgetedRequest = applyCSGPTContextBudget(
-      requestMessages,
+      preparedMessages.messages,
       requestRest,
-      upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
+      contextLength,
     );
+    upstreamMessages = normalizeMessagesToText(budgetedRequest.messages);
     if (model === CSGPT_MODEL_2) {
+      // CS2 模板使用三种文本角色；工件和预算元数据只在应用层使用。
+      upstreamMessages = upstreamMessages.map(({ role, content }) => ({
+        role: role === "developer" ? "system" : role,
+        content,
+      }));
       const measured = await countVLLMChatTokens({
         baseUrl: upstream.baseUrl,
         apiKey: upstream.apiKey,
         model: upstreamModel,
-        messages: normalizeMessagesToText(budgetedRequest.messages),
-        contextLength: upstream.contextLength || DEFAULT_CSGPT_CONTEXT_LENGTH,
+        messages: upstreamMessages,
+        contextLength,
         chatTemplateKwargs: budgetedRequest.rest.chat_template_kwargs,
       });
       budgetedRequest = reconcileCSGPTMeasuredBudget(
@@ -973,7 +987,7 @@ async function handleDedicatedCSGPTChatCompletions(
       headers,
       body: JSON.stringify({
         model: upstreamModel,
-        messages: normalizeMessagesToText(budgetedRequest.messages),
+        messages: upstreamMessages,
         stream,
         ...budgetedRequest.rest,
       }),
@@ -1226,6 +1240,9 @@ async function handleChatCompletions(
         userFileRagEnabled,
         userFileExcludedFileIds,
         userId,
+        tokenBudget: backend.isCSGPT
+          ? { rest, contextLength: getCSGPTContextLength(model, config) }
+          : undefined,
       });
       processedMessages = preparedMessages.messages;
       ragKgSources = preparedMessages.ragKgSources;
