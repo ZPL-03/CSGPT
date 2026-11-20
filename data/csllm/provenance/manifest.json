@@ -1,6 +1,6 @@
 {
   "package": "csllm",
-  "generated_at": "2026-11-19T02:20:22.345703+00:00",
+  "generated_at": "2026-11-19T15:54:55.137856+00:00",
   "source_files": {
     "rag_chunks": "dataset/processed/rag/rag_chunks.jsonl",
     "relations": "dataset/processed/kg/relations.jsonl",
@@ -8,9 +8,9 @@
     "kg_stats": "dataset/processed/kg/kg_stats.json"
   },
   "record_counts": {
-    "rag_chunks": 157480,
-    "relations": 234030,
-    "entities": 2218,
+    "rag_chunks": 155599,
+    "relations": 234200,
+    "entities": 2217,
     "sources": 1931
   },
   "schemas": {
@@ -87,26 +87,26 @@
   "files": [
     {
       "path": "runtime/rag_chunks.compact.jsonl.gz",
-      "bytes": 88749776,
-      "sha256": "e48896afc6e0c4828878a583401ae51fb8c68c6ab0b51769f17ef605c8b39800",
-      "records": 157480
+      "bytes": 88088965,
+      "sha256": "b2ea960854e0587e8b2619db6e29fed34f11855f99134e8bb74fe354008f5261",
+      "records": 155599
     },
     {
       "path": "runtime/relations.compact.jsonl.gz",
-      "bytes": 21757843,
-      "sha256": "47781ab6c1f6496834f520a174c40961408c2ccfc59a08f3b4659ce4a07a1bf1",
-      "records": 234030
+      "bytes": 21879014,
+      "sha256": "3653b82b08aa5471126d710e3fc184c8306c3660c02816830c952505a2deaed5",
+      "records": 234200
     },
     {
       "path": "kg/entities.jsonl",
-      "bytes": 1645654,
-      "sha256": "e0a6a4f4ab931546bc31d1a74481f916961fdf4b3542287d34ac87e5dde8e709",
-      "records": 2218
+      "bytes": 1651213,
+      "sha256": "681e63c2829ffedf558a07969d333497d63c3eaeda37d603904d0dcbecf5d26e",
+      "records": 2217
     },
     {
       "path": "kg/kg_stats.json",
-      "bytes": 10157,
-      "sha256": "11091186b0ea38e277c8b6bbb9ccf30eaeafb67bf604bea2037a977d9c169579",
+      "bytes": 10722,
+      "sha256": "43145d928845c6b567326b65fa57dcfbcefacd3485c388a205e1ccb0c66749f7",
       "records": null
     },
     {
@@ -118,7 +118,7 @@
     {
       "path": "provenance/file_manifest.jsonl",
       "bytes": 717,
-      "sha256": "6679f552e8a0f5a912be534abb49e6e67e6cbfd2395c128ca277169c11ea9d34",
+      "sha256": "987c4015962e15eb43bd09786410995cb813486f089b4ede2530956f55fb2f29",
       "records": 5
     }
   ]
