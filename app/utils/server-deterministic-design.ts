@@ -8,6 +8,7 @@ import {
   type FEMReadyDesignServiceResponse,
 } from "./design-contract";
 import { DESIGN_FACT_RULES } from "./design-context";
+import { designNarrativeTask } from "./design-narrative";
 export type {
   DesignServiceResponse,
   DeterministicDesignServiceResponse,
@@ -972,15 +973,40 @@ export function buildDesignNarrativeInstruction(
     throw new Error("设计意图与设计服务响应模式不一致。");
   }
   validateDesignInterpretationContext(response);
-  // 初始说明使用候选集合摘要；逐角统计由完整工件和点名追问提供。
+  // 说明使用集合事实，精确参数及数值取值由候选表和点名追问提供。
   const overview = { ...response.interpretation_context.facts };
-  delete overview["实际使用角度/deg"];
-  delete overview["实际角度层数合计"];
+  for (const field of [
+    "实际使用角度/deg",
+    "实际角度层数合计",
+    "候选参数取值",
+    "载荷条件",
+    "设计目标",
+  ]) {
+    delete overview[field];
+  }
+  for (const name of ["单层厚度", "总厚度"]) {
+    const key = `${name}/mm`;
+    const values = overview[key] as number[];
+    delete overview[key];
+    overview[`${name}已知范围/mm`] = values.length
+      ? { min: Math.min(...values), max: Math.max(...values) }
+      : null;
+  }
+  if (response.generation_mode === "fem_ready_cylindrical_shell") {
+    const { request } = response.result;
+    overview["制造工艺"] = request.manufacturing_process;
+    overview["外压依据"] = request.load_conditions.pressure_basis;
+    overview["设计目标"] = {
+      安全系数: request.design_targets.safety_factor,
+      主要目标: request.design_targets.primary_objective,
+    };
+  }
   return (
-    "结合当前问题说明不同候选分组的取舍、铺层与厚度的设计依据，以及制造和有限元校核要点。" +
+    designNarrativeTask +
+    "\n" +
     "讨论铺层时分别说明中面对称和正负角均衡的判据。角度统计是几何特征，刚度结论还需要材料、层厚与层序。" +
     "区分已知的总厚度和单层厚度；等厚条件未确定时，不能把平均层厚当作实际层厚。" +
-    "候选表由应用程序展示，说明中只引用支持结论的统计，不逐项复述候选或角度清单。" +
+    "候选来源分组和历史参考与目标比较是不同统计；各组交叉关系见工件表。说明只引用影响取舍的事实。" +
     DESIGN_FACT_RULES +
     "\n" +
     JSON.stringify(overview) +

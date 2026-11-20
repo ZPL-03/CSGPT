@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { designFixture } from "./helpers/design-fixtures";
+import {
+  designFixture,
+  designNarrativeFixture,
+} from "./helpers/design-fixtures";
 import { toCSGPTDesignArtifact } from "../app/utils/structured-design";
 import {
   buildLaminateCalculationContext,
@@ -126,7 +129,13 @@ import {
 const femFixture = designFixture("fem") as FEMReadyDesignServiceResponse;
 const candidates = femFixture.result.candidates;
 const artifact: CSGPTDesignArtifact = toCSGPTDesignArtifact(femFixture);
-const narrative = "需求与边界\n圆柱段长度 600 mm。";
+const narrative = JSON.stringify(designNarrativeFixture);
+const renderedNarrative = [
+  `### 方案取舍\n\n${designNarrativeFixture.tradeoffs}`,
+  `### 铺层与厚度\n\n${designNarrativeFixture.layup}`,
+  `### 制造\n\n${designNarrativeFixture.manufacturing}`,
+  `### 有限元校核\n\n${designNarrativeFixture.verification}`,
+].join("\n\n");
 
 const designRequest =
   "生成50组 FEM-ready 复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm，两端金属封头。";
@@ -402,7 +411,14 @@ test("设计说明读取与候选指纹绑定的服务统计", () => {
   assert.match(instruction, /"角度序列镜像对称的候选数量":0/);
   assert.match(instruction, /"正负角层数均衡的候选数量":50/);
   assert.ok(response.interpretation_context.facts["实际角度层数合计"]);
-  assert.doesNotMatch(instruction, /"实际使用角度\/deg"|"实际角度层数合计"/);
+  assert.doesNotMatch(
+    instruction,
+    /"实际使用角度\/deg"|"实际角度层数合计"|"候选参数取值"|"external_pressure_MPa"/,
+  );
+  assert.match(instruction, /"单层厚度已知范围\/mm":\{"min":\d/);
+  assert.ok(
+    instruction.includes(response.result.request.manufacturing_process),
+  );
   response.interpretation_context.design_fingerprint = "b".repeat(64);
   assert.throws(
     () => buildDesignNarrativeInstruction(intent, response),
@@ -501,7 +517,10 @@ for (const reason of ["stop"]) {
     };
     const output = appendDesignToOpenAICompletion(input, appendix, artifact);
     assert.equal(output.choices[0].finish_reason, reason);
-    assert.equal(output.choices[0].message.content, narrative + appendix);
+    assert.equal(
+      output.choices[0].message.content,
+      renderedNarrative + appendix,
+    );
     assert.equal(input.choices[0].message.content, narrative);
     assert.deepEqual(output[CSGPT_DESIGN_ARTIFACT_FIELD], artifact);
   });
@@ -517,7 +536,7 @@ for (const reason of ["stop"]) {
       const content = events
         .map((item) => item.choices?.[0]?.delta?.content || "")
         .join("");
-      assert.equal(content, narrative + appendix);
+      assert.equal(content, renderedNarrative + appendix);
       assert.ok(content.includes("TMP_50"));
       assert.deepEqual(
         events
@@ -654,7 +673,15 @@ test("有工件的错误解释只返回错误事件，不展示伪造安全说�
   const body = completionErrorEvents(
     appendDesignToOpenAIStream(
       inputStream(
-        event(delta("当前没有候选达到安全阈值。", "stop")) + "data: [DONE]\n\n",
+        event(
+          delta(
+            JSON.stringify({
+              ...designNarrativeFixture,
+              verification: "当前没有候选达到安全阈值。",
+            }),
+            "stop",
+          ),
+        ) + "data: [DONE]\n\n",
       ),
       appendix,
       "csllm",
@@ -663,7 +690,33 @@ test("有工件的错误解释只返回错误事件，不展示伪造安全说�
   );
   const text = await new Response(body).text();
   assert.match(text, /invalid_completion/);
+  assert.match(text, /模型解释与工件冲突/);
   assert.doesNotMatch(text, /"delta"|\[DONE\]|csgpt_design_artifact/);
+});
+
+test("不完整说明、重复候选表和额外字段不能随工件返回", () => {
+  for (const content of [
+    JSON.stringify({ ...designNarrativeFixture, manufacturing: " " }),
+    JSON.stringify({ ...designNarrativeFixture, table: "| TMP_1 |" }),
+    JSON.stringify({
+      ...designNarrativeFixture,
+      tradeoffs: "| TMP_1 |\n| TMP_2 |",
+    }),
+    JSON.stringify({ ...designNarrativeFixture, layup: "铺".repeat(301) }),
+    JSON.stringify({ ...designNarrativeFixture, layup: "候选的层序为 [0/±30/90]s。" }),
+  ]) {
+    assert.throws(
+      () =>
+        appendDesignToOpenAICompletion(
+          {
+            choices: [{ message: { content }, finish_reason: "stop" }],
+          },
+          appendix,
+          artifact,
+        ),
+      /工程说明/,
+    );
+  }
 });
 
 test("取消错误事件适配器会取消上游，且不发送正常终态", async () => {

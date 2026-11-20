@@ -215,7 +215,7 @@ SPRINGER_OPENACCESS_API_KEY=
 
 `CSGPT_CS*_CONTEXT_LENGTH` 表示对应上游的总上下文窗口，输入消息和输出消息共用该窗口。CSGPT 上游默认按 16384 tokens 配置；如果上游服务使用其他窗口，应按实际服务能力填写。CSGPT 模型的 `max_tokens` 默认目标输出预算为 16384，不是输入长度。服务端保留最新消息，按估算的 token 数优先为系统上下文分配空间，必要时压缩上下文或裁剪较早的历史轮次，再分配剩余输出预算。CS2 还会调用上游 `/tokenize`，按实际输入 token 数和后端上下文窗口校核预算；分词失败或回答空间不足时不发送生成请求。其他 Provider 的 `max_tokens` 请求不经过这套 CSGPT 专用预算处理。
 
-`CSGPT_CS2_DESIGN_BASE_URL` 和 `CSGPT_CS2_DESIGN_API_KEY` 是 CS2 统一设计接口配置。未填写时分别复用 `CSGPT_CS2_BASE_URL` 和 `CSGPT_CS2_API_KEY`；浏览器只访问 CSGPT 服务端代理，不接收上游密钥。服务端和浏览器共用候选合同，核对请求参数、逐层厚度、历史压力、源行和当前求解状态。候选接口须返回 `interpretation_context`，其中的分组、已知取值和未知数量由候选数据复算核对后交给模型解释。完整候选表由结构化字段渲染，不使用接口中的 Markdown。合同缺失或不一致时返回错误。
+`CSGPT_CS2_DESIGN_BASE_URL` 和 `CSGPT_CS2_DESIGN_API_KEY` 是 CS2 统一设计接口配置。未填写时分别复用 `CSGPT_CS2_BASE_URL` 和 `CSGPT_CS2_API_KEY`；浏览器通过 CSGPT 服务端访问上游。服务端和浏览器共用候选合同，核对请求参数、逐层厚度、历史压力、源行和当前求解状态。候选表由工件字段渲染。候选接口的 `interpretation_context` 由服务端按工件复算，模型据此说明方案取舍、铺层与厚度、制造和有限元校核。CS2 的工程说明请求使用 `response_format: json_schema`，服务端校验四段正文后，与完整候选表一起返回。合同不一致或说明无效时返回错误。
 
 FEM-ready 请求中的单层厚度按 40 层转换为源表总厚度筛选条件；同时给出总厚度时须满足厚度算术。指定分析缺陷比时只选择对应源行，不覆盖源行工况。缺陷比支持小数、百分比和千分比；未指定时保留各源行取值。端部边界的肯定与否定要求分别解析，冲突或仅排除边界的请求返回输入错误。
 

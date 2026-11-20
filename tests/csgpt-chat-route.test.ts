@@ -10,7 +10,10 @@ import { designArtifactMessage } from "../app/utils/design-context";
 import { CSGPT_SYSTEM_PROMPT } from "../app/prompts/csgpt";
 import { POST } from "../app/api/[provider]/[...path]/route";
 import { CSGPT_DESIGN_ARTIFACT_FIELD } from "../app/utils/structured-design";
-import { designFixture } from "./helpers/design-fixtures";
+import {
+  designFixture,
+  designNarrativeFixture,
+} from "./helpers/design-fixtures";
 
 const question =
   "设计50组复合材料耐压壳方案，水深5000米，圆柱壳长度600mm，内半径150mm。";
@@ -73,13 +76,20 @@ for (const mode of [
           });
           assert.equal(body.messages.at(-1)?.role, "user");
           assert.ok(body.messages.at(-1)?.content.includes(question));
-          assert.ok(body.messages.at(-1)?.content.includes('"当前有限元结果":null'));
+          assert.ok(
+            body.messages.at(-1)?.content.includes('"当前有限元结果":null'),
+          );
           return mode === "tokenizer_error"
             ? Response.json({ error: "unavailable" }, { status: 503 })
             : Response.json({ count: 31000, max_model_len: 32768 });
         }
         assert.equal(url, "https://llm.invalid/v1/chat/completions");
         assert.equal(body.model, "test-adapter");
+        assert.equal(body.response_format.type, "json_schema");
+        assert.deepEqual(
+          body.response_format.json_schema.schema.required,
+          Object.keys(designNarrativeFixture),
+        );
         assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
         assert.ok(body.max_tokens > 0 && body.max_tokens < 4096);
         assert.equal(body.messages.at(-1)?.role, "user");
@@ -99,14 +109,16 @@ for (const mode of [
           ),
           mode === "stream",
         );
-        assert.ok(body.messages.at(-1)?.content.includes('"当前有限元结果":null'));
+        assert.ok(
+          body.messages.at(-1)?.content.includes('"当前有限元结果":null'),
+        );
         if (mode === "stream") {
           const events = [
             {
               choices: [
                 {
                   index: 0,
-                  delta: { content: "候选采用对称均衡铺层。" },
+                  delta: { content: JSON.stringify(designNarrativeFixture) },
                   finish_reason: null,
                 },
               ],
@@ -124,7 +136,10 @@ for (const mode of [
             {
               index: 0,
               message: {
-                content: mode === "empty" ? "" : "候选采用对称均衡铺层。",
+                content:
+                  mode === "empty"
+                    ? ""
+                    : JSON.stringify(designNarrativeFixture),
               },
               finish_reason: "stop",
             },
@@ -164,6 +179,7 @@ for (const mode of [
         50,
       );
       assert.ok(data.choices[0].message.content.includes("| 50 |"));
+      assert.ok(data.choices[0].message.content.startsWith("### 方案取舍"));
     } else if (mode === "stream") {
       assert.equal(response.status, 200);
       const text = await response.text();
@@ -171,6 +187,7 @@ for (const mode of [
         text.indexOf("| 50 |") < text.lastIndexOf('"finish_reason":"stop"'),
       );
       assert.ok(text.endsWith("data: [DONE]\n\n"));
+      assert.ok(text.includes("### 有限元校核"));
     } else {
       assert.equal(response.status, 502);
       assert.equal((await response.json()).error, true);

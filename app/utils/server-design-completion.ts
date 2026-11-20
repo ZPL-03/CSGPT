@@ -3,7 +3,10 @@ import {
   CSGPT_DESIGN_ARTIFACT_FIELD,
   type CSGPTDesignArtifact,
 } from "./structured-design";
-import { designNarrativeValidator } from "./design-narrative";
+import {
+  designNarrativeRenderer,
+  designNarrativeResponseFormat,
+} from "./design-narrative";
 
 const DESIGN_NARRATIVE_MAX_TOKENS = 4096;
 const CONTENT_CHUNK_CHARS = 1200;
@@ -50,7 +53,10 @@ export function prepareDesignNarrativeRest(rest: Record<string, any>) {
   if (rest.n !== undefined && rest.n !== 1) {
     throw new Error("确定性设计回答只支持单个完成结果。");
   }
-  const result = { ...rest };
+  const result: Record<string, any> = {
+    ...rest,
+    response_format: designNarrativeResponseFormat,
+  };
   const requestedTokens = rest.max_completion_tokens ?? rest.max_tokens;
   delete result.max_completion_tokens;
   result.max_tokens =
@@ -104,8 +110,11 @@ export function appendDesignToOpenAICompletion(
   appendix: string,
   designArtifact: CSGPTDesignArtifact,
 ) {
-  validateTextCompletion(data, designNarrativeValidator(designArtifact));
+  validateTextCompletion(data);
   const choice = data.choices[0];
+  const narrative = designNarrativeRenderer(designArtifact)(
+    choice.message.content,
+  );
   return {
     ...data,
     [CSGPT_DESIGN_ARTIFACT_FIELD]: designArtifact,
@@ -114,7 +123,7 @@ export function appendDesignToOpenAICompletion(
         ...choice,
         message: {
           ...choice.message,
-          content: choice.message.content + appendix,
+          content: narrative + appendix,
         },
         finish_reason: choice.finish_reason,
       },
@@ -128,12 +137,11 @@ export function appendDesignToOpenAIStream(
   model: string,
   designArtifact: CSGPTDesignArtifact,
 ) {
-  return completeTextStream(
-    upstreamBody,
-    model,
-    designNarrativeValidator(designArtifact),
-    { appendix, designArtifact },
-  );
+  return completeTextStream(upstreamBody, model, undefined, {
+    appendix,
+    designArtifact,
+    render: designNarrativeRenderer(designArtifact),
+  });
 }
 
 /** 层合板解释使用同一完成协议，但不追加候选或伪造设计工件。 */
@@ -149,7 +157,11 @@ function completeTextStream(
   upstreamBody: ReadableStream<Uint8Array>,
   model: string,
   validateNarrative?: (text: string) => void,
-  extension?: { appendix: string; designArtifact: CSGPTDesignArtifact },
+  extension?: {
+    appendix: string;
+    designArtifact: CSGPTDesignArtifact;
+    render: (text: string) => string;
+  },
 ) {
   const reader = upstreamBody.getReader();
   const decoder = new TextDecoder();
@@ -218,8 +230,10 @@ function completeTextStream(
           }
         }
         // 有工件的解释先完成事实检查，错误说明不能作为候选结果展示。
-        if (validateNarrative) heldEvents.push(payload);
-        else send(payload);
+        if (!extension) {
+          if (validateNarrative) heldEvents.push(payload);
+          else send(payload);
+        }
       };
 
       try {
@@ -242,15 +256,17 @@ function completeTextStream(
         validateNarrative?.(narrative);
         for (const payload of heldEvents) send(payload);
 
-        const appendix = extension?.appendix || "";
+        const rendered = extension
+          ? extension.render(narrative) + extension.appendix
+          : "";
         for (
           let offset = 0;
-          offset < appendix.length;
+          offset < rendered.length;
           offset += CONTENT_CHUNK_CHARS
         ) {
           send(
             chunk({
-              content: appendix.slice(offset, offset + CONTENT_CHUNK_CHARS),
+              content: rendered.slice(offset, offset + CONTENT_CHUNK_CHARS),
             }),
           );
         }

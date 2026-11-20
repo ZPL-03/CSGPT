@@ -1,6 +1,79 @@
 import { validateDesignContract } from "./design-contract";
 import type { CSGPTDesignArtifact } from "./structured-design";
 
+const DESIGN_NARRATIVE_SECTIONS = {
+  tradeoffs: ["方案取舍", "结合候选分组及工程目标说明适用条件与取舍。"],
+  layup: ["铺层与厚度", "结合已知层序统计和厚度说明设计依据。"],
+  manufacturing: ["制造", "说明工艺可行性及需要控制的制造条件。"],
+  verification: ["有限元校核", "说明建模、校核重点与结论适用范围。"],
+} as const;
+const SECTION_LENGTH = 300;
+const sections = Object.entries(DESIGN_NARRATIVE_SECTIONS);
+const EXPLICIT_LAYUP =
+  /\[[\d+−±°._() -]*\d[\d+−±°._() -]*\/[\d+−±°._()/ -]*\d[\d+−±°._()/ -]*\]/u;
+
+export const designNarrativeResponseFormat = {
+  type: "json_schema",
+  json_schema: {
+    name: "design_narrative",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: Object.fromEntries(
+        sections.map(([key, [, description]]) => [
+          key,
+          { type: "string", description },
+        ]),
+      ),
+      required: sections.map(([key]) => key),
+      additionalProperties: false,
+    },
+  },
+} as const;
+
+export const designNarrativeTask =
+  `根据给定的集合统计编写工程说明，输出 JSON 对象。每个字段是一段正文，至多 ${SECTION_LENGTH} 字；具体层序由候选表展示。\n` +
+  sections.map(([key, [, description]]) => `${key}：${description}`).join("\n");
+
+/** 校核结构与可识别的事实冲突，再将解释转换成聊天正文。 */
+export function designNarrativeRenderer(artifact: CSGPTDesignArtifact) {
+  const validate = designNarrativeValidator(artifact);
+  return (text: string) => {
+    let value: Record<string, unknown>;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      throw new Error("模型未返回有效的工程说明 JSON。");
+    }
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Array.isArray(value) ||
+      Object.keys(value).length !== sections.length
+    ) {
+      throw new Error("工程说明字段与合同不一致。");
+    }
+    return sections
+      .map(([key, [title]]) => {
+        const field = value[key];
+        const paragraph = typeof field === "string" ? field.trim() : "";
+        if (
+          !paragraph ||
+          [...paragraph].length > SECTION_LENGTH ||
+          /[\r\n]/.test(paragraph)
+        ) {
+          throw new Error(`工程说明「${title}」需要一段完整正文。`);
+        }
+        if (EXPLICIT_LAYUP.test(paragraph)) {
+          throw new Error("工程说明引用了具体层序，请以候选工件为准。");
+        }
+        validate(paragraph);
+        return `### ${title}\n\n${paragraph}`;
+      })
+      .join("\n\n");
+  };
+}
+
 /** 对可明确识别的事实冲突报错；不将自由文本检查当作完整科学语义证明。 */
 export function designNarrativeValidator(artifact: CSGPTDesignArtifact) {
   const response = validateDesignContract(artifact);

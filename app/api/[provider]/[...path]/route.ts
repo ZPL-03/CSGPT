@@ -863,10 +863,10 @@ async function handleDedicatedCSGPTChatCompletions(
   let designArtifact: CSGPTDesignArtifact | null = null;
   if (designIntent && designResponse) {
     const requirement = normalizeContentToText(requestMessages.at(-1)?.content);
-    modelTurn = `用户需求：\n${requirement}\n\n候选工件已由设计工具生成。\n${buildDesignNarrativeInstruction(
+    modelTurn = `${buildDesignNarrativeInstruction(
       designIntent,
       designResponse,
-    )}`;
+    )}\n\n候选生成需求（工件已按此请求生成）：\n${JSON.stringify(requirement)}`;
     designAppendix = renderDeterministicDesignAppendix(
       designIntent,
       designResponse,
