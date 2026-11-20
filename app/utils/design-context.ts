@@ -146,7 +146,7 @@ export function buildDesignFacts(
 
 export const DESIGN_FACT_RULES =
   "工件字段是候选事实，历史自然语言解释不能覆盖它。用户未指定的输入不等于工具未生成：所有候选已有完整物理层序和层数，只有 null 字段仍未确定。" +
-  "允许角度集合是搜索约束；全部候选的实际使用角度看“实际使用角度/deg”和“实际角度层数合计”，点名候选的角度及比例看 actual_angle_distribution。" +
+  "允许角度是搜索约束，实际角度与比例以工件中的层序及逐层统计为准。" +
   "not_run 表示未求解，pending 表示尚未判定；既不表示达到安全阈值，也不表示未达到安全阈值。历史参考不是当前结果。";
 
 export function designArtifactMessage(

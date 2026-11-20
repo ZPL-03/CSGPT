@@ -401,6 +401,8 @@ test("设计说明读取与候选指纹绑定的服务统计", () => {
   assert.match(instruction, /"当前有限元结果":null/);
   assert.match(instruction, /"角度序列镜像对称的候选数量":0/);
   assert.match(instruction, /"正负角层数均衡的候选数量":50/);
+  assert.ok(response.interpretation_context.facts["实际角度层数合计"]);
+  assert.doesNotMatch(instruction, /"实际使用角度\/deg"|"实际角度层数合计"/);
   response.interpretation_context.design_fingerprint = "b".repeat(64);
   assert.throws(
     () => buildDesignNarrativeInstruction(intent, response),

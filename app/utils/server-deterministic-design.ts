@@ -972,8 +972,10 @@ export function buildDesignNarrativeInstruction(
     throw new Error("设计意图与设计服务响应模式不一致。");
   }
   validateDesignInterpretationContext(response);
-  const context = response.interpretation_context;
-  // 统计事实由设计服务按实际候选汇总，界面直接展示完整候选表。
+  // 初始说明使用候选集合摘要；逐角统计由完整工件和点名追问提供。
+  const overview = { ...response.interpretation_context.facts };
+  delete overview["实际使用角度/deg"];
+  delete overview["实际角度层数合计"];
   return (
     "结合当前问题说明不同候选分组的取舍、铺层与厚度的设计依据，以及制造和有限元校核要点。" +
     "讨论铺层时分别说明中面对称和正负角均衡的判据。角度统计是几何特征，刚度结论还需要材料、层厚与层序。" +
@@ -981,7 +983,7 @@ export function buildDesignNarrativeInstruction(
     "候选表由应用程序展示，说明中只引用支持结论的统计，不逐项复述候选或角度清单。" +
     DESIGN_FACT_RULES +
     "\n" +
-    JSON.stringify(context.facts) +
+    JSON.stringify(overview) +
     "\n用户明确输入：\n" +
     JSON.stringify(intent.facts) +
     "\n工具选择与建模依据（不是用户缺失字段列表）：\n" +
