@@ -77,7 +77,7 @@ for (const mode of [
           assert.equal(body.messages.at(-1)?.role, "user");
           assert.ok(body.messages.at(-1)?.content.includes(question));
           assert.ok(
-            body.messages.at(-1)?.content.includes('"当前有限元结果":null'),
+            body.messages.at(-1)?.content.includes("尚未进行有限元校核"),
           );
           return mode === "tokenizer_error"
             ? Response.json({ error: "unavailable" }, { status: 503 })
@@ -110,7 +110,7 @@ for (const mode of [
           mode === "stream",
         );
         assert.ok(
-          body.messages.at(-1)?.content.includes('"当前有限元结果":null'),
+          body.messages.at(-1)?.content.includes("尚未进行有限元校核"),
         );
         if (mode === "stream") {
           const events = [

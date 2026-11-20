@@ -2,10 +2,13 @@ import { validateDesignContract } from "./design-contract";
 import type { CSGPTDesignArtifact } from "./structured-design";
 
 const DESIGN_NARRATIVE_SECTIONS = {
-  tradeoffs: ["方案取舍", "结合候选分组及工程目标说明适用条件与取舍。"],
-  layup: ["铺层与厚度", "结合已知层序统计和厚度说明设计依据。"],
-  manufacturing: ["制造", "说明工艺可行性及需要控制的制造条件。"],
-  verification: ["有限元校核", "说明建模、校核重点与结论适用范围。"],
+  tradeoffs: ["方案取舍", "解释哪些候选值得优先复核、适用条件及代价。"],
+  layup: ["铺层与厚度", "解释铺层和厚度选择怎样影响设计，指出需要核算的量。"],
+  manufacturing: [
+    "制造",
+    "根据已知工艺或待确认状态，说明可制造性要核对的条件。",
+  ],
+  verification: ["有限元校核", "说明需要复核的载荷、边界、缺陷与评价指标。"],
 } as const;
 const SECTION_LENGTH = 300;
 const sections = Object.entries(DESIGN_NARRATIVE_SECTIONS);
@@ -32,7 +35,7 @@ export const designNarrativeResponseFormat = {
 } as const;
 
 export const designNarrativeTask =
-  `根据给定的集合统计编写工程说明，输出 JSON 对象。每个字段是一段正文，至多 ${SECTION_LENGTH} 字；具体层序由候选表展示。\n` +
+  `根据工件事实给出工程解释，输出 JSON 对象。每个字段是一段正文，至多 ${SECTION_LENGTH} 字。候选表和事实摘要会直接展示层序、数值和状态；说明依据与取舍即可。\n` +
   sections.map(([key, [, description]]) => `${key}：${description}`).join("\n");
 
 /** 校核结构与可识别的事实冲突，再将解释转换成聊天正文。 */

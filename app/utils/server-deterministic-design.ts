@@ -965,6 +965,47 @@ export async function requestDeterministicDesign(
   }
 }
 
+// 解释输入和可见摘要使用同一份候选统计，不由模型复算数值或重新分类。
+function describeDesignEvidence(response: DesignServiceResponse) {
+  validateDesignInterpretationContext(response);
+  const facts = response.interpretation_context.facts;
+  const thicknessRange = (name: string) => {
+    const values = facts[`${name}/mm`] as number[];
+    const missing = Number(facts[`${name}未知的候选数量`]);
+    if (!values.length) return `${name}待确定`;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = min === max ? `${min} mm` : `${min} 至 ${max} mm`;
+    return `${name} ${range}${missing ? `，另有 ${missing} 组待确定` : ""}`;
+  };
+  const evidence = [
+    `共 ${response.result.candidate_count} 组；角度序列镜像对称 ${facts["角度序列镜像对称的候选数量"]} 组，正负角层数均衡 ${facts["正负角层数均衡的候选数量"]} 组。`,
+    `物理层数 ${(facts["物理层数"] as number[]).join(
+      "、",
+    )} 层；${thicknessRange("单层厚度")}；${thicknessRange("总厚度")}。`,
+  ];
+  const fem = response.generation_mode === "fem_ready_cylindrical_shell";
+  const process = fem
+    ? response.result.request.manufacturing_process
+    : (facts["各候选共同参数"] as Record<string, unknown>)
+        .manufacturing_process;
+  evidence.push(`制造工艺：${process || "待确认"}。`);
+  if (fem) {
+    for (const name of ["候选来源分组", "历史参考与目标比较"]) {
+      const groups = Object.entries(facts[name] as Record<string, number>);
+      evidence.push(
+        `${name}：${groups
+          .map(([label, count]) => `${label} ${count} 组`)
+          .join("，")}。`,
+      );
+    }
+    evidence.push("当前圆柱段候选均未求解；历史参考只用于初筛。");
+  } else {
+    evidence.push("概念候选尚未进行有限元校核。");
+  }
+  return evidence;
+}
+
 export function buildDesignNarrativeInstruction(
   intent: DesignIntent,
   response: DesignServiceResponse,
@@ -972,44 +1013,13 @@ export function buildDesignNarrativeInstruction(
   if (intent.mode !== response.generation_mode) {
     throw new Error("设计意图与设计服务响应模式不一致。");
   }
-  validateDesignInterpretationContext(response);
-  // 说明使用集合事实，精确参数及数值取值由候选表和点名追问提供。
-  const overview = { ...response.interpretation_context.facts };
-  for (const field of [
-    "实际使用角度/deg",
-    "实际角度层数合计",
-    "候选参数取值",
-    "载荷条件",
-    "设计目标",
-  ]) {
-    delete overview[field];
-  }
-  for (const name of ["单层厚度", "总厚度"]) {
-    const key = `${name}/mm`;
-    const values = overview[key] as number[];
-    delete overview[key];
-    overview[`${name}已知范围/mm`] = values.length
-      ? { min: Math.min(...values), max: Math.max(...values) }
-      : null;
-  }
-  if (response.generation_mode === "fem_ready_cylindrical_shell") {
-    const { request } = response.result;
-    overview["制造工艺"] = request.manufacturing_process;
-    overview["外压依据"] = request.load_conditions.pressure_basis;
-    overview["设计目标"] = {
-      安全系数: request.design_targets.safety_factor,
-      主要目标: request.design_targets.primary_objective,
-    };
-  }
   return (
     designNarrativeTask +
     "\n" +
-    "讨论铺层时分别说明中面对称和正负角均衡的判据。角度统计是几何特征，刚度结论还需要材料、层厚与层序。" +
-    "区分已知的总厚度和单层厚度；等厚条件未确定时，不能把平均层厚当作实际层厚。" +
-    "候选来源分组和历史参考与目标比较是不同统计；各组交叉关系见工件表。说明只引用影响取舍的事实。" +
+    "角度镜像与正负角层数是不同统计，刚度结论还取决于材料、层厚和层序。来源分组与历史参考比较是各自统计。" +
     DESIGN_FACT_RULES +
-    "\n" +
-    JSON.stringify(overview) +
+    "\n\n工件事实：\n" +
+    describeDesignEvidence(response).join("\n") +
     "\n用户明确输入：\n" +
     JSON.stringify(intent.facts) +
     "\n工具选择与建模依据（不是用户缺失字段列表）：\n" +
@@ -1026,9 +1036,11 @@ export function renderDeterministicDesignAppendix(
   const fem = response.generation_mode === "fem_ready_cylindrical_shell";
   const title = fem ? "FEM-ready 圆柱壳候选" : "概念候选";
   const scope = fem
-    ? "候选按源行保留材料、铺层、厚度和分析缺陷。历史压力用于初筛，当前圆柱段尚未求解；金属封头和连接不在该子模型内。"
-    : "铺层按外表面到内表面逐层展开。未给定的厚度保留为空，候选承载能力需结合材料与工况校核。";
-  return `\n\n## ${title}\n\n${scope}\n\n${renderDesignTable(
+    ? "计算范围为复合材料圆柱段；金属封头和连接不在该子模型内。"
+    : "铺层按外表面到内表面逐层展开。";
+  return `\n\n## ${title}\n\n${scope}\n\n${describeDesignEvidence(
     response,
-  )}\n\n设计结果指纹：\`${response.result.design_fingerprint}\`。`;
+  ).join("\n\n")}\n\n${renderDesignTable(response)}\n\n设计结果指纹：\`${
+    response.result.design_fingerprint
+  }\`。`;
 }
