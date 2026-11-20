@@ -659,7 +659,10 @@ async function prepareProxyMessages(
   }
 
   if (options.ragKgEnabled) {
-    const prefix = "项目内部知识库上下文\n";
+    const prefix =
+      options.modelTurn !== undefined
+        ? "项目内部知识库：用于解释工艺与校核方法。候选的铺层、尺寸和结果以设计工件为准。\n"
+        : "项目内部知识库上下文\n";
     const maxTokens =
       options.tokenBudget &&
       Math.max(
@@ -866,7 +869,7 @@ async function handleDedicatedCSGPTChatCompletions(
     modelTurn = `${buildDesignNarrativeInstruction(
       designIntent,
       designResponse,
-    )}\n\n候选生成需求（工件已按此请求生成）：\n${JSON.stringify(requirement)}`;
+    )}\n\n用户需求（用于说明候选取舍）：\n${JSON.stringify(requirement)}`;
     designAppendix = renderDeterministicDesignAppendix(
       designIntent,
       designResponse,

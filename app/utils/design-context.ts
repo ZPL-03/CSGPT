@@ -145,7 +145,7 @@ export function buildDesignFacts(
 }
 
 export const DESIGN_FACT_RULES =
-  "工件字段是候选事实，历史自然语言解释不能覆盖它。用户未指定的输入不等于工具未生成：所有候选已有完整物理层序和层数，只有 null 字段仍未确定。" +
+  "以工件字段为准。每组候选包含完整物理层序和层数；值为 null 的参数待确认。" +
   "允许角度是搜索约束，实际角度与比例以工件中的层序及逐层统计为准。" +
   "not_run 表示未求解，pending 表示尚未判定；既不表示达到安全阈值，也不表示未达到安全阈值。历史参考不是当前结果。";
 
@@ -159,7 +159,7 @@ export function designArtifactMessage(
     _csgptContextPriority: 95,
     _csgptContextAtomic: true,
     designArtifact: artifact,
-    content: `${DESIGN_FACT_RULES}汇总覆盖所有候选，candidates 与 sequences 仅展开当前问题点名的候选；未展开不等于未生成。\n${JSON.stringify(
+    content: `${DESIGN_FACT_RULES}汇总覆盖全部候选，candidates 与 sequences 展示问题指定的候选明细。\n${JSON.stringify(
       buildDesignFacts(
         validated,
         requestedDesignIds(question, validated.generation_mode),

@@ -1022,7 +1022,7 @@ export function buildDesignNarrativeInstruction(
     describeDesignEvidence(response).join("\n") +
     "\n用户明确输入：\n" +
     JSON.stringify(intent.facts) +
-    "\n工具选择与建模依据（不是用户缺失字段列表）：\n" +
+    "\n工具选择与建模依据：\n" +
     JSON.stringify(intent.assumptions)
   );
 }
