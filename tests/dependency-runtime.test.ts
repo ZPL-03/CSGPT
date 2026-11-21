@@ -68,6 +68,22 @@ test("长铺层序列按角度边界换行，不拆开角度数值", () => {
   assert.doesNotMatch(html, /<wbr\/?>(?:<\/wbr>)?/);
 });
 
+test("无括号无角度符号的历史铺层序列使用同一网格显示", () => {
+  const html = renderMarkdown(
+    "| 40层角度（外到内） |\n| --- |\n| 90/90/90/90/25/−25/80/−80 |",
+  );
+  assert.match(html, /class="layup-sequence-cell"/);
+  assert.match(html, /class="layup-sequence-angle">-25°<\/span>/);
+  assert.equal((html.match(/class="layup-sequence-ply"/g) ?? []).length, 8);
+});
+
+test("普通数值斜杠文本不按铺层处理", () => {
+  const html = renderMarkdown(
+    "| 比例 | 说明 |\n| --- | --- |\n| 1/2/3/4 | 普通数值 |",
+  );
+  assert.doesNotMatch(html, /class="layup-sequence-cell"/);
+});
+
 test("铺层表格保留容器内横向滚动并统一单元格对齐", () => {
   assert.match(
     markdownStyles,
@@ -84,6 +100,14 @@ test("铺层表格保留容器内横向滚动并统一单元格对齐", () => {
   assert.match(
     markdownStyles,
     /\.markdown-body table th,[\s\S]*?\.markdown-body table td\s*\{[\s\S]*?vertical-align:\s*middle/,
+  );
+  assert.match(
+    markdownStyles,
+    /\.markdown-body \.layup-sequence-grid\s*\{[\s\S]*?display:\s*flex[\s\S]*?flex-wrap:\s*wrap/,
+  );
+  assert.doesNotMatch(
+    markdownStyles,
+    /\.layup-sequence-grid\s*\{[\s\S]*?repeat\(/,
   );
 });
 
