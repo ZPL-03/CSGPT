@@ -5,6 +5,9 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) {
   throw new Error("CSGPT_UI_PORT 必须是 1024 到 65535 的整数。");
 }
 const baseURL = `http://127.0.0.1:${port}`;
+const browserChannel =
+  process.env.CSGPT_UI_BROWSER_CHANNEL ||
+  (process.platform === "win32" ? "msedge" : undefined);
 
 // 兼容测试只启动回环地址上的构建产物，不使用真实账号、数据库或已有服务。
 export default defineConfig({
@@ -17,7 +20,7 @@ export default defineConfig({
   use: {
     baseURL,
     browserName: "chromium",
-    channel: process.env.CSGPT_UI_BROWSER_CHANNEL || undefined,
+    channel: browserChannel,
     locale: "zh-CN",
     serviceWorkers: "block",
     trace: "off",
