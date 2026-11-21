@@ -3,7 +3,7 @@ import clsx from "clsx";
 
 // 角度序列只在层间分隔符处提供换行点，避免数值被拆开。
 const LAYUP_SEQUENCE_PATTERN =
-  /^\[((?:[+-]?\d+(?:\.\d+)?)(?:\/[+-]?\d+(?:\.\d+)?)+)\]$/;
+  /^\[((?:[+\-−]?\d+(?:\.\d+)?°?)(?:\/[+\-−]?\d+(?:\.\d+)?°?)+)\]$/;
 
 function plainTextContent(value: React.ReactNode): string {
   if (typeof value === "string" || typeof value === "number") {
@@ -19,23 +19,22 @@ export function formatLayupSequence(text: string) {
   const match = text.match(LAYUP_SEQUENCE_PATTERN);
   if (!match) return null;
 
-  const angles = match[1].split("/");
+  const angles = match[1]
+    .split("/")
+    .map((angle) => angle.replace(/°$/, "").replace("−", "-"));
   return (
     <span className="layup-sequence" aria-label={text}>
       <span aria-hidden="true">[</span>
-      {angles.map((angle, index) => (
-        <React.Fragment key={`${angle}-${index}`}>
-          {index > 0 && (
-            <>
-              <span className="layup-sequence-separator" aria-hidden="true">
-                /
-              </span>
-              <wbr />
-            </>
-          )}
-          <span className="layup-sequence-angle">{angle}</span>
-        </React.Fragment>
-      ))}
+      <span className="layup-sequence-grid" aria-hidden="true">
+        {angles.map((angle, index) => (
+          <span className="layup-sequence-ply" key={`${angle}-${index}`}>
+            <span className="layup-sequence-angle">{angle}°</span>
+            {index < angles.length - 1 && (
+              <span className="layup-sequence-separator">/</span>
+            )}
+          </span>
+        ))}
+      </span>
       <span aria-hidden="true">]</span>
     </span>
   );

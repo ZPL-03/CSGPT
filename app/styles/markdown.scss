@@ -715,16 +715,37 @@
 }
 
 .markdown-body .layup-sequence-cell {
-  width: 340px;
-  min-width: 260px;
+  width: 360px;
+  min-width: 360px;
   max-width: 360px;
+  vertical-align: middle;
 }
 
 .markdown-body .layup-sequence {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.18rem;
   white-space: normal;
   word-break: normal;
   overflow-wrap: normal;
-  line-height: 1.7;
+  line-height: 1.55;
+}
+
+.markdown-body .layup-sequence-grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(5, max-content);
+  justify-content: space-between;
+  gap: 2px 8px;
+  align-items: center;
+}
+
+.markdown-body .layup-sequence-ply {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .markdown-body .layup-sequence-angle {
@@ -732,8 +753,14 @@
 }
 
 .markdown-body .layup-sequence-separator {
-  padding: 0 0.08em;
+  padding-left: 0.12em;
   color: var(--color-fg-muted);
+}
+
+@media (max-width: 900px) {
+  .markdown-body .layup-sequence-grid {
+    grid-template-columns: repeat(4, max-content);
+  }
 }
 
 .markdown-body table tr {

@@ -50,8 +50,10 @@ test("长铺层序列按角度边界换行，不拆开角度数值", () => {
     "| 编号 | 逐层角度（外到内） |\n| --- | --- |\n| TMP_1 | [0/45/-45/90/0/45/-45/90] |",
   );
   assert.match(html, /class="layup-sequence-cell"/);
-  assert.match(html, /class="layup-sequence-angle">-45<\/span>/);
-  assert.equal((html.match(/<wbr\/?>(?:<\/wbr>)?/g) ?? []).length, 7);
+  assert.match(html, /class="layup-sequence-angle">-45°<\/span>/);
+  assert.equal((html.match(/class="layup-sequence-ply"/g) ?? []).length, 8);
+  assert.equal((html.match(/class="layup-sequence-separator"/g) ?? []).length, 7);
+  assert.doesNotMatch(html, /<wbr\/?>(?:<\/wbr>)?/);
 });
 
 test("默认数学渲染不授权外部链接和图片命令", () => {
