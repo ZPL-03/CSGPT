@@ -17,6 +17,7 @@ import { useAppConfig } from "../store/config";
 import clsx from "clsx";
 import { splitThinkingContent } from "../utils/thinking";
 import { MarkdownTableCell } from "./markdown-table-cell";
+import { MarkdownTable } from "./markdown-table";
 
 export function Mermaid(props: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -229,6 +230,7 @@ function MarkdownRenderer(props: { content: string }) {
       components={{
         pre: PreCode,
         code: CustomCode,
+        table: MarkdownTable,
         td: MarkdownTableCell,
         p: ({ node: _node, ...pProps }) => <p {...pProps} dir="auto" />,
         a: ({ node: _node, ...aProps }) => {

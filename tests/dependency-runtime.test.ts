@@ -11,6 +11,7 @@ import { micromark } from "micromark";
 import { math, mathHtml } from "micromark-extension-math";
 import mermaid from "mermaid";
 import { remarkPlugins, rehypePlugins } from "../app/utils/markdown-plugins";
+import { MarkdownTable } from "../app/components/markdown-table";
 import { MarkdownTableCell } from "../app/components/markdown-table-cell";
 
 const require = createRequire(import.meta.url);
@@ -26,7 +27,7 @@ function renderMarkdown(content: string) {
       return ReactMarkdown({
         remarkPlugins,
         rehypePlugins,
-        components: { td: MarkdownTableCell },
+        components: { table: MarkdownTable, td: MarkdownTableCell },
         children: content,
       });
     }),
@@ -53,6 +54,7 @@ test("长铺层序列按角度边界换行，不拆开角度数值", () => {
   const html = renderMarkdown(
     "| 编号 | 逐层角度（外到内） |\n| --- | --- |\n| TMP_1 | [0/45/-45/90/0/45/-45/90] |",
   );
+  assert.match(html, /class="markdown-table-scroll"><table/);
   assert.match(html, /class="layup-sequence-cell"/);
   assert.match(html, /class="layup-sequence-angle">-45°<\/span>/);
   assert.equal((html.match(/class="layup-sequence-ply"/g) ?? []).length, 8);
@@ -67,15 +69,22 @@ test("长铺层序列按角度边界换行，不拆开角度数值", () => {
 });
 
 test("铺层表格保留容器内横向滚动并统一单元格对齐", () => {
-  assert.doesNotMatch(
+  assert.match(
     markdownStyles,
-    /table:has\(\.layup-sequence-cell\)[\s\S]{0,160}max-width:\s*none/,
+    /\.markdown-table-scroll\s*\{[\s\S]*?overflow-x:\s*auto/,
+  );
+  assert.match(
+    markdownStyles,
+    /\.markdown-body table\s*\{[\s\S]*?display:\s*table[\s\S]*?width:\s*max-content/,
   );
   assert.match(
     markdownStyles,
     /table:has\(\.layup-sequence-cell\) th,[\s\S]*?table:has\(\.layup-sequence-cell\) td\s*\{[\s\S]*?text-align:\s*center/,
   );
-  assert.match(markdownStyles, /\.markdown-body table\s*\{[\s\S]*?overflow:\s*auto/);
+  assert.match(
+    markdownStyles,
+    /\.markdown-body table th,[\s\S]*?\.markdown-body table td\s*\{[\s\S]*?vertical-align:\s*middle/,
+  );
 });
 
 test("默认数学渲染不授权外部链接和图片命令", () => {

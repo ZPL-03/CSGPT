@@ -299,14 +299,22 @@
   content: "";
 }
 
+.markdown-body .markdown-table-scroll {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 .markdown-body table {
   border-spacing: 0;
   border-collapse: collapse;
-  display: block;
+  display: table;
   width: max-content;
   min-width: 100%;
-  max-width: 100%;
-  overflow: auto;
+  table-layout: auto;
 }
 
 .markdown-body td,
@@ -704,7 +712,7 @@
 .markdown-body table td {
   padding: 6px 13px;
   border: 1px solid var(--color-border-default);
-  vertical-align: top;
+  vertical-align: middle;
   word-break: normal;
   overflow-wrap: normal;
 }
@@ -715,19 +723,17 @@
 }
 
 .markdown-body .layup-sequence-cell {
-  width: 360px;
-  min-width: 360px;
-  max-width: 360px;
+  width: max-content;
+  min-width: 0;
   vertical-align: middle;
   text-align: center;
 }
 
 .markdown-body .layup-sequence {
   display: grid;
-  grid-template-columns: 1ch minmax(0, 1fr) 1ch;
+  grid-template-columns: max-content max-content max-content;
   align-items: stretch;
-  width: 100%;
-  max-width: 100%;
+  width: max-content;
   margin-inline: auto;
   white-space: normal;
   word-break: normal;
@@ -751,9 +757,9 @@
 
 .markdown-body .layup-sequence-grid {
   display: grid;
-  width: 100%;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 2px 8px;
+  width: max-content;
+  grid-template-columns: repeat(5, max-content);
+  gap: 2px 6px;
   align-items: center;
 }
 
