@@ -128,6 +128,10 @@ import {
 import { getModelProvider } from "../utils/model";
 import clsx from "clsx";
 import { getAvailableClientsCount, isMcpEnabled } from "../mcp/actions";
+import {
+  groupRagKgDocumentSources,
+  type RagKgDocumentGroup,
+} from "../utils/rag-kg-sources";
 
 const localStorage = safeLocalStorage();
 
@@ -192,47 +196,52 @@ function RagKgSourcesView({
   );
   if (!documentSources.length && !graphSources.length) return null;
 
+  const documentGroups = groupRagKgDocumentSources(documentSources);
+
+  const sourceTitle = (group: RagKgDocumentGroup) =>
+    [
+      group.title,
+      group.ids.length > 1 ? `证据分块：${group.ids.join("、")}` : undefined,
+      group.evidence.length
+        ? `分块标识：${group.evidence.map((item) => item.chunk_id).join("、")}`
+        : undefined,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
   return (
     <div className={styles["rag-kg-sources"]}>
       <div className={styles["rag-kg-sources-title"]}>检索来源</div>
-      {documentSources.length > 0 && (
+      {documentGroups.length > 0 && (
         <div className={styles["rag-kg-source-list"]}>
-          {documentSources.map((source) =>
-            source.sourceUrl ? (
+          {documentGroups.map((group) =>
+            group.sourceUrl ? (
               <a
-                key={source.id}
+                key={group.ids.join("/")}
                 className={styles["rag-kg-source-item"]}
-                href={source.sourceUrl}
+                href={group.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                title={[
-                  source.title,
-                  source.evidence?.chunk_id,
-                  source.evidence?.chunk_fingerprint,
-                ]
-                  .filter(Boolean)
-                  .join("\n")}
+                title={sourceTitle(group)}
               >
-                <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+                <span className={styles["rag-kg-source-id"]}>
+                  {group.ids.join("/")}
+                </span>
                 <span className={styles["rag-kg-source-title"]}>
-                  {source.title}
+                  {group.title}
                 </span>
               </a>
             ) : (
               <div
-                key={source.id}
+                key={group.ids.join("/")}
                 className={styles["rag-kg-source-item"]}
-                title={[
-                  source.title,
-                  source.evidence?.chunk_id,
-                  source.evidence?.chunk_fingerprint,
-                ]
-                  .filter(Boolean)
-                  .join("\n")}
+                title={sourceTitle(group)}
               >
-                <span className={styles["rag-kg-source-id"]}>{source.id}</span>
+                <span className={styles["rag-kg-source-id"]}>
+                  {group.ids.join("/")}
+                </span>
                 <span className={styles["rag-kg-source-title"]}>
-                  {source.title}
+                  {group.title}
                 </span>
               </div>
             ),

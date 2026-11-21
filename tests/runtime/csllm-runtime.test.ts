@@ -15,6 +15,7 @@ import { NextRequest } from "next/server";
 import { CSGPT_DEFAULT_MODEL } from "../../app/constant";
 import { parseControlledToolRecordsHeader } from "../../app/utils/controlled-tool-records";
 import {
+  countRagKgDocumentSources,
   parseRagKgSourcesHeader,
   type RagKgSource,
 } from "../../app/utils/rag-kg-sources";
@@ -236,7 +237,7 @@ for (const scenario of [
       assert.equal(tools[0].id, "csgpt-rag-kg");
       const invocation = JSON.parse(tools[0].function.arguments);
       assert.equal(invocation.status, "completed");
-      assert.equal(invocation.count, sources.length);
+      assert.equal(invocation.count, countRagKgDocumentSources(sources));
       contexts.push({
         text: messages
           .filter((message) => message.role === "system")

@@ -11,6 +11,7 @@ import { CSGPT_SYSTEM_PROMPT } from "@/app/prompts/csgpt";
 import { buildInternalKnowledgeContext } from "@/app/utils/server-rag-kg";
 import {
   encodeRagKgSourcesHeader,
+  countRagKgDocumentSources,
   RAG_KG_SOURCES_HEADER,
   type RagKgSource,
 } from "@/app/utils/rag-kg-sources";
@@ -327,8 +328,8 @@ function buildControlledToolRecords(input: {
       id: "csgpt-rag-kg",
       name: "知识库检索",
       enabled: input.ragKgEnabled,
-      count: input.ragKgSources.length,
-      unit: "条来源",
+      count: countRagKgDocumentSources(input.ragKgSources),
+      unit: "份来源",
     }),
     createControlledToolRecord({
       id: "csgpt-web-search",

@@ -13,7 +13,9 @@ import {
   formatRagEvidence,
 } from "../app/utils/rag-evidence";
 import {
+  countRagKgDocumentSources,
   encodeRagKgSourcesHeader,
+  groupRagKgDocumentSources,
   parseRagKgSourcesHeader,
   RAG_KG_SOURCES_HEADER,
 } from "../app/utils/rag-kg-sources";
@@ -127,6 +129,49 @@ test("完整证据通过引用头传输与共享窗口，不从中间裁剪公�
     ),
     sources,
   );
+});
+
+test("同一来源的多个证据分块只显示一个来源项并保留分块编号", () => {
+  const sources = [
+    {
+      kind: "document" as const,
+      id: "S1",
+      title: "同一篇资料",
+      evidence: {
+        record_id: "record-1",
+        chunk_id: "chunk-1",
+        chunk_fingerprint: "a".repeat(40),
+      },
+    },
+    {
+      kind: "document" as const,
+      id: "S2",
+      title: "同一篇资料",
+      evidence: {
+        record_id: "record-1",
+        chunk_id: "chunk-2",
+        chunk_fingerprint: "b".repeat(40),
+      },
+    },
+    {
+      kind: "document" as const,
+      id: "S3",
+      title: "另一篇资料",
+      evidence: {
+        record_id: "record-2",
+        chunk_id: "chunk-3",
+        chunk_fingerprint: "c".repeat(40),
+      },
+    },
+  ];
+  const groups = groupRagKgDocumentSources(sources);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0].ids, ["S1", "S2"]);
+  assert.deepEqual(
+    groups[0].evidence.map((item) => item.chunk_id),
+    ["chunk-1", "chunk-2"],
+  );
+  assert.equal(countRagKgDocumentSources(sources), 2);
 });
 
 // 子进程使用独立临时语料根目录，正式 data/csllm 始终只读。
