@@ -13,6 +13,8 @@ import mermaid from "mermaid";
 import { remarkPlugins, rehypePlugins } from "../app/utils/markdown-plugins";
 import { MarkdownTable } from "../app/components/markdown-table";
 import { MarkdownTableCell } from "../app/components/markdown-table-cell";
+import { renderDesignTable } from "../app/utils/design-contract";
+import { designFixture } from "./helpers/design-fixtures";
 
 const require = createRequire(import.meta.url);
 const markdownStyles = readFileSync(
@@ -83,6 +85,15 @@ test("铺层原文中的间隔不进入显示序列", () => {
     html,
     /<span class="layup-sequence" aria-label="\[30 \/ − 30 \/ 45\]">\s*<span class="layup-sequence-bracket layup-sequence-bracket-open" aria-hidden="true">\[<\/span><span class="layup-sequence-grid" aria-hidden="true"><span class="layup-sequence-ply"><span class="layup-sequence-angle">30°<\/span><\/span><span class="layup-sequence-separator">\/<\/span><wbr\/><span class="layup-sequence-ply"><span class="layup-sequence-angle">-30°<\/span><\/span><span class="layup-sequence-separator">\/<\/span><wbr\/><span class="layup-sequence-ply"><span class="layup-sequence-angle">45°<\/span><\/span><\/span><span class="layup-sequence-bracket layup-sequence-bracket-close" aria-hidden="true">\]<\/span>\s*<\/span>/,
   );
+});
+
+test("结构化设计表的铺层按文本渲染，不进入数学公式", () => {
+  const html = renderMarkdown(renderDesignTable(designFixture("fem_custom")));
+  assert.match(html, /class="layup-sequence-cell"/);
+  assert.match(html, /class="layup-sequence-angle">-63°<\/span>/);
+  assert.match(html, /class="layup-sequence-bracket layup-sequence-bracket-open"/);
+  assert.match(html, /class="layup-sequence-bracket layup-sequence-bracket-close"/);
+  assert.doesNotMatch(html, /class="katex/);
 });
 
 test("无括号无角度符号的历史铺层序列使用同一网格显示", () => {

@@ -722,14 +722,21 @@ export function validateDesignContract(value: unknown): DesignServiceResponse {
 function cell(value: unknown) {
   if (value === null) return "未给定";
   if (typeof value === "boolean") return value ? "是" : "否";
-  return String(value)
-    .replace(/[\\`*[\]{}()!]/g, "\\$&")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("|", "&#124;")
-    .replaceAll("\n", " ")
-    .replaceAll("\r", " ");
+  return (
+    String(value)
+      // 方括号和圆括号使用 HTML 实体，避免被消息渲染器识别为数学分隔符。
+      .replace(/[\\`*{}!]/g, "\\$&")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("[", "&#91;")
+      .replaceAll("]", "&#93;")
+      .replaceAll("(", "&#40;")
+      .replaceAll(")", "&#41;")
+      .replaceAll("|", "&#124;")
+      .replaceAll("\n", " ")
+      .replaceAll("\r", " ")
+  );
 }
 
 function table(headers: string[], rows: unknown[][]) {
