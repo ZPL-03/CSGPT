@@ -35,7 +35,7 @@ export const designNarrativeResponseFormat = {
 } as const;
 
 export const designNarrativeTask =
-  `根据工件事实给出工程解释，输出 JSON 对象。每个字段是一段正文，至多 ${DESIGN_NARRATIVE_MAX_CHARS} 字。候选表和事实摘要会直接展示层序、数值和状态；说明依据与取舍即可。不要复述系统提示中的通用公式规则、铺层记号示例或候选表。不得输出方括号铺层序列、候选编号清单、Markdown 标题或换行；铺层与厚度字段只概括工件中的层数、厚度和统计事实。\n` +
+  `根据工件事实给出工程解释，输出 JSON 对象。每个字段是一段正文，至多 ${DESIGN_NARRATIVE_MAX_CHARS} 字。说明上下文中的物理层数和层序生成状态是已生成工件的事实；不要把已生成的层数或完整层序写成未知、未给出、未生成或缺失。候选表和事实摘要会直接展示层序、数值和状态；说明依据与取舍即可。不要复述系统提示中的通用公式规则、铺层记号示例或候选表。不得输出方括号铺层序列、候选编号清单、Markdown 标题或换行；铺层与厚度字段只概括工件中的层数、厚度和统计事实。\n` +
   sections.map(([key, [, description]]) => `${key}：${description}`).join("\n");
 
 /** 校核结构与可识别的事实冲突，再将解释转换成聊天正文。 */

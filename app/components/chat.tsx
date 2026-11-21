@@ -129,6 +129,7 @@ import { getModelProvider } from "../utils/model";
 import clsx from "clsx";
 import { getAvailableClientsCount, isMcpEnabled } from "../mcp/actions";
 import {
+  groupRagKgGraphSources,
   groupRagKgDocumentSources,
   type RagKgDocumentGroup,
 } from "../utils/rag-kg-sources";
@@ -197,6 +198,7 @@ function RagKgSourcesView({
   if (!documentSources.length && !graphSources.length) return null;
 
   const documentGroups = groupRagKgDocumentSources(documentSources);
+  const graphGroups = groupRagKgGraphSources(graphSources);
 
   const sourceTitle = (group: RagKgDocumentGroup) =>
     [
@@ -248,27 +250,36 @@ function RagKgSourcesView({
           )}
         </div>
       )}
-      {graphSources.length > 0 && (
+      {graphGroups.length > 0 && (
         <details className={styles["rag-kg-graph-sources"]}>
-          <summary>知识图谱依据 {graphSources.length}</summary>
+          <summary>知识图谱依据 {graphGroups.length}</summary>
           <div className={styles["rag-kg-graph-list"]}>
-            {graphSources.map((source) => (
-              <div key={source.id} className={styles["rag-kg-graph-item"]}>
-                <span className={styles["rag-kg-source-id"]}>{source.id}</span>
-                <span>{source.source}</span>
-                <span className={styles["rag-kg-relation"]}>
-                  {source.relation}
+            {graphGroups.map((group) => (
+              <div
+                key={group.ids.join("/")}
+                className={styles["rag-kg-graph-item"]}
+              >
+                <span className={styles["rag-kg-source-id"]}>
+                  {group.ids.join("/")}
                 </span>
-                <span>{source.target}</span>
+                <span>{group.source}</span>
+                <span className={styles["rag-kg-relation"]}>
+                  {group.relation}
+                </span>
+                <span>{group.target}</span>
                 <details
                   style={{ gridColumn: "1 / -1", overflowWrap: "anywhere" }}
                 >
                   <summary>分块依据</summary>
-                  {source.evidence ? (
+                  {group.evidence.length ? (
                     <div>
-                      {source.evidence.chunk_id}
-                      <br />
-                      {source.evidence.chunk_fingerprint}
+                      {group.evidence.map((evidence) => (
+                        <div key={`${evidence.record_id}:${evidence.chunk_id}`}>
+                          {evidence.chunk_id}
+                          <br />
+                          {evidence.chunk_fingerprint}
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div>分块身份未提供</div>

@@ -28,6 +28,16 @@ export type RagKgDocumentGroup = {
   evidence: RagEvidenceReference[];
 };
 
+export type RagKgGraphGroup = {
+  source: string;
+  sourceType: string;
+  relation: string;
+  target: string;
+  targetType: string;
+  ids: string[];
+  evidence: RagEvidenceReference[];
+};
+
 function documentIdentity(source: RagKgDocumentSource) {
   const recordId = source.evidence?.record_id?.trim();
   if (recordId) return `record:${recordId}`;
@@ -73,6 +83,52 @@ export function countRagKgDocumentSources(sources: RagKgSource[]) {
       (source): source is RagKgDocumentSource => source.kind === "document",
     ),
   ).length;
+}
+
+function graphIdentity(source: RagKgGraphSource) {
+  return [
+    source.sourceType,
+    source.source,
+    source.relation,
+    source.targetType,
+    source.target,
+  ]
+    .map((value) => value.trim().toLowerCase())
+    .join("\u0000");
+}
+
+/** 将同一知识图谱关系在不同证据分块上的重复项合并为一个展示项。 */
+export function groupRagKgGraphSources(
+  sources: RagKgGraphSource[],
+): RagKgGraphGroup[] {
+  const groups = new Map<string, RagKgGraphGroup>();
+  for (const source of sources) {
+    const key = graphIdentity(source);
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        source: source.source,
+        sourceType: source.sourceType,
+        relation: source.relation,
+        target: source.target,
+        targetType: source.targetType,
+        ids: [source.id],
+        evidence: source.evidence ? [source.evidence] : [],
+      });
+      continue;
+    }
+    if (!existing.ids.includes(source.id)) existing.ids.push(source.id);
+    if (source.evidence) {
+      const duplicate = existing.evidence.some(
+        (item) =>
+          item.record_id === source.evidence?.record_id &&
+          item.chunk_id === source.evidence?.chunk_id &&
+          item.chunk_fingerprint === source.evidence?.chunk_fingerprint,
+      );
+      if (!duplicate) existing.evidence.push(source.evidence);
+    }
+  }
+  return Array.from(groups.values());
 }
 
 const MAX_HEADER_VALUE_LENGTH = 7600;

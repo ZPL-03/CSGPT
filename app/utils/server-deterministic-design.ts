@@ -983,6 +983,7 @@ function describeDesignEvidence(response: DesignServiceResponse) {
     `物理层数 ${(facts["物理层数"] as number[]).join(
       "、",
     )} 层；${thicknessRange("单层厚度")}；${thicknessRange("总厚度")}。`,
+    `完整物理层序已生成 ${facts["完整层序已生成的候选数量"]} 组；说明只概括层数、厚度和统计事实，不复述具体层序。`,
   ];
   const fem = response.generation_mode === "fem_ready_cylindrical_shell";
   const process = fem

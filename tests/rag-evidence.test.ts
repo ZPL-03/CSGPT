@@ -15,6 +15,7 @@ import {
 import {
   countRagKgDocumentSources,
   encodeRagKgSourcesHeader,
+  groupRagKgGraphSources,
   groupRagKgDocumentSources,
   parseRagKgSourcesHeader,
   RAG_KG_SOURCES_HEADER,
@@ -172,6 +173,45 @@ test("同一来源的多个证据分块只显示一个来源项并保留分块�
     ["chunk-1", "chunk-2"],
   );
   assert.equal(countRagKgDocumentSources(sources), 2);
+});
+
+test("同一知识图谱关系的多个证据分块只显示一个关系项", () => {
+  const groups = groupRagKgGraphSources([
+    {
+      kind: "graph",
+      id: "K1",
+      source: "Layup",
+      sourceType: "Entity",
+      relation: "VERIFIED_BY",
+      target: "Finite Element Verification",
+      targetType: "Entity",
+      evidence: {
+        record_id: "record-1",
+        chunk_id: "chunk-1",
+        chunk_fingerprint: "a".repeat(40),
+      },
+    },
+    {
+      kind: "graph",
+      id: "K2",
+      source: "Layup",
+      sourceType: "Entity",
+      relation: "VERIFIED_BY",
+      target: "Finite Element Verification",
+      targetType: "Entity",
+      evidence: {
+        record_id: "record-1",
+        chunk_id: "chunk-2",
+        chunk_fingerprint: "b".repeat(40),
+      },
+    },
+  ]);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].ids, ["K1", "K2"]);
+  assert.deepEqual(
+    groups[0].evidence.map((item) => item.chunk_id),
+    ["chunk-1", "chunk-2"],
+  );
 });
 
 // 子进程使用独立临时语料根目录，正式 data/csllm 始终只读。
