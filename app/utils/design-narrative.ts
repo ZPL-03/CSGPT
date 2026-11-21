@@ -10,7 +10,7 @@ const DESIGN_NARRATIVE_SECTIONS = {
   ],
   verification: ["有限元校核", "说明需要复核的载荷、边界、缺陷与评价指标。"],
 } as const;
-const SECTION_LENGTH = 300;
+export const DESIGN_NARRATIVE_MAX_CHARS = 600;
 const sections = Object.entries(DESIGN_NARRATIVE_SECTIONS);
 const EXPLICIT_LAYUP =
   /\[[\d+−±°._() -]*\d[\d+−±°._() -]*\/[\d+−±°._()/ -]*\d[\d+−±°._()/ -]*\]/u;
@@ -35,7 +35,7 @@ export const designNarrativeResponseFormat = {
 } as const;
 
 export const designNarrativeTask =
-  `根据工件事实给出工程解释，输出 JSON 对象。每个字段是一段正文，至多 ${SECTION_LENGTH} 字。候选表和事实摘要会直接展示层序、数值和状态；说明依据与取舍即可。\n` +
+  `根据工件事实给出工程解释，输出 JSON 对象。每个字段是一段正文，至多 ${DESIGN_NARRATIVE_MAX_CHARS} 字。候选表和事实摘要会直接展示层序、数值和状态；说明依据与取舍即可。不要复述系统提示中的通用公式规则、铺层记号示例或候选表。不得输出方括号铺层序列、候选编号清单、Markdown 标题或换行；铺层与厚度字段只概括工件中的层数、厚度和统计事实。\n` +
   sections.map(([key, [, description]]) => `${key}：${description}`).join("\n");
 
 /** 校核结构与可识别的事实冲突，再将解释转换成聊天正文。 */
@@ -62,7 +62,7 @@ export function designNarrativeRenderer(artifact: CSGPTDesignArtifact) {
         const paragraph = typeof field === "string" ? field.trim() : "";
         if (
           !paragraph ||
-          [...paragraph].length > SECTION_LENGTH ||
+          [...paragraph].length > DESIGN_NARRATIVE_MAX_CHARS ||
           /[\r\n]/.test(paragraph)
         ) {
           throw new Error(`工程说明「${title}」需要一段完整正文。`);

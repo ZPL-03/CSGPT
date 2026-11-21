@@ -110,6 +110,7 @@ import {
   renderDeterministicDesignAppendix,
   type FEMReadyDesignServiceResponse,
 } from "../app/utils/server-deterministic-design";
+import { DESIGN_NARRATIVE_MAX_CHARS } from "../app/utils/design-narrative";
 import {
   appendDesignToOpenAICompletion,
   appendDesignToOpenAIStream,
@@ -403,6 +404,8 @@ test("设计说明读取与候选指纹绑定的服务统计", () => {
   assert.ok(intent);
   const response = designFixture("fem") as FEMReadyDesignServiceResponse;
   const instruction = buildDesignNarrativeInstruction(intent, response);
+  assert.match(instruction, new RegExp(`至多 ${DESIGN_NARRATIVE_MAX_CHARS} 字`));
+  assert.match(instruction, /不得输出方括号铺层序列/);
   assert.deepEqual(response.interpretation_context.facts["候选来源分组"], {
     同几何历史基线: 8,
     同几何探索: 40,
@@ -708,7 +711,10 @@ test("不完整说明、重复候选表和额外字段不能随工件返回", ()
       ...designNarrativeFixture,
       tradeoffs: "| TMP_1 |\n| TMP_2 |",
     }),
-    JSON.stringify({ ...designNarrativeFixture, layup: "铺".repeat(301) }),
+    JSON.stringify({
+      ...designNarrativeFixture,
+      layup: "铺".repeat(DESIGN_NARRATIVE_MAX_CHARS + 1),
+    }),
     JSON.stringify({ ...designNarrativeFixture, layup: "候选的层序为 [0/±30/90]s。" }),
   ]) {
     assert.throws(
