@@ -30,7 +30,7 @@ export function formatLayupSequenceForColumn(
     : null;
   if (!body) return null;
 
-  const angles = body.split("/").map((angle) => angle.trim());
+  const angles = body.split("/").map((angle) => angle.replace(/\s+/g, ""));
   if (
     angles.length === 0 ||
     angles.some((angle) => !/^[+\-−]?\d+(?:\.\d+)?°?$/.test(angle))
@@ -51,12 +51,17 @@ export function formatLayupSequenceForColumn(
       </span>
       <span className="layup-sequence-grid" aria-hidden="true">
         {displayAngles.map((angle, index) => (
-          <span className="layup-sequence-ply" key={`${angle}-${index}`}>
-            <span className="layup-sequence-angle">{angle}°</span>
+          <React.Fragment key={`${angle}-${index}`}>
+            <span className="layup-sequence-ply">
+              <span className="layup-sequence-angle">{angle}°</span>
+            </span>
             {index < angles.length - 1 && (
-              <span className="layup-sequence-separator">/</span>
+              <>
+                <span className="layup-sequence-separator">/</span>
+                <wbr />
+              </>
             )}
-          </span>
+          </React.Fragment>
         ))}
       </span>
       <span

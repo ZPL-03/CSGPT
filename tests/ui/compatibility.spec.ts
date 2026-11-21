@@ -187,6 +187,45 @@ test("页面公式矩阵、Mermaid 数学标签与 ER 图实际渲染", async ({
   await expect(page).toHaveURL(/#\/settings$/);
 });
 
+test("长铺层序列在消息表格中按斜杠换行且括号完整", async ({ page }) => {
+  await page.locator('[title^="兼容验收 C"]').click();
+  const answer = page.getByTestId("chat-assistant").last();
+  const table = answer.locator("table").filter({ hasText: "逐层铺层" });
+  const cell = table.locator("td.layup-sequence-cell");
+  const sequence = cell.locator(".layup-sequence");
+
+  await expect(table).toContainText("TMP_1");
+  await expect(sequence).toContainText("[90°/90°");
+  await expect(sequence).toContainText("/90°]");
+
+  const layout = await cell.evaluate((element) => {
+    const sequence = element.querySelector<HTMLElement>(".layup-sequence")!;
+    const open = element.querySelector<HTMLElement>(
+      ".layup-sequence-bracket-open",
+    )!;
+    const close = element.querySelector<HTMLElement>(
+      ".layup-sequence-bracket-close",
+    )!;
+    const style = getComputedStyle(sequence);
+    return {
+      cellWidth: element.clientWidth,
+      cellScrollWidth: element.scrollWidth,
+      sequenceHeight: sequence.getBoundingClientRect().height,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      display: style.display,
+      whiteSpace: style.whiteSpace,
+      openTop: open.getBoundingClientRect().top,
+      closeBottom: close.getBoundingClientRect().bottom,
+    };
+  });
+
+  expect(layout.display).toBe("inline");
+  expect(layout.whiteSpace).toBe("normal");
+  expect(layout.cellScrollWidth).toBeLessThanOrEqual(layout.cellWidth + 1);
+  expect(layout.sequenceHeight).toBeGreaterThan(layout.lineHeight * 1.5);
+  expect(layout.closeBottom).toBeGreaterThanOrEqual(layout.openTop);
+});
+
 test("聊天导出保留公式源文本和 JSON 消息", async ({ page }) => {
   await page.locator('[title^="兼容验收 A"]').click();
   await page.getByTitle("导出聊天记录", { exact: true }).click();

@@ -469,6 +469,7 @@
 .chat-message {
   display: flex;
   flex-direction: row;
+  min-width: 0;
 
   &:last-child {
     animation: slide-in ease 0.3s;
@@ -515,6 +516,8 @@
 }
 
 .chat-message-container {
+  width: 100%;
+  min-width: 0;
   max-width: var(--message-max-width);
   display: flex;
   flex-direction: column;
@@ -625,6 +628,8 @@
 
 .chat-message-item {
   box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   margin-top: 10px;
   border-radius: 10px;

@@ -94,6 +94,8 @@
   -ms-text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
   margin: 0;
+  min-width: 0;
+  width: 100%;
   color: var(--color-fg-default);
   background-color: var(--color-canvas-default);
   font-size: 14px;
@@ -312,8 +314,9 @@
   border-spacing: 0;
   border-collapse: collapse;
   display: table;
-  width: max-content;
+  width: 100%;
   min-width: 100%;
+  max-width: none;
   table-layout: auto;
 }
 
@@ -712,14 +715,10 @@
 .markdown-body table td {
   padding: 6px 13px;
   border: 1px solid var(--color-border-default);
+  text-align: center;
   vertical-align: middle;
   word-break: normal;
   overflow-wrap: normal;
-}
-
-.markdown-body table:has(.layup-sequence-cell) th,
-.markdown-body table:has(.layup-sequence-cell) td {
-  text-align: center;
 }
 
 .markdown-body .layup-sequence-cell {
@@ -730,47 +729,25 @@
 }
 
 .markdown-body .layup-sequence {
-  display: inline-flex;
-  align-items: stretch;
-  max-inline-size: 100%;
+  display: inline;
   margin-inline: auto;
   white-space: normal;
   word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   line-height: 1.55;
 }
 
 .markdown-body .layup-sequence-bracket {
-  display: flex;
-  justify-content: center;
+  display: inline;
   font-variant-numeric: tabular-nums;
 }
 
-.markdown-body .layup-sequence-bracket-open {
-  align-items: flex-start;
-}
-
-.markdown-body .layup-sequence-bracket-close {
-  align-items: flex-end;
-}
-
 .markdown-body .layup-sequence-grid {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  min-inline-size: 0;
-  max-inline-size: 100%;
-  gap: 2px 6px;
-  align-items: center;
-  justify-content: center;
-  align-content: center;
+  display: inline;
 }
 
 .markdown-body .layup-sequence-ply {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: center;
-  min-width: 0;
+  display: inline;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -780,7 +757,6 @@
 }
 
 .markdown-body .layup-sequence-separator {
-  padding-left: 0.12em;
   color: var(--color-fg-muted);
 }
 

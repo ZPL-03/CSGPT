@@ -50,7 +50,7 @@ test("Markdown 数学解析保留行内公式、矩阵、表格和单位", () =>
   assert.doesNotMatch(html, /class="katex-error"/);
 });
 
-test("长铺层序列按角度边界换行，不拆开角度数值", () => {
+test("长铺层序列按斜杠换行并保留完整括号", () => {
   const html = renderMarkdown(
     "| 编号 | 逐层角度（外到内） |\n| --- | --- |\n| TMP_1 | [0/45/-45/90/0/45/-45/90] |",
   );
@@ -58,14 +58,31 @@ test("长铺层序列按角度边界换行，不拆开角度数值", () => {
   assert.match(html, /class="layup-sequence-cell"/);
   assert.match(html, /class="layup-sequence-angle">-45°<\/span>/);
   assert.equal((html.match(/class="layup-sequence-ply"/g) ?? []).length, 8);
-  assert.equal((html.match(/class="layup-sequence-separator"/g) ?? []).length, 7);
+  assert.equal(
+    (html.match(/class="layup-sequence-separator"/g) ?? []).length,
+    7,
+  );
   const gridIndex = html.indexOf('class="layup-sequence-grid"');
   const closeBracketIndex = html.indexOf(
     'class="layup-sequence-bracket layup-sequence-bracket-close"',
   );
   assert.ok(gridIndex >= 0);
   assert.ok(closeBracketIndex > gridIndex);
-  assert.doesNotMatch(html, /<wbr\/?>(?:<\/wbr>)?/);
+  assert.match(
+    html,
+    /class="layup-sequence-bracket layup-sequence-bracket-close" aria-hidden="true">\]<\/span>/,
+  );
+  assert.equal((html.match(/<wbr\s*\/?>(?:<\/wbr>)?/g) ?? []).length, 7);
+});
+
+test("铺层原文中的间隔不进入显示序列", () => {
+  const html = renderMarkdown(
+    "| 编号 | 铺层 |\n| --- | --- |\n| TMP_1 | [30 / − 30 / 45] |",
+  );
+  assert.match(
+    html,
+    /<span class="layup-sequence" aria-label="\[30 \/ − 30 \/ 45\]">\s*<span class="layup-sequence-bracket layup-sequence-bracket-open" aria-hidden="true">\[<\/span><span class="layup-sequence-grid" aria-hidden="true"><span class="layup-sequence-ply"><span class="layup-sequence-angle">30°<\/span><\/span><span class="layup-sequence-separator">\/<\/span><wbr\/><span class="layup-sequence-ply"><span class="layup-sequence-angle">-30°<\/span><\/span><span class="layup-sequence-separator">\/<\/span><wbr\/><span class="layup-sequence-ply"><span class="layup-sequence-angle">45°<\/span><\/span><\/span><span class="layup-sequence-bracket layup-sequence-bracket-close" aria-hidden="true">\]<\/span>\s*<\/span>/,
+  );
 });
 
 test("无括号无角度符号的历史铺层序列使用同一网格显示", () => {
@@ -91,23 +108,19 @@ test("铺层表格保留容器内横向滚动并统一单元格对齐", () => {
   );
   assert.match(
     markdownStyles,
-    /\.markdown-body table\s*\{[\s\S]*?display:\s*table[\s\S]*?width:\s*max-content/,
+    /\.markdown-body table\s*\{[\s\S]*?display:\s*table[\s\S]*?width:\s*100%/,
   );
   assert.match(
     markdownStyles,
-    /table:has\(\.layup-sequence-cell\) th,[\s\S]*?table:has\(\.layup-sequence-cell\) td\s*\{[\s\S]*?text-align:\s*center/,
+    /\.markdown-body table th,[\s\S]*?\.markdown-body table td\s*\{[\s\S]*?text-align:\s*center[\s\S]*?vertical-align:\s*middle/,
   );
   assert.match(
     markdownStyles,
-    /\.markdown-body table th,[\s\S]*?\.markdown-body table td\s*\{[\s\S]*?vertical-align:\s*middle/,
-  );
-  assert.match(
-    markdownStyles,
-    /\.markdown-body \.layup-sequence-grid\s*\{[\s\S]*?display:\s*flex[\s\S]*?flex-wrap:\s*wrap/,
+    /\.markdown-body \.layup-sequence\s*\{[\s\S]*?display:\s*inline[\s\S]*?white-space:\s*normal/,
   );
   assert.doesNotMatch(
     markdownStyles,
-    /\.layup-sequence-grid\s*\{[\s\S]*?repeat\(/,
+    /\.markdown-body \.layup-sequence-grid\s*\{[\s\S]*?flex-wrap:\s*wrap/,
   );
 });
 

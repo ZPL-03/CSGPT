@@ -46,6 +46,10 @@ erDiagram
 ~~~
 `;
 
+export const longLayupMarkdown = String.raw`| 编号 | 逐层铺层（外到内） | 总厚度/mm |
+| --- | --- | --- |
+| TMP_1 | [90°/90°/90°/90°/10°/-10°/57°/-57°/10°/-10°/57°/-57°/10°/-10°/57°/-57°/10°/-10°/57°/-57°/10°/-10°/57°/-57°/90°/90°/90°/90°] | 7.5 |`;
+
 interface LocalMessage {
   id: string;
   role: string;
@@ -86,6 +90,7 @@ export const test = base.extend<{ localApp: LocalApp }>({
           [
             ["fixture-a", "兼容验收 A", engineeringMarkdown],
             ["fixture-b", "兼容验收 B", "这是独立会话 B，厚度 7.5 mm。"],
+            ["fixture-c", "兼容验收 C", longLayupMarkdown],
           ].map(([id, topic, content], index) => [
             id,
             {
