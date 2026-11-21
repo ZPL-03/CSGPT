@@ -11,6 +11,7 @@ import { micromark } from "micromark";
 import { math, mathHtml } from "micromark-extension-math";
 import mermaid from "mermaid";
 import { remarkPlugins, rehypePlugins } from "../app/utils/markdown-plugins";
+import { MarkdownTableCell } from "../app/components/markdown-table-cell";
 
 const require = createRequire(import.meta.url);
 
@@ -21,6 +22,7 @@ function renderMarkdown(content: string) {
       return ReactMarkdown({
         remarkPlugins,
         rehypePlugins,
+        components: { td: MarkdownTableCell },
         children: content,
       });
     }),
@@ -41,6 +43,15 @@ test("Markdown 数学解析保留行内公式、矩阵、表格和单位", () =>
   assert.match(html, /<th>层厚\/mm<\/th>/);
   assert.match(html, /<td>0\.125<\/td><td>60<\/td>/);
   assert.doesNotMatch(html, /class="katex-error"/);
+});
+
+test("长铺层序列按角度边界换行，不拆开角度数值", () => {
+  const html = renderMarkdown(
+    "| 编号 | 逐层角度（外到内） |\n| --- | --- |\n| TMP_1 | [0/45/-45/90/0/45/-45/90] |",
+  );
+  assert.match(html, /class="layup-sequence-cell"/);
+  assert.match(html, /class="layup-sequence-angle">-45<\/span>/);
+  assert.equal((html.match(/<wbr\/?>(?:<\/wbr>)?/g) ?? []).length, 7);
 });
 
 test("默认数学渲染不授权外部链接和图片命令", () => {

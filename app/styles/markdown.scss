@@ -304,8 +304,14 @@
   border-collapse: collapse;
   display: block;
   width: max-content;
+  min-width: 100%;
   max-width: 100%;
   overflow: auto;
+}
+
+.markdown-body table:has(.layup-sequence-cell) {
+  min-width: max-content;
+  max-width: none;
 }
 
 .markdown-body td,
@@ -703,6 +709,31 @@
 .markdown-body table td {
   padding: 6px 13px;
   border: 1px solid var(--color-border-default);
+  vertical-align: top;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.markdown-body .layup-sequence-cell {
+  width: 340px;
+  min-width: 260px;
+  max-width: 360px;
+}
+
+.markdown-body .layup-sequence {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  line-height: 1.7;
+}
+
+.markdown-body .layup-sequence-angle {
+  white-space: nowrap;
+}
+
+.markdown-body .layup-sequence-separator {
+  padding: 0 0.08em;
+  color: var(--color-fg-muted);
 }
 
 .markdown-body table tr {
