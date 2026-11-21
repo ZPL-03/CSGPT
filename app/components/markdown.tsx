@@ -16,6 +16,7 @@ import { IconButton } from "./button";
 import { useAppConfig } from "../store/config";
 import clsx from "clsx";
 import { splitThinkingContent } from "../utils/thinking";
+import { escapeBrackets } from "../utils/markdown-text";
 import { MarkdownTableCell } from "./markdown-table-cell";
 import { MarkdownTable } from "./markdown-table";
 
@@ -177,24 +178,6 @@ function CustomCode(props: { children?: React.ReactNode; className?: string }) {
 
       {renderShowMoreButton()}
     </>
-  );
-}
-
-function escapeBrackets(text: string) {
-  const pattern =
-    /(```[\s\S]*?```|`.*?`)|\\\[([\s\S]*?[^\\])\\\]|\\\((.*?)\\\)/g;
-  return text.replace(
-    pattern,
-    (match, codeBlock, squareBracket, roundBracket) => {
-      if (codeBlock) {
-        return codeBlock;
-      } else if (squareBracket) {
-        return `$$${squareBracket}$$`;
-      } else if (roundBracket) {
-        return `$${roundBracket}$`;
-      }
-      return match;
-    },
   );
 }
 

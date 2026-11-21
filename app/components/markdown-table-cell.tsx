@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { parseLayupSequence } from "../utils/layup-sequence";
 
 function plainTextContent(value: React.ReactNode): string {
   if (typeof value === "string" || typeof value === "number") {
@@ -19,28 +20,8 @@ export function formatLayupSequenceForColumn(
   text: string,
   allowUnbracketed: boolean,
 ) {
-  const trimmed = text.trim();
-  const hasOpeningBracket = trimmed.startsWith("[");
-  const hasClosingBracket = trimmed.endsWith("]");
-  const isBracketed = hasOpeningBracket && hasClosingBracket;
-  const body = isBracketed
-    ? trimmed.slice(1, -1).trim()
-    : !hasOpeningBracket && !hasClosingBracket && allowUnbracketed
-    ? trimmed
-    : null;
-  if (!body) return null;
-
-  const angles = body.split("/").map((angle) => angle.replace(/\s+/g, ""));
-  if (
-    angles.length === 0 ||
-    angles.some((angle) => !/^[+\-−]?\d+(?:\.\d+)?°?$/.test(angle))
-  ) {
-    return null;
-  }
-
-  const displayAngles = angles.map((angle) =>
-    angle.replace(/°$/, "").replace("−", "-"),
-  );
+  const displayAngles = parseLayupSequence(text, allowUnbracketed);
+  if (!displayAngles) return null;
   return (
     <span className="layup-sequence" aria-label={text}>
       <span
@@ -55,7 +36,7 @@ export function formatLayupSequenceForColumn(
             <span className="layup-sequence-ply">
               <span className="layup-sequence-angle">{angle}°</span>
             </span>
-            {index < angles.length - 1 && (
+            {index < displayAngles.length - 1 && (
               <>
                 <span className="layup-sequence-separator">/</span>
                 <wbr />

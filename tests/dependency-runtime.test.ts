@@ -15,6 +15,7 @@ import { MarkdownTable } from "../app/components/markdown-table";
 import { MarkdownTableCell } from "../app/components/markdown-table-cell";
 import { renderDesignTable } from "../app/utils/design-contract";
 import { designFixture } from "./helpers/design-fixtures";
+import { escapeBrackets } from "../app/utils/markdown-text";
 
 const require = createRequire(import.meta.url);
 const markdownStyles = readFileSync(
@@ -94,6 +95,22 @@ test("结构化设计表的铺层按文本渲染，不进入数学公式", () =>
   assert.match(html, /class="layup-sequence-bracket layup-sequence-bracket-open"/);
   assert.match(html, /class="layup-sequence-bracket layup-sequence-bracket-close"/);
   assert.doesNotMatch(html, /class="katex/);
+});
+
+test("历史转义铺层恢复为普通文本，不进入数学公式", () => {
+  const legacy = [
+    "| 编号 | 逐层角度（外到内） |",
+    "| --- | --- |",
+    "| TMP_1 | \\[30 / − 30 / − 30 / 45\\] |",
+  ].join("\n");
+  const html = renderMarkdown(escapeBrackets(legacy));
+  assert.match(html, /class="layup-sequence-cell"/);
+  assert.match(html, /class="layup-sequence-angle">-30°<\/span>/);
+  assert.doesNotMatch(html, /class="katex/);
+});
+
+test("普通转义公式继续使用数学渲染", () => {
+  assert.equal(escapeBrackets(String.raw`\[B=0\]`), "$$B=0$$");
 });
 
 test("无括号无角度符号的历史铺层序列使用同一网格显示", () => {
