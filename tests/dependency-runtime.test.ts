@@ -14,6 +14,10 @@ import { remarkPlugins, rehypePlugins } from "../app/utils/markdown-plugins";
 import { MarkdownTableCell } from "../app/components/markdown-table-cell";
 
 const require = createRequire(import.meta.url);
+const markdownStyles = readFileSync(
+  new URL("../app/styles/markdown.scss", import.meta.url),
+  "utf8",
+);
 
 // 数学文本使用页面相同的解析依赖；输出检查保留公式语义与信任边界。
 function renderMarkdown(content: string) {
@@ -53,7 +57,25 @@ test("长铺层序列按角度边界换行，不拆开角度数值", () => {
   assert.match(html, /class="layup-sequence-angle">-45°<\/span>/);
   assert.equal((html.match(/class="layup-sequence-ply"/g) ?? []).length, 8);
   assert.equal((html.match(/class="layup-sequence-separator"/g) ?? []).length, 7);
+  const gridIndex = html.indexOf('class="layup-sequence-grid"');
+  const closeBracketIndex = html.indexOf(
+    'class="layup-sequence-bracket layup-sequence-bracket-close"',
+  );
+  assert.ok(gridIndex >= 0);
+  assert.ok(closeBracketIndex > gridIndex);
   assert.doesNotMatch(html, /<wbr\/?>(?:<\/wbr>)?/);
+});
+
+test("铺层表格保留容器内横向滚动并统一单元格对齐", () => {
+  assert.doesNotMatch(
+    markdownStyles,
+    /table:has\(\.layup-sequence-cell\)[\s\S]{0,160}max-width:\s*none/,
+  );
+  assert.match(
+    markdownStyles,
+    /table:has\(\.layup-sequence-cell\) th,[\s\S]*?table:has\(\.layup-sequence-cell\) td\s*\{[\s\S]*?text-align:\s*center/,
+  );
+  assert.match(markdownStyles, /\.markdown-body table\s*\{[\s\S]*?overflow:\s*auto/);
 });
 
 test("默认数学渲染不授权外部链接和图片命令", () => {

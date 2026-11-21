@@ -24,7 +24,12 @@ export function formatLayupSequence(text: string) {
     .map((angle) => angle.replace(/°$/, "").replace("−", "-"));
   return (
     <span className="layup-sequence" aria-label={text}>
-      <span aria-hidden="true">[</span>
+      <span
+        className="layup-sequence-bracket layup-sequence-bracket-open"
+        aria-hidden="true"
+      >
+        [
+      </span>
       <span className="layup-sequence-grid" aria-hidden="true">
         {angles.map((angle, index) => (
           <span className="layup-sequence-ply" key={`${angle}-${index}`}>
@@ -35,7 +40,12 @@ export function formatLayupSequence(text: string) {
           </span>
         ))}
       </span>
-      <span aria-hidden="true">]</span>
+      <span
+        className="layup-sequence-bracket layup-sequence-bracket-close"
+        aria-hidden="true"
+      >
+        ]
+      </span>
     </span>
   );
 }

@@ -309,11 +309,6 @@
   overflow: auto;
 }
 
-.markdown-body table:has(.layup-sequence-cell) {
-  min-width: max-content;
-  max-width: none;
-}
-
 .markdown-body td,
 .markdown-body th {
   padding: 0;
@@ -714,28 +709,50 @@
   overflow-wrap: normal;
 }
 
+.markdown-body table:has(.layup-sequence-cell) th,
+.markdown-body table:has(.layup-sequence-cell) td {
+  text-align: center;
+}
+
 .markdown-body .layup-sequence-cell {
   width: 360px;
   min-width: 360px;
   max-width: 360px;
   vertical-align: middle;
+  text-align: center;
 }
 
 .markdown-body .layup-sequence {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0.18rem;
+  display: grid;
+  grid-template-columns: 1ch minmax(0, 1fr) 1ch;
+  align-items: stretch;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
   white-space: normal;
   word-break: normal;
   overflow-wrap: normal;
   line-height: 1.55;
 }
 
+.markdown-body .layup-sequence-bracket {
+  display: flex;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-body .layup-sequence-bracket-open {
+  align-items: flex-start;
+}
+
+.markdown-body .layup-sequence-bracket-close {
+  align-items: flex-end;
+}
+
 .markdown-body .layup-sequence-grid {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(5, max-content);
-  justify-content: space-between;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px 8px;
   align-items: center;
 }
@@ -744,6 +761,7 @@
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
+  min-width: 0;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
