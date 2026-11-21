@@ -1,5 +1,6 @@
 import {
   CSGPT_CONTEXT_LENGTH,
+  CSGPT_DEFAULT_CS1_CONTEXT_LENGTH,
   CSGPT_DEFAULT_MODEL,
   CSGPT_DEFAULT_MODEL_DISPLAY_NAME,
   CSGPT_MODEL_2,
@@ -308,7 +309,7 @@ export const getServerSideConfig = () => {
     csgptUpstreamModelName: process.env.CSGPT_CS1_UPSTREAM_MODEL_NAME,
     csgptContextLength: getPositiveInteger(
       process.env.CSGPT_CS1_CONTEXT_LENGTH,
-      CSGPT_CONTEXT_LENGTH,
+      CSGPT_DEFAULT_CS1_CONTEXT_LENGTH,
     ),
     csgptCs2BaseUrl: process.env.CSGPT_CS2_BASE_URL,
     csgptCs2ApiKey: process.env.CSGPT_CS2_API_KEY,
